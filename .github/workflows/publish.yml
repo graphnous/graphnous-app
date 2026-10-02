@@ -1,5 +1,5 @@
 # Publishes the server's Maven modules to GitHub Packages, among them the
-# scanner modules graphnous-java-scanner builds on.
+# scanner modules, for builds that plan or run scans themselves.
 #
 # A push to main publishes the version in the poms (1.0-SNAPSHOT); a tag
 # vX.Y.Z publishes X.Y.Z. The tests run first, so nothing untested is
@@ -27,11 +27,13 @@ jobs:
     name: Publish
     runs-on: ubuntu-latest
     steps:
-      # The server generates code from the schemas next to the app
+      # The server generates code from the schemas next to the app, at the
+      # commit CI checks it with (SCHEMAS_REF in ci.yml)
       - name: Check out the schemas
         uses: actions/checkout@v4
         with:
           repository: graphnous/graphnous-schemas
+          ref: b8c8b252b1a399376b7770a447743a173b946974
           path: graphnous-schemas
 
       - name: Check out the app
