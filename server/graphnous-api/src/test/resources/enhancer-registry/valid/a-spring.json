@@ -1,0 +1,12 @@
+{
+  "$schema": "https://graphnous.dev/schema/enhancer/enhancer-manifest.schema.json",
+  "schemaVersion": "1.0",
+  "id": "io.acme.spring",
+  "name": "Spring",
+  "version": "1.0.0",
+  "namespace": "Acme",
+  "compatibility": { "languages": ["java"] },
+  "rules": [
+    { "id": "controllers", "match": { "kind": "Class" }, "actions": { "addLabels": ["Controller"] } }
+  ]
+}

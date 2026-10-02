@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0",
+  "id": "io.acme.spring",
+  "name": "Spring",
+  "version": "1.0.0",
+  "namespace": "Acme",
+  "rules": [
+    { "id": "controllers", "macth": { "kind": "Class" }, "actions": { "addLabels": ["Controller"] } }
+  ]
+}

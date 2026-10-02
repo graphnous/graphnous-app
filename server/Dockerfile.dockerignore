@@ -1,0 +1,10 @@
+# The build context is the repository root; keep it to what the image builds
+**/.git
+**/.idea
+**/*.iml
+**/.DS_Store
+**/node_modules
+**/target
+**/dist
+**/build
+graphnous-app/web

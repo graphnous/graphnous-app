@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>dev.graphnous</groupId>
+        <artifactId>graphnous-server</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>graphnous-application</artifactId>
+
+    <properties>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!--
+            The enhancer manifest schema, in graphnous-schemas next to this
+            project. Override with -Dgraphnous.enhancer.schemas.dir=...
+        -->
+        <graphnous.enhancer.schemas.dir>${project.basedir}/../../../graphnous-schemas/enhancer</graphnous.enhancer.schemas.dir>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.graphnous</groupId>
+            <artifactId>graphnous-domain</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.graphnous</groupId>
+            <artifactId>graphnous-scanner-core</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.18</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>6.1.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>5.23.0</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Generates the enhancer manifest model from its JSON schema -->
+                <groupId>org.jsonschema2pojo</groupId>
+                <artifactId>jsonschema2pojo-maven-plugin</artifactId>
+                <version>1.2.2</version>
+                <configuration>
+                    <sourceDirectory>${graphnous.enhancer.schemas.dir}</sourceDirectory>
+                    <targetPackage>dev.graphnous.application.enhancer.model</targetPackage>
+                    <outputDirectory>${project.build.directory}/generated-sources/jsonschema2pojo</outputDirectory>
+
+                    <sourceType>jsonschema</sourceType>
+
+                    <includeHashcodeAndEquals>true</includeHashcodeAndEquals>
+                    <includeToString>true</includeToString>
+                    <includeJsr303Annotations>false</includeJsr303Annotations>
+
+                    <usePrimitives>false</usePrimitives>
+                    <initializeCollections>true</initializeCollections>
+
+                    <includeConstructors>false</includeConstructors>
+                    <generateBuilders>false</generateBuilders>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>generate-enhancer-manifest-model</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

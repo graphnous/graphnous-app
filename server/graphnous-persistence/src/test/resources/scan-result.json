@@ -1,0 +1,203 @@
+{
+  "format": "graphnous-scan-result",
+  "version": "2",
+  "target": {
+    "path": "backend",
+    "language": "JAVA",
+    "languageVersion": "25",
+    "buildSystem": "MAVEN"
+  },
+  "modules": [
+    {
+      "name": "orders",
+      "path": "orders",
+      "files": [
+        {
+          "path": "src/main/java/com/example/Order.java",
+          "language": "JAVA",
+          "sourceSet": "MAIN",
+          "size": 120,
+          "classes": [
+            {
+              "name": "Order",
+              "qualifiedName": "com.example.Order",
+              "kind": "CLASS",
+              "modifiers": [
+                "PUBLIC",
+                "FINAL"
+              ],
+              "superClass": "com.example.Entity<java.util.UUID>",
+              "interfaces": [
+                "com.example.Identified",
+                "java.lang.Comparable<com.example.Order>"
+              ],
+              "annotations": [
+                {
+                  "name": "Deprecated",
+                  "qualifiedName": "java.lang.Deprecated"
+                },
+                {
+                  "name": "Path",
+                  "qualifiedName": "jakarta.ws.rs.Path",
+                  "arguments": {
+                    "value": "/orders"
+                  }
+                },
+                {
+                  "name": "Table",
+                  "qualifiedName": "jakarta.persistence.Table",
+                  "arguments": {
+                    "name": "orders",
+                    "indexes": [
+                      {
+                        "name": "Index",
+                        "qualifiedName": "jakarta.persistence.Index",
+                        "arguments": {
+                          "columnList": "total"
+                        }
+                      }
+                    ],
+                    "uniqueConstraints": []
+                  }
+                }
+              ],
+              "methods": [
+                {
+                  "name": "Order",
+                  "qualifiedName": "com.example.Order.Order(java.util.UUID)",
+                  "kind": "CONSTRUCTOR",
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type": "java.util.UUID",
+                      "annotations": [
+                        {
+                          "name": "PathParam",
+                          "qualifiedName": "jakarta.ws.rs.PathParam",
+                          "arguments": {
+                            "value": "id"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "annotations": [
+                    {
+                      "name": "Inject",
+                      "qualifiedName": "jakarta.inject.Inject"
+                    }
+                  ]
+                },
+                {
+                  "name": "compareTo",
+                  "qualifiedName": "com.example.Order.compareTo(com.example.Order)",
+                  "kind": "METHOD",
+                  "modifiers": [
+                    "PUBLIC"
+                  ],
+                  "returnType": "int",
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type": "com.example.Order"
+                    }
+                  ],
+                  "annotations": [
+                    {
+                      "name": "Override"
+                    }
+                  ]
+                }
+              ],
+              "fields": [
+                {
+                  "name": "total",
+                  "type": "long",
+                  "qualifiedName": "com.example.Order.total",
+                  "modifiers": [
+                    "PRIVATE"
+                  ],
+                  "annotations": [
+                    {
+                      "name": "Column",
+                      "qualifiedName": "jakarta.persistence.Column",
+                      "arguments": {
+                        "name": "total",
+                        "nullable": false,
+                        "length": 10,
+                        "precision": [
+                          1,
+                          2
+                        ],
+                        "scale": [
+                          1,
+                          2.5
+                        ],
+                        "columnDefinition": [
+                          "a",
+                          "b"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/main/java/com/example/Entity.java",
+          "classes": [
+            {
+              "name": "Entity",
+              "qualifiedName": "com.example.Entity",
+              "kind": "CLASS",
+              "typeParameters": [
+                "T"
+              ]
+            },
+            {
+              "name": "Identified",
+              "qualifiedName": "com.example.Identified",
+              "kind": "INTERFACE"
+            }
+          ]
+        }
+      ],
+      "packages": [
+        {
+          "name": "example",
+          "qualifiedName": "com.example",
+          "classes": [
+            {
+              "name": "Order",
+              "qualifiedName": "com.example.Order",
+              "kind": "CLASS"
+            },
+            {
+              "name": "Entity",
+              "qualifiedName": "com.example.Entity",
+              "kind": "CLASS"
+            },
+            {
+              "name": "Identified",
+              "qualifiedName": "com.example.Identified",
+              "kind": "INTERFACE"
+            }
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "org.slf4j:slf4j-api",
+          "version": "2.0.18",
+          "scope": "compile"
+        },
+        {
+          "name": "org.junit.jupiter:junit-jupiter",
+          "scope": "test"
+        }
+      ]
+    }
+  ]
+}

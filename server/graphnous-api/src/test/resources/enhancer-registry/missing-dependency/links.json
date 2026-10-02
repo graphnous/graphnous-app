@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "id": "io.acme.http-links",
+  "name": "HTTP links",
+  "version": "1.0.0",
+  "namespace": "Acme",
+  "dependsOn": ["io.acme.spring"],
+  "rules": [
+    { "id": "calls", "match": { "kind": "Method" }, "actions": { "addLabels": ["Call"] } }
+  ]
+}

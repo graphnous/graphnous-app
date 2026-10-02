@@ -1,0 +1,57 @@
+server:
+  port: 1337
+
+spring:
+  neo4j:
+    uri: ${NEO4J_URI:bolt://localhost:6687}
+    authentication:
+      username: ${NEO4J_USERNAME:neo4j}
+      password: ${NEO4J_PASSWORD:changeme}
+  datasource:
+    url: jdbc:h2:mem:graphnous;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  servlet:
+    multipart:
+      # Uploaded scan results; a large project's results run to many MB
+      max-file-size: ${GRAPHNOUS_UPLOAD_MAX_FILE_SIZE:100MB}
+      max-request-size: ${GRAPHNOUS_UPLOAD_MAX_REQUEST_SIZE:500MB}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+graphnous:
+  security:
+    # Off: anyone may use the API, in one fixed organization, as in the
+    # open-source container. On: only users of the Graphnous platform, with
+    # its access tokens, each in the organization they logged in to
+    enabled: ${GRAPHNOUS_SECURITY_ENABLED:false}
+    # The platform, which issues the access tokens
+    issuer-uri: ${GRAPHNOUS_PLATFORM_URL:http://localhost:1338}
+  enhancers:
+    # The enhancer manifests the server installs on startup
+    location: classpath*:enhancers/*.json
+  scans:
+    # An active scan without a status change for this long is failed, as
+    # are scans a previous run of the server left active
+    timeout: 1h
+    recovery-interval: 1m
+  scanner:
+    # Labels the containers this server starts. On startup the server stops
+    # the containers a previous run left, so give servers sharing a Docker
+    # daemon different names.
+    instance: graphnous
+    # Repositories are checked out in a git container into this workspace,
+    # which the scanner containers then mount. With type volume the server
+    # must have the volume mounted at path; use type host with a directory
+    # on the Docker host when running the server directly on it.
+    workspace:
+      type: volume
+      volume: graphnous-checkouts
+      path: /checkouts
+    git-image: alpine/git:2.54.0
+    # Built by graphnous-java-scanner (cli/target/scanners)
+    java-scanner: scanners/java-scanner.jar
+    typescript-scanner: scanners/scanner.js

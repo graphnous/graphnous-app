@@ -1,0 +1,130 @@
+# The app's checks, for its own repository, with server/ and web/ at its
+# root.
+#
+# The app builds on parts of the repository it came from: the server and
+# the web app generate code from graphnous-schemas, and the server's image
+# bundles both scanners. Each job checks out what it needs from that
+# repository (the GRAPHNOUS_REPOSITORY variable, by default
+# graphnous/Graphnous-2) at the workspace's root, and the app into
+# graphnous-app next to it: the layout the app's relative paths expect.
+# That repository is private, so this needs a GRAPHNOUS_TOKEN secret that
+# can read its contents.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GRAPHNOUS_REPOSITORY: ${{ vars.GRAPHNOUS_REPOSITORY || 'graphnous/Graphnous-2' }}
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the schemas
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GRAPHNOUS_REPOSITORY }}
+          token: ${{ secrets.GRAPHNOUS_TOKEN }}
+          sparse-checkout: graphnous-schemas
+
+      - name: Check out the app
+        uses: actions/checkout@v4
+        with:
+          path: graphnous-app
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+
+      # The tests that need Docker use the runner's daemon
+      - run: mvn -B -f graphnous-app/server/pom.xml verify
+
+  web:
+    name: Web app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: graphnous-app/web
+    steps:
+      - name: Check out the schemas
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GRAPHNOUS_REPOSITORY }}
+          token: ${{ secrets.GRAPHNOUS_TOKEN }}
+          sparse-checkout: graphnous-schemas
+
+      - name: Check out the app
+        uses: actions/checkout@v4
+        with:
+          path: graphnous-app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: graphnous-app/web/package-lock.json
+          # Installs the @graphnous scope from GitHub Packages, with
+          # NODE_AUTH_TOKEN
+          registry-url: https://npm.pkg.github.com
+          scope: "@graphnous"
+
+      # OpenAPI Generator, which generates the API client, runs on Java
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      # graphnous-theme as a package, from GitHub Packages (see README.md)
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: npm run lint
+
+      # Generates the API client first, and typechecks
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      # Every story as a test, with its accessibility checks, in light and
+      # in dark
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:storybook
+
+  image:
+    name: Server image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the schemas and the scanners
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GRAPHNOUS_REPOSITORY }}
+          token: ${{ secrets.GRAPHNOUS_TOKEN }}
+          sparse-checkout: |
+            graphnous-schemas
+            graphnous-java-scanner
+            graphnous-typescript-scanner
+
+      - name: Check out the app
+        uses: actions/checkout@v4
+        with:
+          path: graphnous-app
+
+      - uses: docker/setup-buildx-action@v3
+
+      # From the workspace's root, as from the repository the app came from
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: graphnous-app/server/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

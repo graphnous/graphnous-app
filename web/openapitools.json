@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.25.0",
+    "generators": {
+      "graphnous": {
+        "generatorName": "typescript-fetch",
+        "inputSpec": "../../graphnous-schemas/openapi/v1.yaml",
+        "output": "src/generated/api",
+        "globalProperty": {
+          "apiDocs": "false",
+          "modelDocs": "false"
+        },
+        "additionalProperties": {
+          "supportsES6": true,
+          "withInterfaces": true,
+          "useSingleRequestParameter": true
+        }
+      }
+    }
+  }
+}
