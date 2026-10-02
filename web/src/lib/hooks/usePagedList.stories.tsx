@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { getRouter } from "@storybook/nextjs-vite/navigation.mock";
 import { expect, userEvent } from "storybook/test";
-import { Pagination, Table, type Column } from "graphnous-theme";
+import { Pagination, Table, type Column } from "@graphnous/theme";
 
 import { usePagedList } from "./usePagedList";
 

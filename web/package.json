@@ -15,8 +15,8 @@
     "test:storybook": "vitest run --project=storybook-light && vitest run --project=storybook-dark"
   },
   "dependencies": {
+    "@graphnous/theme": "^0.1.0",
     "@phosphor-icons/react": "^2.1.10",
-    "graphnous-theme": "^0.1.0",
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8"

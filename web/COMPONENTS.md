@@ -9,7 +9,7 @@ callbacks; they do not fetch data, read the URL or know the API. Domain
 components may, and are built from the dumb ones.
 
 The dumb components (sections 1 to 6) are the component library in
-[`graphnous-theme`](../../graphnous-theme), in
+[`graphnous-theme`](https://github.com/graphnous/graphnous-theme), in
 `src/components/<layer>/<Component>/` there, with their stories next to them.
 What knows the API (sections 7 and 8) stays in this app. Icons come from
 Phosphor (`@phosphor-icons/react/ssr`).

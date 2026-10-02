@@ -1,4 +1,4 @@
-import { Duration, Timeline, type TimelineStatus, type TimelineStep } from "graphnous-theme";
+import { Duration, Timeline, type TimelineStatus, type TimelineStep } from "@graphnous/theme";
 
 import { ScanStepError } from "@/components/ScanStepError/ScanStepError";
 import type { ScanStep, ScanStepStatus, ScanStepType } from "@/types";

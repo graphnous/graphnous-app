@@ -1,0 +1,65 @@
+# Publishes the server's Maven modules to GitHub Packages, among them the
+# scanner modules graphnous-java-scanner builds on.
+#
+# A push to main publishes the version in the poms (1.0-SNAPSHOT); a tag
+# vX.Y.Z publishes X.Y.Z. The tests run first, so nothing untested is
+# published.
+
+name: Publish Maven packages
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# Deploying the same snapshot twice at once can corrupt its metadata
+concurrency:
+  group: publish-maven-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    steps:
+      # The server generates code from the schemas next to the app
+      - name: Check out the schemas
+        uses: actions/checkout@v4
+        with:
+          repository: graphnous/graphnous-schemas
+          path: graphnous-schemas
+
+      - name: Check out the app
+        uses: actions/checkout@v4
+        with:
+          path: graphnous-app
+
+      # Writes a settings.xml with the server "github" (distributionManagement
+      # in server/pom.xml), authenticated with the workflow's token
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Set the version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: >
+          mvn -B -f graphnous-app/server/pom.xml versions:set
+          -DnewVersion="${GITHUB_REF_NAME#v}"
+          -DprocessAllModules
+          -DgenerateBackupPoms=false
+
+      # The tests that need Docker use the runner's daemon
+      - name: Publish
+        run: mvn -B -f graphnous-app/server/pom.xml deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

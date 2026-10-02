@@ -1,4 +1,4 @@
-import { Alert, CodeBlock, CopyButton } from "graphnous-theme";
+import { Alert, CodeBlock, CopyButton } from "@graphnous/theme";
 
 import type { ScanStep, ScanStepType } from "@/types";
 

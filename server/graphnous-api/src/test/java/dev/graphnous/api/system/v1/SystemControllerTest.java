@@ -47,7 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SystemControllerTest {
 
     private static final String OPENAPI_SPEC =
-            "../../../graphnous-schemas/openapi/v1.yaml";
+            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
 
     /**
      * Checks only the response, for requests that are invalid on purpose.

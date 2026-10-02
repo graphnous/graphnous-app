@@ -40,7 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# the API client, generated from graphnous-schemas/openapi/v1.yaml (npm run generate:api)
+# the API client, generated from the published OpenAPI spec (npm run generate:api)
 /src/generated/
 
 *storybook.log
