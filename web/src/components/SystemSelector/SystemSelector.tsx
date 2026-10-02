@@ -1,6 +1,6 @@
 "use client";
 
-import { Combobox, type ComboboxProps } from "graphnous-theme";
+import { Combobox, type ComboboxProps } from "@graphnous/theme";
 
 import type { System } from "@/types";
 

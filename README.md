@@ -7,7 +7,7 @@ or runs without security, as the open-source container does.
 | Folder | What it is |
 | --- | --- |
 | [`server`](server) | The Spring Boot server: the REST API, scan orchestration and persistence, and the scanner framework the scanners build on |
-| [`web`](web) | The web app, in Next.js, built from [`graphnous-theme`](../graphnous-theme) |
+| [`web`](web) | The web app, in Next.js, built from [`@graphnous/theme`](https://www.npmjs.com/package/@graphnous/theme) |
 
 Each has its README with how to run and test it; the
 [repository README](../README.md) describes how the pieces fit together.
@@ -34,17 +34,7 @@ a token that can read the contents of both scanner repositories.
 
 Still to do:
 
-1. Have the web app install `graphnous-theme` from GitHub Packages, once it
-   is published (see the theme's README), instead of from the Graphnous-2
-   npm workspace:
-   - depend on `graphnous-theme@npm:@graphnous/theme`, and commit a
-     `web/package-lock.json`: the workflow installs with `npm ci`;
-   - drop `transpilePackages` from `web/next.config.ts`, as the published
-     package is compiled;
-   - let this repository's workflows read the package, in its settings
-     on GitHub (Manage Actions access), so the workflow's own token can
-     install it.
-2. Pin the web app's dependencies that are `latest`
+1. Pin the web app's dependencies that are `latest`
    (`@chromatic-com/storybook`, `playwright` and `vite`).
 
 To run the server's image or compose file outside CI, clone the schemas and

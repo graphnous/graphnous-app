@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
-import { Field } from "graphnous-theme";
+import { Field } from "@graphnous/theme";
 
 import type { System } from "@/types";
 

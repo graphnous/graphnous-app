@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
-import { Button, StatusIndicator } from "graphnous-theme";
+import { Button, StatusIndicator } from "@graphnous/theme";
 
 import { usePolling } from "./usePolling";
 

@@ -58,10 +58,6 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: graphnous-app/web/package-lock.json
-          # Installs the @graphnous scope from GitHub Packages, with
-          # NODE_AUTH_TOKEN
-          registry-url: https://npm.pkg.github.com
-          scope: "@graphnous"
 
       # OpenAPI Generator, which generates the API client, runs on Java
       - uses: actions/setup-java@v4
@@ -69,10 +65,7 @@ jobs:
           distribution: temurin
           java-version: 25
 
-      # graphnous-theme as a package, from GitHub Packages (see README.md)
       - run: npm ci
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - run: npm run lint
 
