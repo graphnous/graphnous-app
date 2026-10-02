@@ -17,24 +17,18 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Runs a scanner in a container of the image its definition names. The
- * repository is the only mount, made available read-only as the
- * {@link DockerWorkspace} describes. The scanner artifact is copied into
- * the container below {@value #SCANNER_DIRECTORY} before it starts, and the
- * result is copied out of {@value #OUTPUT} after it stops, so no paths of
- * this process have to exist on the Docker host.
+ * Runs a scanner in a container of its image, with its command as the
+ * entrypoint. The repository is the only mount, made available read-only
+ * as the {@link DockerWorkspace} describes. The directory of the scanner's
+ * output is created writable before the container starts, and the result
+ * is copied out of it after it stops, so no paths of this process have to
+ * exist on the Docker host.
  */
 public class DockerSandbox implements ScanSandbox {
-
-    static final String SCANNER_DIRECTORY = "/scanner";
-    static final String OUTPUT = "/output";
-
-    private static final String RESULT = OUTPUT + "/scan-result.json";
 
     private final DockerClient docker;
     private final DockerWorkspace workspace;
@@ -108,25 +102,17 @@ public class DockerSandbox implements ScanSandbox {
     ) {
         final var repository = workspace.mount(path);
 
-        final var image = definition.image(target);
-        final var scanner = definition.scanner().toAbsolutePath();
-        final var containerScanner = SCANNER_DIRECTORY + "/" + scanner.getFileName();
+        final var image = definition.image();
+        final var output = definition.output();
 
         String containerId = null;
 
         try {
             Containers.pullIfMissing(docker, image);
 
-            final var command = new ArrayList<>(
-                definition.containerCommand(containerScanner, repository.repository(), target)
-            );
-
-            command.add("--output");
-            command.add(RESULT);
-
             containerId = docker
                 .createContainerCmd(image)
-                .withCmd(command)
+                .withEntrypoint(definition.command(repository.repository(), target))
                 .withLabels(labels)
                 .withHostConfig(
                     HostConfig.newHostConfig()
@@ -137,7 +123,7 @@ public class DockerSandbox implements ScanSandbox {
 
             docker.copyArchiveToContainerCmd(containerId)
                 .withTarInputStream(new ByteArrayInputStream(
-                    ContainerArchive.scannerAndOutput(scanner, SCANNER_DIRECTORY, OUTPUT)
+                    ContainerArchive.writableDirectory(output.substring(0, output.lastIndexOf('/')))
                 ))
                 .withRemotePath("/")
                 .exec();
@@ -150,7 +136,7 @@ public class DockerSandbox implements ScanSandbox {
                 );
             }
 
-            return readResult(containerId);
+            return readResult(containerId, output);
 
         } catch (IOException e) {
             throw new UncheckedIOException(
@@ -171,15 +157,18 @@ public class DockerSandbox implements ScanSandbox {
         }
     }
 
-    private ScanResultSchema readResult(final String containerId) throws IOException {
-        try (final var archive = docker.copyArchiveFromContainerCmd(containerId, RESULT).exec()) {
+    private ScanResultSchema readResult(
+        final String containerId,
+        final String output
+    ) throws IOException {
+        try (final var archive = docker.copyArchiveFromContainerCmd(containerId, output).exec()) {
             return objectMapper.readValue(
                 ContainerArchive.firstFile(archive),
                 ScanResultSchema.class
             );
         } catch (NotFoundException e) {
             throw new IllegalStateException(
-                "Scanner did not write a result to " + RESULT,
+                "Scanner did not write a result to " + output,
                 e
             );
         }

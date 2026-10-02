@@ -2,33 +2,33 @@ package dev.graphnous.scanner.definition;
 
 import dev.graphnous.scanner.model.ScanTarget;
 
-import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * A scanner published as an image: the image holds the scanner and its
+ * runtime, and the command runs it with the repository mounted in the
+ * container.
+ */
 public interface ScannerDefinition {
 
     boolean supports(ScanTarget target);
 
     /**
-     * The scanner artifact (jar or script) on this machine.
+     * The image the scanner runs in, such as
+     * {@code ghcr.io/graphnous/graphnous-java-scanner:0.1.0}.
      */
-    Path scanner();
+    String image();
 
     /**
-     * The command running the scanner directly on this machine.
+     * The command running the scanner in its image, with the repository
+     * mounted at the given container path. It writes the result to
+     * {@link #output()}.
      */
-    List<String> command(Path repository, ScanTarget target);
+    List<String> command(String repository, ScanTarget target);
 
     /**
-     * The command running the scanner inside {@link #image(ScanTarget)},
-     * with the scanner artifact and repository mounted at the given
-     * container paths.
+     * Where in the container the scanner writes its result.
      */
-    List<String> containerCommand(String scanner, String repository, ScanTarget target);
-
-    /**
-     * The image providing the runtime the scanner needs.
-     */
-    String image(ScanTarget target);
+    String output();
 
 }

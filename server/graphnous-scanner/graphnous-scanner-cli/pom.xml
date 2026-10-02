@@ -12,9 +12,9 @@
 
     <!--
         Scans a repository from the command line, with the scan planning and
-        execution the server uses. Runs the scanners from a scanners directory
-        next to its jar: java-scanner.jar and scanner.js, from the releases of
-        graphnous-java-scanner and graphnous-typescript-scanner.
+        execution the server uses. Runs each scanner in a Docker container of
+        its image, published by graphnous-java-scanner and
+        graphnous-typescript-scanner.
     -->
     <artifactId>graphnous-scanner-cli</artifactId>
 

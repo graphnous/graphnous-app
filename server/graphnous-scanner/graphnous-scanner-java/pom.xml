@@ -11,10 +11,10 @@
     </parent>
 
     <!--
-        What the scan orchestrator needs to plan and launch Java scans:
-        Maven target detection, Java version detection and the scanner
-        definition. The scanner itself is graphnous-java-scanner, which
-        keeps its own copy of the Maven POM reading in maven/.
+        What the scan orchestrator needs to plan Java scans: Maven target
+        detection and Java version detection. The scanner itself is the
+        graphnous-java-scanner image, which keeps its own copy of the Maven
+        POM reading in maven/.
     -->
     <artifactId>graphnous-scanner-java</artifactId>
 

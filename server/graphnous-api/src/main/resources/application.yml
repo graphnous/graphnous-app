@@ -52,6 +52,35 @@ graphnous:
       volume: graphnous-checkouts
       path: /checkouts
     git-image: alpine/git:2.54.0
-    # Downloaded from the scanners' releases by download-scanners.sh
-    java-scanner: scanners/java-scanner.jar
-    typescript-scanner: scanners/scanner.js
+  # The scanner for each language: its image, the command running it (in
+  # place of the image's entrypoint) and where it writes its result. The
+  # command's {repository}, {target}, {languageVersion} and {output} are
+  # replaced for each target; an unknown language version is empty.
+  scanners:
+    JAVA:
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.1.0
+      command:
+        - java
+        - -jar
+        - /opt/graphnous/java-scanner.jar
+        - --path
+        - "{repository}"
+        - --target
+        - "{target}"
+        - --java-version
+        - "{languageVersion}"
+        - --output
+        - "{output}"
+      output: /output/scan-result.json
+    TYPESCRIPT:
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.1.0
+      command:
+        - node
+        - /opt/graphnous/scanner.js
+        - --path
+        - "{repository}"
+        - --target
+        - "{target}"
+        - --output
+        - "{output}"
+      output: /output/scan-result.json

@@ -5,11 +5,8 @@
 # checks it out from the repository the app came from (the
 # GRAPHNOUS_REPOSITORY variable, by default graphnous/Graphnous-2) at the
 # workspace's root, and the app into graphnous-app next to it: the layout
-# the app's relative paths expect. The server's image bundles both
-# scanners, downloaded from their releases. Those repositories are private,
-# so this needs a GRAPHNOUS_TOKEN secret that can read the contents of
-# GRAPHNOUS_REPOSITORY, graphnous/Graphnous-java-scanner and
-# graphnous/Graphnous-typescript-scanner.
+# the app's relative paths expect. That repository is private, so this needs
+# a GRAPHNOUS_TOKEN secret that can read its contents.
 
 name: CI
 
@@ -114,12 +111,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: graphnous-app
-
-      # At the versions download-scanners.sh pins
-      - name: Download the scanners
-        run: graphnous-app/server/download-scanners.sh
-        env:
-          GH_TOKEN: ${{ secrets.GRAPHNOUS_TOKEN }}
 
       - uses: docker/setup-buildx-action@v3
 

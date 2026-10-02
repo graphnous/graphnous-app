@@ -1,10 +1,10 @@
-# Builds the Graphnous server with the scanners it hands to its scanner
-# containers. Build from the repository root, as the server generates its
-# API from graphnous-schemas, after downloading the scanners into
-# server/scanners (see download-scanners.sh):
+# Builds the Graphnous server. Build from the repository root, as the server
+# generates its API from graphnous-schemas:
 #
-#   graphnous-app/server/download-scanners.sh
 #   docker build -f graphnous-app/server/Dockerfile .
+#
+# The scanners are images of their own, which the server pulls when it
+# first scans with them (graphnous.scanners in application.yml).
 
 FROM maven:3.9-eclipse-temurin-25 AS server
 
@@ -21,7 +21,6 @@ FROM eclipse-temurin:25-jre
 WORKDIR /app
 
 COPY --from=server /build/graphnous-app/server/graphnous-api/target/graphnous-api-*.jar graphnous-server.jar
-COPY graphnous-app/server/scanners/java-scanner.jar graphnous-app/server/scanners/scanner.js scanners/
 
 # Repositories are checked out in the graphnous-checkouts volume, mounted here
 # and, by name, in the git and scanner containers the server starts

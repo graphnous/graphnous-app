@@ -249,27 +249,18 @@ class DefaultScanExecutorTest {
         }
 
         @Override
-        public Path scanner() {
-            return Path.of("scanner");
-        }
-
-        @Override
-        public List<String> command(final Path repository, final ScanTarget target) {
-            return new ArrayList<>();
-        }
-
-        @Override
-        public List<String> containerCommand(
-            final String scanner,
-            final String repository,
-            final ScanTarget target
-        ) {
-            return new ArrayList<>();
-        }
-
-        @Override
-        public String image(final ScanTarget target) {
+        public String image() {
             return "image";
+        }
+
+        @Override
+        public List<String> command(final String repository, final ScanTarget target) {
+            return List.of();
+        }
+
+        @Override
+        public String output() {
+            return "/output/scan-result.json";
         }
     }
 

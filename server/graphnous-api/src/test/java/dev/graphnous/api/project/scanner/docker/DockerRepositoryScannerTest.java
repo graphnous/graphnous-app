@@ -5,9 +5,10 @@ import com.github.dockerjava.api.DockerClient;
 import dev.graphnous.application.project.scanner.ScanLogger;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.scanner.docker.DockerWorkspace;
-import dev.graphnous.scanner.java.JavaScannerDefinition;
+import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.java.language.JavaVersionDetector;
 import dev.graphnous.scanner.java.targetdetector.MavenScanTargetDetector;
+import dev.graphnous.scanner.model.ScanTarget;
 import dev.graphnous.scanner.plan.DefaultScanPlanner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -75,7 +76,12 @@ class DockerRepositoryScannerTest {
 
         return new DockerRepositoryScanner(
             planner,
-            List.of(new JavaScannerDefinition(repository.resolve("java-scanner.jar"))),
+            List.of(new ImageScannerDefinition(
+                ScanTarget.Language.JAVA,
+                "ghcr.io/graphnous/graphnous-java-scanner:0.1.0",
+                List.of("java", "-jar", "/opt/graphnous/java-scanner.jar"),
+                "/output/scan-result.json"
+            )),
             docker,
             new DockerWorkspace.NamedVolume("checkouts", repository),
             new ObjectMapper(),

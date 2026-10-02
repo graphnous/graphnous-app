@@ -37,6 +37,3 @@ build/
 
 ### Mac OS ###
 .DS_Store
-
-### Scanners, downloaded by download-scanners.sh ###
-/scanners/

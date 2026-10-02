@@ -27,16 +27,15 @@ app generate code from [`graphnous-schemas`](../graphnous-schemas). The
 workflow checks it out from this repository (the `GRAPHNOUS_REPOSITORY`
 variable, by default `graphnous/Graphnous-2`) at the root of the workspace,
 and the app into `graphnous-app` next to it: the layout the app's
-relative paths expect, so they work unchanged. The server's image bundles
-the Java and TypeScript scanners from the releases of
-`graphnous/Graphnous-java-scanner` and `graphnous/Graphnous-typescript-scanner`,
-at the versions `server/download-scanners.sh` pins.
+relative paths expect, so they work unchanged. The scanners are images of
+their own, published by `graphnous/Graphnous-java-scanner` and
+`graphnous/Graphnous-typescript-scanner`; the server runs the versions its
+`graphnous.scanners` configuration names.
 
 Before the move:
 
 1. Add a `GRAPHNOUS_TOKEN` secret to the new repository: a token that can
-   read the contents of this repository and of both scanner repositories,
-   as they are private.
+   read this repository's contents, as it is private.
 2. Have the web app install `graphnous-theme` from GitHub Packages, once it
    is published (see the theme's README), instead of from this repository's
    npm workspace:
@@ -50,6 +49,5 @@ Before the move:
 3. Pin the web app's dependencies that are `latest`
    (`@chromatic-com/storybook`, `playwright` and `vite`).
 
-To run the server's image or compose file outside CI, the schemas have to
-be next to the app, as they are here, and the scanners downloaded with
-`server/download-scanners.sh`.
+To build the server's image or compose file outside CI, the schemas have
+to be next to the app, as they are here.
