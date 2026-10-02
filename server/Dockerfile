@@ -1,19 +1,10 @@
 # Builds the Graphnous server with the scanners it hands to its scanner
 # containers. Build from the repository root, as the server generates its
-# API from graphnous-schemas:
+# API from graphnous-schemas, after downloading the scanners into
+# server/scanners (see download-scanners.sh):
 #
+#   graphnous-app/server/download-scanners.sh
 #   docker build -f graphnous-app/server/Dockerfile .
-
-FROM node:24-alpine AS typescript-scanner
-
-WORKDIR /build/graphnous-typescript-scanner
-
-COPY graphnous-typescript-scanner/package.json graphnous-typescript-scanner/package-lock.json ./
-RUN npm ci
-
-COPY graphnous-typescript-scanner/ .
-RUN npm run build
-
 
 FROM maven:3.9-eclipse-temurin-25 AS server
 
@@ -21,13 +12,8 @@ WORKDIR /build
 
 COPY graphnous-schemas/ graphnous-schemas/
 COPY graphnous-app/server/ graphnous-app/server/
-COPY graphnous-java-scanner/ graphnous-java-scanner/
 
-# The Java scanner builds on the server's scanner modules, so the server is
-# installed first. The repository lives in the stage (no cache mount), so the
-# second build sees what the first installed.
-RUN mvn -B -q -f graphnous-app/server/pom.xml install -DskipTests \
- && mvn -B -q -f graphnous-java-scanner/pom.xml package -DskipTests
+RUN mvn -B -q -f graphnous-app/server/pom.xml package -DskipTests
 
 
 FROM eclipse-temurin:25-jre
@@ -35,8 +21,7 @@ FROM eclipse-temurin:25-jre
 WORKDIR /app
 
 COPY --from=server /build/graphnous-app/server/graphnous-api/target/graphnous-api-*.jar graphnous-server.jar
-COPY --from=server /build/graphnous-java-scanner/cli/target/scanners/java-scanner.jar scanners/java-scanner.jar
-COPY --from=typescript-scanner /build/graphnous-typescript-scanner/build/scanner.js scanners/scanner.js
+COPY graphnous-app/server/scanners/java-scanner.jar graphnous-app/server/scanners/scanner.js scanners/
 
 # Repositories are checked out in the graphnous-checkouts volume, mounted here
 # and, by name, in the git and scanner containers the server starts

@@ -52,6 +52,6 @@ graphnous:
       volume: graphnous-checkouts
       path: /checkouts
     git-image: alpine/git:2.54.0
-    # Built by graphnous-java-scanner (cli/target/scanners)
+    # Downloaded from the scanners' releases by download-scanners.sh
     java-scanner: scanners/java-scanner.jar
     typescript-scanner: scanners/scanner.js

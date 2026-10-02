@@ -13,7 +13,7 @@ persistence. Its web app is in [`../web`](../web). See the
 | `graphnous-persistence` | The repositories: systems, projects, scans and logs in a relational database (JPA), scan results in Neo4j. |
 | `graphnous-api` | The Spring Boot application: REST controllers, configuration and the executable jar. Generates its API models from `graphnous-schemas/openapi/v1.yaml`. |
 | `graphnous-security` | Who may call the API (see Security below), authorization and entitlements. Authorization and entitlements currently allow everything. |
-| `graphnous-scanner` | The scanner framework: target detection, scan planning, the scan result model (generated from `graphnous-schemas/scan`), the Java and TypeScript scanner definitions, and the Docker sandbox that runs them. |
+| `graphnous-scanner` | The scanner framework: target detection, scan planning, the scan result model (generated from `graphnous-schemas/scan`), the Java and TypeScript scanner definitions, the Docker sandbox that runs them, and `graphnous-scanner-cli`, which scans a repository from the command line. |
 
 The relational database is an in-memory H2 database, so systems, projects
 and scans do not survive a restart; scan results in Neo4j do.
@@ -22,11 +22,16 @@ and scans do not survive a restart; scan results in Neo4j do.
 
 ```sh
 cp .env.example .env   # set NEO4J_PASSWORD
+./download-scanners.sh
 docker compose up --build
 ```
 
 Build from this folder; the image is built from the repository root, as it
-also needs the schemas and both scanners. The server runs as a non-root user
+also needs the schemas. `download-scanners.sh` downloads the scanners it
+bundles into `scanners/`, from the releases of
+`graphnous/Graphnous-java-scanner` and `graphnous/Graphnous-typescript-scanner`
+at the versions it pins, with `gh` (a token that can read both private
+repositories). The server runs as a non-root user
 that needs the group owning the Docker socket: nothing to set on Docker
 Desktop, `DOCKER_GID` on Linux (see `.env.example`).
 
@@ -37,15 +42,16 @@ containers need to see the checkout. Inside Docker that is a shared volume;
 outside it, use a directory on the Docker host instead:
 
 ```sh
-mvn -f pom.xml install -DskipTests
-mvn -f ../../graphnous-java-scanner/pom.xml package -DskipTests
+mvn -f pom.xml package -DskipTests
+./download-scanners.sh
 
 java -jar graphnous-api/target/graphnous-api-1.0-SNAPSHOT.jar \
   --graphnous.scanner.workspace.type=host \
-  --graphnous.scanner.workspace.path=/absolute/path/to/checkouts \
-  --graphnous.scanner.java-scanner=../../graphnous-java-scanner/cli/target/scanners/java-scanner.jar \
-  --graphnous.scanner.typescript-scanner=../../graphnous-typescript-scanner/build/scanner.js
+  --graphnous.scanner.workspace.path=/absolute/path/to/checkouts
 ```
+
+The scanners are found in `scanners/`, as the server is started from this
+folder.
 
 On Docker Desktop the checkout directory must be in a folder shared with
 Docker (under your home directory, for example). If a server in Docker uses

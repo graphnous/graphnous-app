@@ -22,19 +22,21 @@ its root. Its `.github` folder is for that repository: GitHub reads
 | --- | --- |
 | `.github/workflows/ci.yml` | On every pull request and push to main: the server's tests (`mvn verify`), the web app's lint, build and story tests, and the server's Docker image |
 
-The app still builds on parts of this repository: the server and the web
-app generate code from [`graphnous-schemas`](../graphnous-schemas), and the
-server's image bundles [`graphnous-java-scanner`](../graphnous-java-scanner)
-and [`graphnous-typescript-scanner`](../graphnous-typescript-scanner). The
-workflow checks them out from this repository (the `GRAPHNOUS_REPOSITORY`
+The app still builds on part of this repository: the server and the web
+app generate code from [`graphnous-schemas`](../graphnous-schemas). The
+workflow checks it out from this repository (the `GRAPHNOUS_REPOSITORY`
 variable, by default `graphnous/Graphnous-2`) at the root of the workspace,
-and the app into `graphnous-app` next to them: the layout the app's
-relative paths expect, so they work unchanged.
+and the app into `graphnous-app` next to it: the layout the app's
+relative paths expect, so they work unchanged. The server's image bundles
+the Java and TypeScript scanners from the releases of
+`graphnous/Graphnous-java-scanner` and `graphnous/Graphnous-typescript-scanner`,
+at the versions `server/download-scanners.sh` pins.
 
 Before the move:
 
 1. Add a `GRAPHNOUS_TOKEN` secret to the new repository: a token that can
-   read this repository's contents, as it is private.
+   read the contents of this repository and of both scanner repositories,
+   as they are private.
 2. Have the web app install `graphnous-theme` from GitHub Packages, once it
    is published (see the theme's README), instead of from this repository's
    npm workspace:
@@ -48,5 +50,6 @@ Before the move:
 3. Pin the web app's dependencies that are `latest`
    (`@chromatic-com/storybook`, `playwright` and `vite`).
 
-To run the server's image or compose file outside CI, the schemas and both
-scanners have to be next to the app, as they are here.
+To run the server's image or compose file outside CI, the schemas have to
+be next to the app, as they are here, and the scanners downloaded with
+`server/download-scanners.sh`.
