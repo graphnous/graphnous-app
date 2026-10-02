@@ -5,8 +5,9 @@ calls the app's server, in [`../server`](../server).
 
 ## API client
 
-The models and client for the Graphnous API are generated from
-`../../graphnous-schemas/openapi/v1.yaml` into `src/generated/api` with
+The models and client for the Graphnous API are generated from the
+[OpenAPI spec](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml)
+published on GitHub Pages into `src/generated/api` with
 [OpenAPI Generator](https://openapi-generator.tech) (`typescript-fetch`),
 configured in `openapitools.json`. The generated code is not committed:
 `npm run dev` and `npm run build` generate it first, so it always matches the
@@ -16,7 +17,8 @@ spec. Generate it on its own with:
 npm run generate:api
 ```
 
-OpenAPI Generator runs on Java, which has to be installed.
+OpenAPI Generator runs on Java, which has to be installed, and downloads the
+spec, so generating needs network access.
 
 Components get the client with `useApi()`, from the `ApiClientProvider` in
 the root layout. It calls the API at `NEXT_PUBLIC_GRAPHNOUS_API_URL`, which is

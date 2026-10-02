@@ -11,7 +11,7 @@ persistence. Its web app is in [`../web`](../web). See the
 | `graphnous-domain` | The domain model: systems, projects, scans and scan logs. |
 | `graphnous-application` | The services: authorization checks, creating and deleting systems, projects and scans, running a scan, and failing stuck scans. Depends on repository interfaces only. |
 | `graphnous-persistence` | The repositories: systems, projects, scans and logs in a relational database (JPA), scan results in Neo4j. |
-| `graphnous-api` | The Spring Boot application: REST controllers, configuration and the executable jar. Generates its API models from `graphnous-schemas/openapi/v1.yaml`. |
+| `graphnous-api` | The Spring Boot application: REST controllers, configuration and the executable jar. Generates its API models from the [published OpenAPI spec](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml). |
 | `graphnous-security` | Who may call the API (see Security below), authorization and entitlements. Authorization and entitlements currently allow everything. |
 | `graphnous-scanner` | The scanner framework: target detection, scan planning, the scan result model (generated from `graphnous-schemas/scan`), the Java and TypeScript scanner definitions, and the Docker sandbox that runs them. |
 

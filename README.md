@@ -22,9 +22,11 @@ its root. Its `.github` folder is for that repository: GitHub reads
 | --- | --- |
 | `.github/workflows/ci.yml` | On every pull request and push to main: the server's tests (`mvn verify`), the web app's lint, build and story tests, and the server's Docker image |
 
-The app still builds on parts of this repository: the server and the web
-app generate code from [`graphnous-schemas`](../graphnous-schemas), and the
-server's image bundles [`graphnous-java-scanner`](../graphnous-java-scanner)
+The app still builds on parts of this repository: the server generates
+code from [`graphnous-schemas`](../graphnous-schemas) (the OpenAPI spec, used
+by the server and the web app, is downloaded from
+[GitHub Pages](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml)),
+and the server's image bundles [`graphnous-java-scanner`](../graphnous-java-scanner)
 and [`graphnous-typescript-scanner`](../graphnous-typescript-scanner). The
 workflow checks them out from this repository (the `GRAPHNOUS_REPOSITORY`
 variable, by default `graphnous/Graphnous-2`) at the root of the workspace,

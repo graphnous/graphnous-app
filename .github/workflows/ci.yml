@@ -1,11 +1,11 @@
 # The app's checks, for its own repository, with server/ and web/ at its
 # root.
 #
-# The app builds on parts of the repository it came from: the server and
-# the web app generate code from graphnous-schemas, and the server's image
-# bundles both scanners. Each job checks out what it needs from that
-# repository (the GRAPHNOUS_REPOSITORY variable, by default
-# graphnous/Graphnous-2) at the workspace's root, and the app into
+# The app builds on parts of the repository it came from: the server
+# generates code from graphnous-schemas, and the server's image bundles both
+# scanners; the OpenAPI spec is downloaded from GitHub Pages. Each job
+# checks out what it needs from that repository (the GRAPHNOUS_REPOSITORY
+# variable, by default graphnous/Graphnous-2) at the workspace's root, and the app into
 # graphnous-app next to it: the layout the app's relative paths expect.
 # That repository is private, so this needs a GRAPHNOUS_TOKEN secret that
 # can read its contents.
@@ -53,13 +53,6 @@ jobs:
       run:
         working-directory: graphnous-app/web
     steps:
-      - name: Check out the schemas
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.GRAPHNOUS_REPOSITORY }}
-          token: ${{ secrets.GRAPHNOUS_TOKEN }}
-          sparse-checkout: graphnous-schemas
-
       - name: Check out the app
         uses: actions/checkout@v4
         with:

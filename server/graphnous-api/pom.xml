@@ -17,6 +17,8 @@
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>4.1.1</spring-boot.version>
+        <!-- The API spec, published from graphnous-schemas on GitHub Pages -->
+        <graphnous.openapi.spec>https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml</graphnous.openapi.spec>
     </properties>
 
     <dependencies>
@@ -119,7 +121,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../../../graphnous-schemas/openapi/v1.yaml</inputSpec>
+                            <inputSpec>${graphnous.openapi.spec}</inputSpec>
                             <generatorName>spring</generatorName>
                             <modelPackage>dev.graphnous.api.v1.generated.pagination</modelPackage>
                             <generateModels>true</generateModels>
@@ -147,7 +149,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../../../graphnous-schemas/openapi/v1.yaml</inputSpec>
+                            <inputSpec>${graphnous.openapi.spec}</inputSpec>
                             <generatorName>spring</generatorName>
                             <modelPackage>dev.graphnous.api.v1.generated.system</modelPackage>
 
@@ -176,7 +178,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../../../graphnous-schemas/openapi/v1.yaml</inputSpec>
+                            <inputSpec>${graphnous.openapi.spec}</inputSpec>
                             <generatorName>spring</generatorName>
                             <modelPackage>dev.graphnous.api.v1.generated.project</modelPackage>
 
@@ -205,7 +207,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../../../graphnous-schemas/openapi/v1.yaml</inputSpec>
+                            <inputSpec>${graphnous.openapi.spec}</inputSpec>
                             <generatorName>spring</generatorName>
                             <modelPackage>dev.graphnous.api.v1.generated.scan</modelPackage>
 
@@ -234,7 +236,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../../../graphnous-schemas/openapi/v1.yaml</inputSpec>
+                            <inputSpec>${graphnous.openapi.spec}</inputSpec>
                             <generatorName>spring</generatorName>
                             <modelPackage>dev.graphnous.api.v1.generated.scanlog</modelPackage>
 
