@@ -1,6 +1,6 @@
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { MinusIcon } from "@phosphor-icons/react/ssr";
-import { StatusIndicator, type BadgeTone } from "graphnous-theme";
+import { StatusIndicator, type BadgeTone } from "@graphnous/theme";
 
 import type { ScanStepStatus } from "@/types";
 

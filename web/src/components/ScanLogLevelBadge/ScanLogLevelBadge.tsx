@@ -1,4 +1,4 @@
-import { Badge, type BadgeTone } from "graphnous-theme";
+import { Badge, type BadgeTone } from "@graphnous/theme";
 
 import type { ScanLogLevel } from "@/types";
 

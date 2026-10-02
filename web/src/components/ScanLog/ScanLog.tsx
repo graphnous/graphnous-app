@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Field, Inline, LogViewer, Select, Skeleton, Stack, StatusIndicator, type SelectOption } from "graphnous-theme";
+import { Field, Inline, LogViewer, Select, Skeleton, Stack, StatusIndicator, type SelectOption } from "@graphnous/theme";
 
 import type { ScanLog as ApiScanLog } from "@/generated/api";
 import { ApiErrorMessage } from "@/components/ApiErrorMessage/ApiErrorMessage";

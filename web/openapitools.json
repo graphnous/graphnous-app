@@ -6,7 +6,7 @@
     "generators": {
       "graphnous": {
         "generatorName": "typescript-fetch",
-        "inputSpec": "../../graphnous-schemas/openapi/v1.yaml",
+        "inputSpec": "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml",
         "output": "src/generated/api",
         "globalProperty": {
           "apiDocs": "false",

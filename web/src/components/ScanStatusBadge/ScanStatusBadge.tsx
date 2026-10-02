@@ -1,4 +1,4 @@
-import { StatusIndicator, type BadgeTone } from "graphnous-theme";
+import { StatusIndicator, type BadgeTone } from "@graphnous/theme";
 
 import type { ScanStatus } from "@/types";
 

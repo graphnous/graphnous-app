@@ -7,20 +7,33 @@ or runs without security, as the open-source container does.
 | Folder | What it is |
 | --- | --- |
 | [`server`](server) | The Spring Boot server: the REST API, scan orchestration and persistence, and the scanner framework the scanners build on |
-| [`web`](web) | The web app, in Next.js, built from [`graphnous-theme`](../graphnous-theme) |
+| [`web`](web) | The web app, in Next.js, built from [`@graphnous/theme`](https://www.npmjs.com/package/@graphnous/theme) |
 
 Each has its README with how to run and test it; the
 [repository README](../README.md) describes how the pieces fit together.
 
-## Its own repository
-
-The app is to move to a repository of its own, with `server/` and `web/` at
-its root. Its `.github` folder is for that repository: GitHub reads
-`.github` at a repository's root only, so here it does nothing.
+## CI and sibling repositories
 
 | File | What it does |
 | --- | --- |
 | `.github/workflows/ci.yml` | On every pull request and push to main: the server's tests (`mvn verify`), the web app's lint, build and story tests, and the server's Docker image |
+| `.github/workflows/publish.yml` | On every push to main and every `v*` tag: the server's Maven modules to [GitHub Packages](https://github.com/orgs/graphnous/packages?repo_name=graphnous-app), as `1.0-SNAPSHOT` from main and as the tag's version (`v1.2.3` publishes `1.2.3`) |
+
+The app builds on its sibling repositories: the server generates code from
+[`graphnous-schemas`](https://github.com/graphnous/graphnous-schemas) (the
+OpenAPI spec, used by the server and the web app, is downloaded from
+[GitHub Pages](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml)),
+and the server's image bundles
+[`graphnous-java-scanner`](https://github.com/graphnous/graphnous-java-scanner)
+and
+[`graphnous-typescript-scanner`](https://github.com/graphnous/graphnous-typescript-scanner).
+The workflow checks them out at the root of the workspace, and the app into
+`graphnous-app` next to them: the layout the app's relative paths expect.
+
+The scanners are private, so the workflow needs a `GRAPHNOUS_TOKEN` secret:
+a token that can read the contents of both scanner repositories.
+
+Still to do:
 
 The app still builds on part of this repository: the server and the web
 app generate code from [`graphnous-schemas`](../graphnous-schemas). The

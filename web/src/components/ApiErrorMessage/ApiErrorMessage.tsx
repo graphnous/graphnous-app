@@ -2,7 +2,7 @@
 
 import { ArrowClockwiseIcon, ArrowLeftIcon } from "@phosphor-icons/react/ssr";
 
-import { Alert, Button, ButtonLink } from "graphnous-theme";
+import { Alert, Button, ButtonLink } from "@graphnous/theme";
 
 import { describeApiError, type ApiProblem } from "@/lib/api/errors";
 import { useApiError } from "@/lib/api/useApiError";

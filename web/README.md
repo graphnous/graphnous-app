@@ -5,8 +5,9 @@ calls the app's server, in [`../server`](../server).
 
 ## API client
 
-The models and client for the Graphnous API are generated from
-`../../graphnous-schemas/openapi/v1.yaml` into `src/generated/api` with
+The models and client for the Graphnous API are generated from the
+[OpenAPI spec](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml)
+published on GitHub Pages into `src/generated/api` with
 [OpenAPI Generator](https://openapi-generator.tech) (`typescript-fetch`),
 configured in `openapitools.json`. The generated code is not committed:
 `npm run dev` and `npm run build` generate it first, so it always matches the
@@ -16,7 +17,8 @@ spec. Generate it on its own with:
 npm run generate:api
 ```
 
-OpenAPI Generator runs on Java, which has to be installed.
+OpenAPI Generator runs on Java, which has to be installed, and downloads the
+spec, so generating needs network access.
 
 Components get the client with `useApi()`, from the `ApiClientProvider` in
 the root layout. It calls the API at `NEXT_PUBLIC_GRAPHNOUS_API_URL`, which is
@@ -28,14 +30,14 @@ NEXT_PUBLIC_GRAPHNOUS_API_URL=http://localhost:8080 npm run dev
 
 ## Components and theme
 
-The components and the Tailwind theme are the component library in
-[`graphnous-theme`](../../graphnous-theme), which `src/app/globals.css` and the
-pages import. This app keeps what knows the API: the client in `src/lib/api`,
+The components and the Tailwind theme are the component library
+[`@graphnous/theme`](https://www.npmjs.com/package/@graphnous/theme), from
+[`graphnous-theme`](https://github.com/graphnous/graphnous-theme), which
+`src/app/globals.css` and the pages import. This app keeps what knows the API: the client in `src/lib/api`,
 the data hooks in `src/lib/hooks`, and `ApiErrorMessage`. `AppLinkProvider`
 makes the library's links go through Next.js' router.
 
-Install from the root of the repository, which is an npm workspace with both
-packages:
+Install with:
 
 ```bash
 npm ci
@@ -43,7 +45,8 @@ npm ci
 
 ## Storybook
 
-The library's components have their own Storybook in `graphnous-theme`; this
+The library's components have their own Storybook in
+[`graphnous-theme`](https://github.com/graphnous/graphnous-theme); this
 app's Storybook has the stories of what stays here:
 
 ```bash

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
-import { Button, LogViewer, type LogLine } from "graphnous-theme";
+import { Button, LogViewer, type LogLine } from "@graphnous/theme";
 
 import { useEventStream } from "./useEventStream";
 
