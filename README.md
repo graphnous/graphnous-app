@@ -17,6 +17,7 @@ Each has its README with how to run and test it; the
 | File | What it does |
 | --- | --- |
 | `.github/workflows/ci.yml` | On every pull request and push to main: the server's tests (`mvn verify`), the web app's lint, build and story tests, and the server's Docker image |
+| `.github/workflows/publish.yml` | On every push to main and every `v*` tag: the server's Maven modules to [GitHub Packages](https://github.com/orgs/graphnous/packages?repo_name=graphnous-app), as `1.0-SNAPSHOT` from main and as the tag's version (`v1.2.3` publishes `1.2.3`) |
 
 The app builds on its sibling repositories: the server generates code from
 [`graphnous-schemas`](https://github.com/graphnous/graphnous-schemas) (the

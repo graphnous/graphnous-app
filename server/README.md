@@ -18,6 +18,16 @@ persistence. Its web app is in [`../web`](../web). See the
 The relational database is an in-memory H2 database, so systems, projects
 and scans do not survive a restart; scan results in Neo4j do.
 
+### Publishing
+
+The modules are published to GitHub Packages by
+`.github/workflows/publish.yml`, so `graphnous-java-scanner` can depend on
+the scanner modules without building the server first. To use them from
+another build, add the repository
+`https://maven.pkg.github.com/graphnous/graphnous-app` with the id `github`,
+and a server `github` in `~/.m2/settings.xml` with a token that can read
+packages: GitHub Packages needs one even for reading.
+
 ## Running with Docker
 
 ```sh
