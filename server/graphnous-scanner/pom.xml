@@ -11,10 +11,9 @@
     </parent>
 
     <!--
-        Scan planning and execution. Also consumed by the cli and
-        java-scanner-app in the graphnous-java-scanner repository, which
-        is why the artifactId is not graphnous-scanner (that is the root
-        of graphnous-java-scanner).
+        Scan planning and execution, and the CLI that runs them on their own.
+        The artifactId is not graphnous-scanner, the root of
+        graphnous-java-scanner.
     -->
     <artifactId>graphnous-scanner-parent</artifactId>
     <packaging>pom</packaging>
@@ -24,6 +23,7 @@
         <module>graphnous-scanner-java</module>
         <module>graphnous-scanner-typescript</module>
         <module>graphnous-scanner-docker</module>
+        <module>graphnous-scanner-cli</module>
     </modules>
 
     <properties>
@@ -32,6 +32,7 @@
         <jackson.version>2.22.2</jackson.version>
         <docker-java.version>3.7.1</docker-java.version>
         <commons-compress.version>1.28.0</commons-compress.version>
+        <slf4j.version>2.0.18</slf4j.version>
 
         <junit.version>6.1.3</junit.version>
         <assertj.version>3.27.7</assertj.version>
@@ -109,6 +110,11 @@
                     <groupId>org.jsonschema2pojo</groupId>
                     <artifactId>jsonschema2pojo-maven-plugin</artifactId>
                     <version>1.2.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>3.6.2</version>
                 </plugin>
             </plugins>
         </pluginManagement>

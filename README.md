@@ -19,24 +19,26 @@ Each has its README with how to run and test it; the
 | `.github/workflows/ci.yml` | On every pull request and push to main: the server's tests (`mvn verify`), the web app's lint, build and story tests, and the server's Docker image |
 | `.github/workflows/publish.yml` | On every push to main and every `v*` tag: the server's Maven modules to [GitHub Packages](https://github.com/orgs/graphnous/packages?repo_name=graphnous-app), as `1.0-SNAPSHOT` from main and as the tag's version (`v1.2.3` publishes `1.2.3`) |
 
-The app builds on its sibling repositories: the server generates code from
+The server generates code from
 [`graphnous-schemas`](https://github.com/graphnous/graphnous-schemas) (the
 OpenAPI spec, used by the server and the web app, is downloaded from
-[GitHub Pages](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml)),
-and the server's image bundles
+[GitHub Pages](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml)).
+The workflows check the schemas out at the root of the workspace, at the
+commit the server is written for (`SCHEMAS_REF` in `ci.yml`), and the app
+into `graphnous-app` next to them: the layout the app's relative paths
+expect.
+
+The scanners are images of their own, published by
 [`graphnous-java-scanner`](https://github.com/graphnous/graphnous-java-scanner)
 and
-[`graphnous-typescript-scanner`](https://github.com/graphnous/graphnous-typescript-scanner).
-The workflow checks them out at the root of the workspace, and the app into
-`graphnous-app` next to them: the layout the app's relative paths expect.
-
-The scanners are private, so the workflow needs a `GRAPHNOUS_TOKEN` secret:
-a token that can read the contents of both scanner repositories.
+[`graphnous-typescript-scanner`](https://github.com/graphnous/graphnous-typescript-scanner);
+the server runs the versions its `graphnous.scanners` configuration names
+(see the [server README](server/README.md#scanners)).
 
 Still to do:
 
 1. Pin the web app's dependencies that are `latest`
    (`@chromatic-com/storybook`, `playwright` and `vite`).
 
-To run the server's image or compose file outside CI, clone the schemas and
-both scanners next to the app, as the workflow does.
+To build the server's image or compose file outside CI, clone the schemas
+next to the app, as the workflow does.

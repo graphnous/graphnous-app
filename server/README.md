@@ -13,7 +13,7 @@ persistence. Its web app is in [`../web`](../web). See the
 | `graphnous-persistence` | The repositories: systems, projects, scans and logs in a relational database (JPA), scan results in Neo4j. |
 | `graphnous-api` | The Spring Boot application: REST controllers, configuration and the executable jar. Generates its API models from the [published OpenAPI spec](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml). |
 | `graphnous-security` | Who may call the API (see Security below), authorization and entitlements. Authorization and entitlements currently allow everything. |
-| `graphnous-scanner` | The scanner framework: target detection, scan planning, the scan result model (generated from `graphnous-schemas/scan`), the Java and TypeScript scanner definitions, and the Docker sandbox that runs them. |
+| `graphnous-scanner` | The scanner framework: target detection, scan planning, the scan result model (generated from `graphnous-schemas/scan`), the scanner definitions, the Docker sandbox that runs the scanner images, and `graphnous-scanner-cli`, which scans a repository from the command line. |
 
 The relational database is an in-memory H2 database, so systems, projects
 and scans do not survive a restart; scan results in Neo4j do.
@@ -21,8 +21,8 @@ and scans do not survive a restart; scan results in Neo4j do.
 ### Publishing
 
 The modules are published to GitHub Packages by
-`.github/workflows/publish.yml`, so `graphnous-java-scanner` can depend on
-the scanner modules without building the server first. To use them from
+`.github/workflows/publish.yml`, so other builds can depend on the scanner
+modules without building the server first. To use them from
 another build, add the repository
 `https://maven.pkg.github.com/graphnous/graphnous-app` with the id `github`,
 and a server `github` in `~/.m2/settings.xml` with a token that can read
@@ -36,7 +36,9 @@ docker compose up --build
 ```
 
 Build from this folder; the image is built from the repository root, as it
-also needs the schemas and both scanners. The server runs as a non-root user
+also needs the schemas. The scanners are images of their own, which the
+server pulls on the Docker daemon when it first scans with them; see
+Scanners below. The server runs as a non-root user
 that needs the group owning the Docker socket: nothing to set on Docker
 Desktop, `DOCKER_GID` on Linux (see `.env.example`).
 
@@ -47,14 +49,11 @@ containers need to see the checkout. Inside Docker that is a shared volume;
 outside it, use a directory on the Docker host instead:
 
 ```sh
-mvn -f pom.xml install -DskipTests
-mvn -f ../../graphnous-java-scanner/pom.xml package -DskipTests
+mvn -f pom.xml package -DskipTests
 
 java -jar graphnous-api/target/graphnous-api-1.0-SNAPSHOT.jar \
   --graphnous.scanner.workspace.type=host \
-  --graphnous.scanner.workspace.path=/absolute/path/to/checkouts \
-  --graphnous.scanner.java-scanner=../../graphnous-java-scanner/cli/target/scanners/java-scanner.jar \
-  --graphnous.scanner.typescript-scanner=../../graphnous-typescript-scanner/build/scanner.js
+  --graphnous.scanner.workspace.path=/absolute/path/to/checkouts
 ```
 
 On Docker Desktop the checkout directory must be in a folder shared with
@@ -78,11 +77,38 @@ command-line arguments or environment variables.
 | `graphnous.scanner.workspace.volume` | `graphnous-checkouts` | The volume, for type `volume`. |
 | `graphnous.scanner.workspace.path` | `/checkouts` | Where the server sees the checkouts. |
 | `graphnous.scanner.git-image` | `alpine/git:2.54.0` | The image checkouts run in. |
-| `graphnous.scanner.java-scanner` | `scanners/java-scanner.jar` | The Java scanner copied into scanner containers. |
-| `graphnous.scanner.typescript-scanner` | `scanners/scanner.js` | The TypeScript scanner copied into scanner containers. |
+| `graphnous.scanners.<LANGUAGE>` | `JAVA` and `TYPESCRIPT` | The scanner for each language; see Scanners. |
 | `graphnous.security.enabled` (`GRAPHNOUS_SECURITY_ENABLED`) | `false` | Whether the API needs access tokens; see Security. |
 | `graphnous.security.issuer-uri` (`GRAPHNOUS_PLATFORM_URL`) | `http://localhost:1338` | The Graphnous platform, which issues the access tokens. |
 | `graphnous.security.default-organization-id` | `00000000-0000-0000-0000-000000000000` | The organization of every request with security off. |
+
+## Scanners
+
+Each scanner is an image, published by its own repository
+(`graphnous/Graphnous-java-scanner`, `graphnous/Graphnous-typescript-scanner`)
+to the GitHub Container Registry. `graphnous.scanners` names one per
+language:
+
+```yaml
+graphnous:
+  scanners:
+    JAVA:
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.1.0
+      command: [java, -jar, /opt/graphnous/java-scanner.jar,
+                --path, "{repository}", --target, "{target}",
+                --java-version, "{languageVersion}", --output, "{output}"]
+      output: /output/scan-result.json
+```
+
+For each target the server starts a container of the image with the
+command as its entrypoint, the repository mounted read-only, and an empty
+directory for the output that any user can write to. `{repository}` is
+where the repository is mounted, `{target}` the target's path in it,
+`{languageVersion}` its detected language version (empty when unknown)
+and `{output}` the output, which the server reads the result from once
+the container has stopped. A target of a language without a scanner fails
+to scan. To try another version, change the image's tag; to try a local
+build, the image only has to exist on the Docker daemon.
 
 ## Security
 

@@ -1,13 +1,9 @@
 # The app's checks.
 #
-# The app builds on its sibling repositories: the server generates code from
-# graphnous/graphnous-schemas, and the server's image bundles
-# graphnous/graphnous-java-scanner and graphnous/graphnous-typescript-scanner.
-# Each job checks out what it needs at the workspace's root, and the app into
-# graphnous-app next to them: the layout the app's relative paths expect.
-# The OpenAPI spec is downloaded from GitHub Pages. The scanners are private,
-# so the image job needs a GRAPHNOUS_TOKEN secret that can read their
-# contents.
+# The server generates code from graphnous-schemas. The jobs that build it
+# check out the schemas at SCHEMAS_REF, the commit the server is written
+# for, at the workspace's root, and the app into graphnous-app next to it:
+# the layout the app's relative paths expect.
 
 name: CI
 
@@ -15,6 +11,11 @@ on:
   push:
     branches: [main]
   pull_request:
+
+env:
+  # The scan result schema the server reads, and the Java scanner writes;
+  # move it forward with the server's code (and the scanners' pins)
+  SCHEMAS_REF: b8c8b252b1a399376b7770a447743a173b946974
 
 jobs:
   server:
@@ -25,6 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: graphnous/graphnous-schemas
+          ref: ${{ env.SCHEMAS_REF }}
           path: graphnous-schemas
 
       - name: Check out the app
@@ -87,21 +89,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: graphnous/graphnous-schemas
+          ref: ${{ env.SCHEMAS_REF }}
           path: graphnous-schemas
-
-      - name: Check out the Java scanner
-        uses: actions/checkout@v4
-        with:
-          repository: graphnous/graphnous-java-scanner
-          token: ${{ secrets.GRAPHNOUS_TOKEN }}
-          path: graphnous-java-scanner
-
-      - name: Check out the TypeScript scanner
-        uses: actions/checkout@v4
-        with:
-          repository: graphnous/graphnous-typescript-scanner
-          token: ${{ secrets.GRAPHNOUS_TOKEN }}
-          path: graphnous-typescript-scanner
 
       - name: Check out the app
         uses: actions/checkout@v4
@@ -110,7 +99,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      # From the workspace's root, with the app and its sibling repositories
+      # From the workspace's root, with the schemas next to the app
       - name: Build
         uses: docker/build-push-action@v6
         with:

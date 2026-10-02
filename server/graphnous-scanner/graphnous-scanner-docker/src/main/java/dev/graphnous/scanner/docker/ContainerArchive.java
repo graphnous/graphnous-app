@@ -7,8 +7,6 @@ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * Tar archives for Docker's copy API, which moves files in and out of a
@@ -18,40 +16,22 @@ import java.nio.file.Path;
  */
 final class ContainerArchive {
 
-    private static final int DIRECTORY_MODE = 040755;
     private static final int WRITABLE_DIRECTORY_MODE = 040777;
-    private static final int FILE_MODE = 0100644;
 
     private ContainerArchive() {
     }
 
     /**
-     * An archive to extract at the container root, holding the scanner at
-     * {@code <scannerDirectory>/<file name>} and an empty output directory
-     * any container user can write to.
+     * An archive to extract at the container root, holding an empty
+     * directory any container user can write to.
      */
-    static byte[] scannerAndOutput(
-        final Path scanner,
-        final String scannerDirectory,
-        final String outputDirectory
-    ) throws IOException {
+    static byte[] writableDirectory(final String directory) throws IOException {
         final var bytes = new ByteArrayOutputStream();
 
         try (final var tar = new TarArchiveOutputStream(bytes)) {
             tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
 
-            directory(tar, relative(scannerDirectory), DIRECTORY_MODE);
-            directory(tar, relative(outputDirectory), WRITABLE_DIRECTORY_MODE);
-
-            final var entry = new TarArchiveEntry(
-                relative(scannerDirectory) + "/" + scanner.getFileName()
-            );
-            entry.setSize(Files.size(scanner));
-            entry.setMode(FILE_MODE);
-
-            tar.putArchiveEntry(entry);
-            Files.copy(scanner, tar);
-            tar.closeArchiveEntry();
+            directory(tar, relative(directory), WRITABLE_DIRECTORY_MODE);
         }
 
         return bytes.toByteArray();

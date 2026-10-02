@@ -6,6 +6,7 @@ import com.github.dockerjava.api.command.WaitContainerResultCallback;
 import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.Mount;
 import com.github.dockerjava.api.model.MountType;
+import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.definition.ScannerDefinition;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 import dev.graphnous.scanner.model.ScanTarget;
@@ -60,9 +61,6 @@ class DockerSandboxTest {
     @TempDir
     Path repository;
 
-    @TempDir
-    Path scripts;
-
     static boolean dockerAvailable() {
         try {
             DockerSandbox.defaultClient().pingCmd().exec();
@@ -97,7 +95,7 @@ class DockerSandboxTest {
         sandbox.execute(scanner, repository, target());
 
         assertThat(stdout).containsExactly(
-            "/scanner/scanner.sh --path /workspace --target backend --output /output/scan-result.json"
+            "scanner --path /workspace --target backend --output /output/scan-result.json"
         );
     }
 
@@ -159,18 +157,29 @@ class DockerSandboxTest {
     @Test
     void letsANonRootScannerWriteItsResult() throws IOException {
         // Images may run as any user, so the output directory must be
-        // writable for all. The script re-runs itself as alpine's "nobody".
+        // writable for all. The script writes as alpine's "nobody".
         final var scanner = scanner("""
-            if [ "$1" != "--as-nobody" ]; then
-                exec su -s /bin/sh nobody -c "sh $0 --as-nobody $6"
-            fi
-            id -u
-            printf '%s' '%s' > "$2"
+            printf '%s' '%s' > /tmp/result
+            exec su -s /bin/sh nobody -c "id -u; cp /tmp/result $6"
             """.formatted("%s", RESULT));
 
         final var result = sandbox.execute(scanner, repository, target());
 
         assertThat(stdout).containsExactly("65534");
+        assertThat(result.getFormat()).isEqualTo("graphnous-scan-result");
+    }
+
+    @Test
+    void readsTheResultFromTheScannersOutput() throws IOException {
+        final var scanner = new ImageScannerDefinition(
+            ScanTarget.Language.JAVA,
+            IMAGE,
+            List.of("sh", "-c", "printf '%s' '%s' > \"$1\"".formatted("%s", RESULT), "scanner", "{output}"),
+            "/results/java/result.json"
+        );
+
+        final var result = sandbox.execute(scanner, repository, target());
+
         assertThat(result.getFormat()).isEqualTo("graphnous-scan-result");
     }
 
@@ -188,7 +197,7 @@ class DockerSandboxTest {
     }
 
     @Test
-    void removesTheContainerWhenTheScannerFails() throws IOException {
+    void removesTheContainerWhenTheScannerFails() {
         final var scanner = scanner("exit 1");
 
         final var before = containers();
@@ -300,42 +309,20 @@ class DockerSandboxTest {
     }
 
     /**
-     * A scanner that runs the script with sh; its arguments are
-     * --path $2 --target $4 --output $6.
+     * A scanner that runs the script with sh in {@value #IMAGE}; its
+     * arguments are --path $2 --target $4 --output $6.
      */
-    private ScannerDefinition scanner(final String script) throws IOException {
-        final var file = scripts.resolve("scanner.sh");
-        Files.writeString(file, script);
-
-        return new ScannerDefinition() {
-            @Override
-            public boolean supports(final ScanTarget target) {
-                return true;
-            }
-
-            @Override
-            public Path scanner() {
-                return file;
-            }
-
-            @Override
-            public List<String> command(final Path repository, final ScanTarget target) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public List<String> containerCommand(
-                final String scanner,
-                final String repository,
-                final ScanTarget target
-            ) {
-                return List.of("sh", scanner, "--path", repository, "--target", target.getPath());
-            }
-
-            @Override
-            public String image(final ScanTarget target) {
-                return IMAGE;
-            }
-        };
+    private static ScannerDefinition scanner(final String script) {
+        return new ImageScannerDefinition(
+            ScanTarget.Language.JAVA,
+            IMAGE,
+            List.of(
+                "sh", "-c", script, "scanner",
+                "--path", ImageScannerDefinition.REPOSITORY,
+                "--target", ImageScannerDefinition.TARGET,
+                "--output", ImageScannerDefinition.OUTPUT
+            ),
+            "/output/scan-result.json"
+        );
     }
 }

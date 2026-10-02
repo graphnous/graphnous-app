@@ -7,6 +7,7 @@ import dev.graphnous.api.project.scanner.docker.DockerRepositoryScanner;
 import dev.graphnous.api.project.scanner.docker.DockerScanContainers;
 import dev.graphnous.api.project.scanner.docker.DockerSourceCheckout;
 import dev.graphnous.api.project.scanner.docker.ScannerProperties;
+import dev.graphnous.api.project.scanner.docker.ScannersProperties;
 import dev.graphnous.application.enhancer.EnhancementRepository;
 import dev.graphnous.application.enhancer.Enhancer;
 import dev.graphnous.application.enhancer.EnhancerPipeline;
@@ -24,11 +25,9 @@ import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.scanner.docker.DockerGitCheckout;
 import dev.graphnous.scanner.docker.DockerSandbox;
 import dev.graphnous.scanner.docker.DockerWorkspace;
-import dev.graphnous.scanner.java.JavaScannerDefinition;
 import dev.graphnous.scanner.java.language.JavaVersionDetector;
 import dev.graphnous.scanner.java.targetdetector.MavenScanTargetDetector;
 import dev.graphnous.scanner.plan.DefaultScanPlanner;
-import dev.graphnous.scanner.typescript.TypescriptScannerDefinition;
 import dev.graphnous.scanner.typescript.language.NodeVersionDetector;
 import dev.graphnous.scanner.typescript.targetdetector.NpmTargetDetector;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +39,7 @@ import org.springframework.core.io.support.ResourcePatternResolver;
 import java.util.List;
 
 @Configuration
-@EnableConfigurationProperties(ScannerProperties.class)
+@EnableConfigurationProperties({ScannerProperties.class, ScannersProperties.class})
 public class ScannerConfiguration {
 
     /**
@@ -139,7 +138,7 @@ public class ScannerConfiguration {
         final DockerClient dockerClient,
         final DockerGitCheckout dockerGitCheckout,
         final DockerScanContainers dockerScanContainers,
-        final ScannerProperties properties
+        final ScannersProperties scanners
     ) {
         final var planner = new DefaultScanPlanner(
             List.of(
@@ -148,16 +147,13 @@ public class ScannerConfiguration {
             ),
             List.of(
                 new JavaVersionDetector(),
-                new NodeVersionDetector(scannerObjectMapper, TypescriptScannerDefinition.DEFAULT_NODE_VERSION)
+                new NodeVersionDetector(scannerObjectMapper, NodeVersionDetector.DEFAULT_NODE_VERSION)
             )
         );
 
         return new DockerRepositoryScanner(
             planner,
-            List.of(
-                new JavaScannerDefinition(properties.javaScanner()),
-                new TypescriptScannerDefinition(properties.typescriptScanner())
-            ),
+            scanners.definitions(),
             dockerClient,
             // The scanners get the workspace the source was checked out in
             dockerGitCheckout.workspace(),

@@ -4,14 +4,11 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -20,48 +17,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ContainerArchiveTest {
 
-    @TempDir
-    Path directory;
-
     @Test
-    void placesTheScannerAndAWritableOutputDirectory() throws IOException {
-        final var scanner = Files.writeString(directory.resolve("java-scanner.jar"), "jar-content");
+    void holdsAWritableDirectory() throws IOException {
+        final var entries = entries(ContainerArchive.writableDirectory("/output"));
 
-        final var entries = entries(ContainerArchive.scannerAndOutput(scanner, "/scanner", "/output"));
-
-        assertThat(entries.keySet()).containsExactly(
-            "scanner/",
-            "output/",
-            "scanner/java-scanner.jar"
-        );
-
-        assertThat(entries.get("scanner/").isDirectory()).isTrue();
+        assertThat(entries.keySet()).containsExactly("output/");
         assertThat(entries.get("output/").isDirectory()).isTrue();
         assertThat(entries.get("output/").getMode() & 0777).isEqualTo(0777);
-
-        final var file = entries.get("scanner/java-scanner.jar");
-        assertThat(file.isFile()).isTrue();
-        assertThat(file.getSize()).isEqualTo("jar-content".length());
-        assertThat(file.getMode() & 0777).isEqualTo(0644);
     }
 
     @Test
-    void storesTheScannerContent() throws IOException {
-        final var scanner = Files.writeString(directory.resolve("scanner.js"), "console.log('hi')");
-
-        final var archive = ContainerArchive.scannerAndOutput(scanner, "/scanner", "/output");
-
-        try (final var tar = new TarArchiveInputStream(new ByteArrayInputStream(archive))) {
-            for (var entry = tar.getNextEntry(); entry != null; entry = tar.getNextEntry()) {
-                if (entry.isFile()) {
-                    assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
-                        .isEqualTo("console.log('hi')");
-                    return;
-                }
-            }
-        }
-
-        throw new AssertionError("No file in archive");
+    void holdsANestedDirectory() throws IOException {
+        assertThat(entries(ContainerArchive.writableDirectory("/tmp/graphnous/output")).keySet())
+            .containsExactly("tmp/graphnous/output/");
     }
 
     @Test

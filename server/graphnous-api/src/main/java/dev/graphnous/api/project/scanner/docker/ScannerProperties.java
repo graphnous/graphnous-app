@@ -5,20 +5,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.nio.file.Path;
 
 /**
- * @param instance          the name of this server on the Docker daemon; its
- *                          containers carry it, so a server only stops its own
- * @param workspace         where repositories are checked out for scanning
- * @param gitImage          the image the checkout runs in
- * @param javaScanner       the java-scanner.jar built by graphnous-java-scanner
- * @param typescriptScanner the scanner.js built by graphnous-typescript-scanner
+ * Where scanners run; {@link ScannersProperties} configures the scanners
+ * themselves.
+ *
+ * @param instance  the name of this server on the Docker daemon; its
+ *                  containers carry it, so a server only stops its own
+ * @param workspace where repositories are checked out for scanning
+ * @param gitImage  the image the checkout runs in
  */
 @ConfigurationProperties("graphnous.scanner")
 public record ScannerProperties(
     String instance,
     Workspace workspace,
-    String gitImage,
-    Path javaScanner,
-    Path typescriptScanner
+    String gitImage
 ) {
 
     /**

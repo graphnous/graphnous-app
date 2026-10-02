@@ -13,6 +13,11 @@ import java.util.regex.Pattern;
 public class NodeVersionDetector implements LanguageVersionDetector {
 
     /**
+     * The Node version reported when the target names none.
+     */
+    public static final String DEFAULT_NODE_VERSION = "24";
+
+    /**
      * A single semver comparator, e.g. {@code >=18.0.0}, {@code ^v20} or {@code 18.x}.
      */
     private static final Pattern COMPARATOR = Pattern.compile(
