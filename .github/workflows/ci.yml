@@ -1,14 +1,13 @@
-# The app's checks, for its own repository, with server/ and web/ at its
-# root.
+# The app's checks.
 #
-# The app builds on parts of the repository it came from: the server
-# generates code from graphnous-schemas, and the server's image bundles both
-# scanners; the OpenAPI spec is downloaded from GitHub Pages. Each job
-# checks out what it needs from that repository (the GRAPHNOUS_REPOSITORY
-# variable, by default graphnous/Graphnous-2) at the workspace's root, and the app into
-# graphnous-app next to it: the layout the app's relative paths expect.
-# That repository is private, so this needs a GRAPHNOUS_TOKEN secret that
-# can read its contents.
+# The app builds on its sibling repositories: the server generates code from
+# graphnous/graphnous-schemas, and the server's image bundles
+# graphnous/graphnous-java-scanner and graphnous/graphnous-typescript-scanner.
+# Each job checks out what it needs at the workspace's root, and the app into
+# graphnous-app next to them: the layout the app's relative paths expect.
+# The OpenAPI spec is downloaded from GitHub Pages. The scanners are private,
+# so the image job needs a GRAPHNOUS_TOKEN secret that can read their
+# contents.
 
 name: CI
 
@@ -16,9 +15,6 @@ on:
   push:
     branches: [main]
   pull_request:
-
-env:
-  GRAPHNOUS_REPOSITORY: ${{ vars.GRAPHNOUS_REPOSITORY || 'graphnous/Graphnous-2' }}
 
 jobs:
   server:
@@ -28,9 +24,8 @@ jobs:
       - name: Check out the schemas
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.GRAPHNOUS_REPOSITORY }}
-          token: ${{ secrets.GRAPHNOUS_TOKEN }}
-          sparse-checkout: graphnous-schemas
+          repository: graphnous/graphnous-schemas
+          path: graphnous-schemas
 
       - name: Check out the app
         uses: actions/checkout@v4
@@ -95,15 +90,25 @@ jobs:
     name: Server image
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the schemas and the scanners
+      - name: Check out the schemas
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.GRAPHNOUS_REPOSITORY }}
+          repository: graphnous/graphnous-schemas
+          path: graphnous-schemas
+
+      - name: Check out the Java scanner
+        uses: actions/checkout@v4
+        with:
+          repository: graphnous/graphnous-java-scanner
           token: ${{ secrets.GRAPHNOUS_TOKEN }}
-          sparse-checkout: |
-            graphnous-schemas
-            graphnous-java-scanner
-            graphnous-typescript-scanner
+          path: graphnous-java-scanner
+
+      - name: Check out the TypeScript scanner
+        uses: actions/checkout@v4
+        with:
+          repository: graphnous/graphnous-typescript-scanner
+          token: ${{ secrets.GRAPHNOUS_TOKEN }}
+          path: graphnous-typescript-scanner
 
       - name: Check out the app
         uses: actions/checkout@v4
@@ -112,7 +117,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      # From the workspace's root, as from the repository the app came from
+      # From the workspace's root, with the app and its sibling repositories
       - name: Build
         uses: docker/build-push-action@v6
         with:
