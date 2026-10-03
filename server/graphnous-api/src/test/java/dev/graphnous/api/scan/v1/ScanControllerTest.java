@@ -6,6 +6,7 @@ import dev.graphnous.application.exception.ConflictException;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.scan.DeleteScanCommand;
 import dev.graphnous.application.scan.ScanService;
+import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,48 @@ class ScanControllerTest {
 
     @MockitoBean
     private RequestContextProvider contextProvider;
+
+    @Test
+    void getScan() throws Exception {
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("abc123", "main"), now, now, now
+        );
+
+        when(scanService.getScan(any(), eq(scan.id()))).thenReturn(scan);
+
+        mockMvc.perform(get("/api/v1/scans/{id}", scan.id().id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(scan.id().id().toString()))
+            .andExpect(jsonPath("$.status").value("COMPLETED"))
+            .andExpect(openApi().isValid(OPENAPI_SPEC));
+    }
+
+    @Test
+    void getUnknownScan() throws Exception {
+        when(scanService.getScan(any(), any())).thenThrow(new NotFoundException("Scan not found"));
+
+        mockMvc.perform(get("/api/v1/scans/{id}", UUID.randomUUID()))
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(OPENAPI_SPEC));
+    }
+
+    @Test
+    void getScanWithoutPermission() throws Exception {
+        when(scanService.getScan(any(), any())).thenThrow(new AuthorizationException("Not allowed"));
+
+        mockMvc.perform(get("/api/v1/scans/{id}", UUID.randomUUID()))
+            .andExpect(status().isForbidden())
+            .andExpect(openApi().isValid(OPENAPI_SPEC));
+    }
+
+    @Test
+    void getScanWithAnInvalidId() throws Exception {
+        mockMvc.perform(get("/api/v1/scans/not-a-uuid"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+    }
 
     @Test
     void deleteScan() throws Exception {

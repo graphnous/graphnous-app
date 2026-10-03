@@ -51,6 +51,18 @@ public class ScanController {
         this.scanLogService = scanLogService;
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<dev.graphnous.api.v1.generated.scan.Scan> getScan(
+        @PathVariable("id") final UUID id
+    ) {
+        final var scan = this.scanService.getScan(
+            this.contextProvider.get(),
+            new Scan.ScanId(id)
+        );
+
+        return ResponseEntity.ok(this.scanMapper.fromDomain(scan));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteScan(
         @PathVariable("id") final UUID id
