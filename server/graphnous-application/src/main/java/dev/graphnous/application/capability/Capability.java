@@ -1,0 +1,15 @@
+package dev.graphnous.application.capability;
+
+public enum Capability {
+    SCANNING,
+    PRIVATE_REPOSITORIES,
+    ARCHITECTURE_ANALYSIS,
+    ARCHITECTURE_RULES,
+    ARCHITECTURE_VIOLATIONS,
+    SCAN_COMPARISON,
+    CROSS_PROJECT_ANALYSIS,
+    CUSTOM_ENHANCERS,
+    CUSTOM_RULESETS,
+    AI,
+    BYOK_AI
+}
