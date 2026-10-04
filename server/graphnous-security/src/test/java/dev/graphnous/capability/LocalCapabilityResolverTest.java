@@ -13,4 +13,9 @@ class LocalCapabilityResolverTest {
             .containsExactlyInAnyOrder(Capability.values());
     }
 
+    @Test
+    void doesNotEnableAuthorization() {
+        assertThat(new LocalCapabilityResolver().isAuthorizationEnabled()).isFalse();
+    }
+
 }

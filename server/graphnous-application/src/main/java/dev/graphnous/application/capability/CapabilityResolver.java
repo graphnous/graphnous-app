@@ -9,4 +9,6 @@ public interface CapabilityResolver {
 
     List<Capability> resolve();
 
+    boolean isAuthorizationEnabled();
+
 }

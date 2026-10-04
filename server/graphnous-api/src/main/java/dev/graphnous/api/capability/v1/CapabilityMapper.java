@@ -1,10 +1,11 @@
 package dev.graphnous.api.capability.v1;
 
 import dev.graphnous.api.v1.generated.capability.CapabilitiesResponse;
+import dev.graphnous.api.v1.generated.capability.CapabilitiesResponseAuthorization;
 import dev.graphnous.api.v1.generated.capability.Capability;
+import dev.graphnous.application.capability.Capabilities;
 
 import java.util.LinkedHashSet;
-import java.util.List;
 
 class CapabilityMapper {
 
@@ -15,12 +16,15 @@ class CapabilityMapper {
     }
 
     public CapabilitiesResponse toResponse(
-        final List<dev.graphnous.application.capability.Capability> domain
+        final Capabilities domain
     ) {
         final var response = new CapabilitiesResponse();
 
         response.setCapabilities(
-            new LinkedHashSet<>(domain.stream().map(this::fromDomain).toList())
+            new LinkedHashSet<>(domain.capabilities().stream().map(this::fromDomain).toList())
+        );
+        response.setAuthorization(
+            new CapabilitiesResponseAuthorization(domain.authorization().enabled())
         );
 
         return response;
