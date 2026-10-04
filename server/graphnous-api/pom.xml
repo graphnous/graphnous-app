@@ -274,7 +274,7 @@
                             <generateSupportingFiles>false</generateSupportingFiles>
 
                             <globalProperties>
-                                <models>CapabilitiesResponse,Capability</models>
+                                <models>CapabilitiesResponse,CapabilitiesResponse_authorization,Capability</models>
                             </globalProperties>
 
                             <configOptions>

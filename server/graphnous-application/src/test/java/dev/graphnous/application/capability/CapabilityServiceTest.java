@@ -22,7 +22,16 @@ class CapabilityServiceTest {
 
         final var service = new CapabilityService(capabilityResolver);
 
-        assertThat(service.getCapabilities()).containsExactly(Capability.SCANNING, Capability.AI);
+        assertThat(service.getCapabilities().capabilities()).containsExactly(Capability.SCANNING, Capability.AI);
+    }
+
+    @Test
+    void returnsWhetherAuthorizationIsEnabled() {
+        when(capabilityResolver.isAuthorizationEnabled()).thenReturn(true);
+
+        final var service = new CapabilityService(capabilityResolver);
+
+        assertThat(service.getCapabilities().authorization().enabled()).isTrue();
     }
 
 }

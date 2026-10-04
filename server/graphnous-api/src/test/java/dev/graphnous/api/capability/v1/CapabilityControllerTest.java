@@ -1,5 +1,6 @@
 package dev.graphnous.api.capability.v1;
 
+import dev.graphnous.application.capability.Capabilities;
 import dev.graphnous.application.capability.Capability;
 import dev.graphnous.application.capability.CapabilityService;
 import org.junit.jupiter.api.Test;
@@ -34,22 +35,29 @@ class CapabilityControllerTest {
     @Test
     void getCapabilities() throws Exception {
         when(capabilityService.getCapabilities()).thenReturn(
-            List.of(Capability.SCANNING, Capability.BYOK_AI)
+            new Capabilities(
+                List.of(Capability.SCANNING, Capability.BYOK_AI),
+                new Capabilities.Authorization(true)
+            )
         );
 
         mockMvc.perform(get("/api/v1/capabilities"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.capabilities", contains("SCANNING", "BYOK_AI")))
+            .andExpect(jsonPath("$.authorization.enabled").value(true))
             .andExpect(openApi().isValid(OPENAPI_SPEC));
     }
 
     @Test
     void getCapabilitiesWhenThereAreNone() throws Exception {
-        when(capabilityService.getCapabilities()).thenReturn(List.of());
+        when(capabilityService.getCapabilities()).thenReturn(
+            new Capabilities(List.of(), new Capabilities.Authorization(false))
+        );
 
         mockMvc.perform(get("/api/v1/capabilities"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.capabilities").isEmpty())
+            .andExpect(jsonPath("$.authorization.enabled").value(false))
             .andExpect(openApi().isValid(OPENAPI_SPEC));
     }
 
