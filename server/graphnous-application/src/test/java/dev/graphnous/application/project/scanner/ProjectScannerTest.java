@@ -9,10 +9,12 @@ import dev.graphnous.application.enhancer.EnhancerRegistry;
 import dev.graphnous.application.enhancer.RuleOutcome;
 import dev.graphnous.application.enhancer.TargetEnhancements;
 import dev.graphnous.application.enhancer.model.EnhancerManifestSchema;
+import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.InMemoryScanStepRepository;
+import dev.graphnous.application.scan.ScanCompletedEvent;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
@@ -29,6 +31,7 @@ import dev.graphnous.scanner.plan.ScanPlan;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -86,6 +89,9 @@ class ProjectScannerTest {
     @Mock
     private EnhancerRegistry enhancerRegistry;
 
+    @Mock
+    private EventPublisher eventPublisher;
+
     private final InMemoryScanStepRepository steps = new InMemoryScanStepRepository();
 
     private final RequestContext context = new RequestContext(
@@ -131,6 +137,23 @@ class ProjectScannerTest {
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
         assertThat(steps.statuses(scan.id()).values()).containsOnly(COMPLETED).hasSize(6);
         assertThat(steps.step(scan.id(), CHECKOUT).startedAt()).isNotNull();
+    }
+
+    @Test
+    void announcesACompletedScanWithItsResults() {
+        final var result = scanResult();
+
+        when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any()))
+            .thenReturn(new ScanReport(List.of(result), List.of()));
+
+        start();
+
+        final var event = completedEvent();
+
+        assertThat(event.getScanId()).isEqualTo(scan.id());
+        assertThat(event.getProjectId()).isEqualTo(project.id());
+        assertThat(event.getResults()).containsExactly(result);
     }
 
     @Test
@@ -211,6 +234,7 @@ class ProjectScannerTest {
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(COMPLETED, COMPLETED, COMPLETED, FAILED, SKIPPED, SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
+        verify(eventPublisher, never()).publish(any());
     }
 
     @Test
@@ -222,6 +246,7 @@ class ProjectScannerTest {
 
         verify(scanResultRepository, never()).save(any(), any());
         verify(scanService, never()).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+        verify(eventPublisher, never()).publish(any());
         verify(scanLogService).log(eq(scan.id()), eq(ScanLogLevel.WARN), startsWith("Scan finished after it was marked FAILED"));
         verify(sourceCheckout).remove(eq(scan.id()), any());
     }
@@ -237,6 +262,7 @@ class ProjectScannerTest {
 
         verify(scanResultRepository, never()).save(any(), any());
         verify(scanService, never()).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+        verify(eventPublisher, never()).publish(any());
         // Its logs were deleted with it
         verify(scanLogService, never()).log(eq(scan.id()), eq(ScanLogLevel.WARN), startsWith("Scan finished"));
     }
@@ -362,6 +388,7 @@ class ProjectScannerTest {
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(SKIPPED, SKIPPED, SKIPPED, COMPLETED, COMPLETED, COMPLETED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+        assertThat(completedEvent().getResults()).containsExactly(result);
     }
 
     @Test
@@ -377,6 +404,7 @@ class ProjectScannerTest {
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(SKIPPED, SKIPPED, SKIPPED, FAILED, SKIPPED, SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
+        verify(eventPublisher, never()).publish(any());
     }
 
     /**
@@ -401,6 +429,14 @@ class ProjectScannerTest {
         return result;
     }
 
+    private ScanCompletedEvent completedEvent() {
+        final var event = ArgumentCaptor.forClass(ScanCompletedEvent.class);
+
+        verify(eventPublisher).publish(event.capture());
+
+        return event.getValue();
+    }
+
     private void start() {
         scanner().startScan(new StartScanCommand(scan.id()), context);
     }
@@ -417,7 +453,8 @@ class ProjectScannerTest {
             scanResultRepository,
             enhancerPipeline,
             enhancerRegistry,
-            new ScanSteps(steps, Clock.systemUTC())
+            new ScanSteps(steps, Clock.systemUTC()),
+            eventPublisher
         );
     }
 

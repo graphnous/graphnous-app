@@ -5,8 +5,10 @@ import dev.graphnous.application.enhancer.Enhancement;
 import dev.graphnous.application.enhancer.EnhancerPipeline;
 import dev.graphnous.application.enhancer.EnhancerRegistry;
 import dev.graphnous.application.enhancer.RuleOutcome;
+import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.application.scan.ScanCompletedEvent;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
@@ -43,6 +45,8 @@ public class ProjectScanner {
 
     private final ScanSteps scanSteps;
 
+    private final EventPublisher eventPublisher;
+
     public ProjectScanner(
         final ScanService scanService,
         final ProjectService projectService,
@@ -53,7 +57,8 @@ public class ProjectScanner {
         final ScanResultRepository scanResultRepository,
         final EnhancerPipeline enhancerPipeline,
         final EnhancerRegistry enhancerRegistry,
-        final ScanSteps scanSteps
+        final ScanSteps scanSteps,
+        final EventPublisher eventPublisher
     ) {
         this.scanService = scanService;
         this.projectService = projectService;
@@ -70,6 +75,8 @@ public class ProjectScanner {
         this.enhancerRegistry = enhancerRegistry;
 
         this.scanSteps = scanSteps;
+
+        this.eventPublisher = eventPublisher;
     }
 
     public void startScan(
@@ -171,7 +178,7 @@ public class ProjectScanner {
             step = null;
             enhance(scanId, report.results(), logger);
 
-            this.scanService.updateStatus(context, scanId, Scan.ScanStatus.COMPLETED);
+            complete(scan, report.results(), context);
         } catch (Exception e) {
             fail(scan, context, logger, step, e);
         } finally {
@@ -225,10 +232,25 @@ public class ProjectScanner {
             step = null;
             enhance(scanId, results, logger);
 
-            this.scanService.updateStatus(context, scanId, Scan.ScanStatus.COMPLETED);
+            complete(scan, results, context);
         } catch (Exception e) {
             fail(scan, context, logger, step, e);
         }
+    }
+
+    /**
+     * Completes the scan, and announces it with its results.
+     */
+    private void complete(
+        final Scan scan,
+        final List<ScanResultSchema> results,
+        final RequestContext context
+    ) {
+        this.scanService.updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+
+        this.eventPublisher.publish(
+            new ScanCompletedEvent(scan.id(), scan.projectId(), results)
+        );
     }
 
     /**

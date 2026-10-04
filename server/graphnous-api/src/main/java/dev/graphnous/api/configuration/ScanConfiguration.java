@@ -14,6 +14,8 @@ import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultRepository;
+import dev.graphnous.application.scan.stats.ScanStatRepository;
+import dev.graphnous.application.scan.stats.ScanStatService;
 import dev.graphnous.application.system.SystemRepository;
 import dev.graphnous.application.system.SystemService;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,14 +58,21 @@ public class ScanConfiguration {
         final ScanRepository scanRepository,
         final ScanLogRepository scanLogRepository,
         final ScanResultRepository scanResultRepository,
-        final ScanStepRepository scanStepRepository
+        final ScanStepRepository scanStepRepository,
+        final ScanStatRepository scanStatRepository
     ) {
         return new ScanDeleter(
             scanRepository,
             scanLogRepository,
             scanResultRepository,
-            scanStepRepository
+            scanStepRepository,
+            scanStatRepository
         );
+    }
+
+    @Bean
+    ScanStatService scanStatService(final ScanStatRepository scanStatRepository) {
+        return new ScanStatService(scanStatRepository);
     }
 
     @Bean

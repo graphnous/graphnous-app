@@ -8,11 +8,13 @@ import dev.graphnous.application.project.ProjectRepository;
 import dev.graphnous.application.scan.ScanRepository;
 import dev.graphnous.application.scan.ScanStepRepository;
 import dev.graphnous.application.scan.log.ScanLogRepository;
+import dev.graphnous.application.scan.stats.ScanStatRepository;
 import dev.graphnous.application.system.SystemRepository;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep;
 import dev.graphnous.domain.scan.log.ScanLog;
+import dev.graphnous.domain.scan.stats.ScanStats;
 import dev.graphnous.domain.system.System;
 import org.junit.jupiter.api.Test;
 import org.neo4j.driver.Driver;
@@ -73,6 +75,9 @@ class RepositoriesTest {
 
     @Autowired
     private ScanStepRepository scanStepRepository;
+
+    @Autowired
+    private ScanStatRepository scanStatRepository;
 
     @Autowired
     private Driver driver;
@@ -363,6 +368,49 @@ class RepositoriesTest {
 
         assertThat(scanStepRepository.findByScanId(scan.id())).isEmpty();
         assertThat(scanStepRepository.findByScanId(other.id())).hasSize(1);
+    }
+
+    // Scan stats
+
+    @Test
+    void findsTheStatsOfAScan() {
+        final var backend = project(system("Shop"), "backend");
+        final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
+
+        final var stats = scanStatRepository.save(
+            new ScanStats(ScanStats.ScanStatId.generate(), scan.id(), backend.id(), 12, 8, 31)
+        );
+
+        assertThat(scanStatRepository.findByScanId(scan.id())).contains(stats);
+        assertThat(scanStatRepository.findByScanId(scan(backend, Scan.ScanStatus.COMPLETED).id())).isEmpty();
+    }
+
+    @Test
+    void updatesTheStatsOfAScan() {
+        final var backend = project(system("Shop"), "backend");
+        final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
+        final var id = ScanStats.ScanStatId.generate();
+
+        scanStatRepository.save(new ScanStats(id, scan.id(), backend.id(), 1, 1, 1));
+        scanStatRepository.save(new ScanStats(id, scan.id(), backend.id(), 12, 8, 31));
+
+        assertThat(scanStatRepository.findByScanId(scan.id()))
+            .contains(new ScanStats(id, scan.id(), backend.id(), 12, 8, 31));
+    }
+
+    @Test
+    void deletesTheStatsOfOneScan() {
+        final var backend = project(system("Shop"), "backend");
+        final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
+        final var other = scan(backend, Scan.ScanStatus.COMPLETED);
+
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), scan.id(), backend.id(), 1, 1, 1));
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), other.id(), backend.id(), 1, 1, 1));
+
+        scanStatRepository.deleteByScanId(scan.id());
+
+        assertThat(scanStatRepository.findByScanId(scan.id())).isEmpty();
+        assertThat(scanStatRepository.findByScanId(other.id())).isPresent();
     }
 
     private System system(final String name) {
