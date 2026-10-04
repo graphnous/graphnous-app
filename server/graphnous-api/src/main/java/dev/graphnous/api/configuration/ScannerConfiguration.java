@@ -2,6 +2,7 @@ package dev.graphnous.api.configuration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
+import dev.graphnous.api.event.SpringEventPublisher;
 import dev.graphnous.api.enhancer.ClasspathEnhancerRegistry;
 import dev.graphnous.api.project.scanner.docker.DockerRepositoryScanner;
 import dev.graphnous.api.project.scanner.docker.DockerScanContainers;
@@ -59,7 +60,8 @@ public class ScannerConfiguration {
         final ScanResultRepository scanResultRepository,
         final EnhancerPipeline enhancerPipeline,
         final EnhancerRegistry enhancerRegistry,
-        final ScanSteps scanSteps
+        final ScanSteps scanSteps,
+        final SpringEventPublisher eventPublisher
     ) {
         return new ProjectScanner(
             scanService,
@@ -71,7 +73,8 @@ public class ScannerConfiguration {
             scanResultRepository,
             enhancerPipeline,
             enhancerRegistry,
-            scanSteps
+            scanSteps,
+            eventPublisher
         );
     }
 
