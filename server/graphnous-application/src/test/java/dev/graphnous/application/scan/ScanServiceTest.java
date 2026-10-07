@@ -16,12 +16,12 @@ import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep;
 import dev.graphnous.domain.system.System;
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -39,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,6 +58,9 @@ class ScanServiceTest {
 
     @Mock
     private ScanSteps scanSteps;
+
+    @Mock
+    private ScanRetention scanRetention;
 
     @Mock
     private ProjectService projectService;
@@ -133,6 +137,11 @@ class ScanServiceTest {
         verify(authorizationService).authorize(context, Permission.SCAN_CREATE);
         verify(entitlementService).requireWithinLimit(context.organization(), Entitlement.SCANS, 3);
         verify(projectService).getProject(context, projectId);
+
+        // Old scans make way before the limit is checked
+        final var order = inOrder(scanRetention, entitlementService);
+        order.verify(scanRetention).makeRoomFor(projectId);
+        order.verify(entitlementService).requireWithinLimit(context.organization(), Entitlement.SCANS, 3);
 
         // Every step of the scan is there, pending, from the start
         verify(scanSteps).create(scan.id());
@@ -300,7 +309,7 @@ class ScanServiceTest {
 
     @Test
     void refusesAnUploadedResultWithoutATarget() {
-        final var withoutTarget = new ScanResultSchema();
+        final var withoutTarget = new ScanResult();
 
         assertUploadRefused(List.of(result("backend"), withoutTarget), "Scan result 2 has no target with a path and a language");
     }
@@ -325,7 +334,7 @@ class ScanServiceTest {
         verify(eventPublisher, never()).publish(any());
     }
 
-    private void assertUploadRefused(final List<ScanResultSchema> results, final String message) {
+    private void assertUploadRefused(final List<ScanResult> results, final String message) {
         final var command = new UploadScanCommand(Project.ProjectId.generate(), "abc123", "main", results);
 
         assertThatThrownBy(() -> service().upload(context, command))
@@ -336,12 +345,12 @@ class ScanServiceTest {
         verify(eventPublisher, never()).publish(any());
     }
 
-    private static ScanResultSchema result(final String path) {
+    private static ScanResult result(final String path) {
         final var target = new ScanTarget();
         target.setPath(path);
         target.setLanguage(ScanTarget.Language.JAVA);
 
-        final var result = new ScanResultSchema();
+        final var result = new ScanResult();
         result.setTarget(target);
 
         return result;
@@ -365,6 +374,7 @@ class ScanServiceTest {
             scanRepository,
             scanDeleter,
             scanSteps,
+            scanRetention,
             projectService,
             authorizationService,
             entitlementService

@@ -134,6 +134,45 @@ class DockerGitCheckoutTest {
     }
 
     @Test
+    void checksOutOtherUrlsWithoutTheSshKey() throws Exception {
+        commit("second");
+
+        final var source = new GitSource("file://" + origin, null, null, "not a real key", null);
+
+        final var path = checkout.checkout("scan-1", source, listener);
+
+        assertThat(path.resolve("file.txt")).hasContent("second");
+    }
+
+    @Test
+    void usesTheSshKeyForSshUrlsOnly() {
+        final var https = new GitSource("https://github.com/org/repo.git", null, null, "secret", null);
+
+        assertThat(https.sshKey()).isNull();
+        assertThat(https.knownHosts()).isNull();
+
+        for (final var url : List.of("git@github.com:org/repo.git", "github.com:org/repo.git", "ssh://git@github.com/org/repo.git")) {
+            final var ssh = new GitSource(url, null, null, "secret", "github.com ssh-ed25519 AAAA");
+
+            assertThat(ssh.sshKey()).as(url).isEqualTo("secret");
+        }
+    }
+
+    @Test
+    void leavesTheSshKeyOutOfItsDescription() {
+        final var source = new GitSource("git@example.com:org/repo.git", null, null, "secret", "example.com ssh-ed25519 AAAA");
+
+        assertThat(source.toString()).doesNotContain("secret");
+    }
+
+    @Test
+    void requiresKnownHostsWithAnSshKey() {
+        assertThatThrownBy(() -> new GitSource("git@example.com:org/repo.git", null, null, "secret", null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Known hosts");
+    }
+
+    @Test
     void removesACheckout() {
         final var path = checkout.checkout("scan-1", source(null, null), listener);
 

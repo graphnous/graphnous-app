@@ -1,5 +1,10 @@
 package dev.graphnous.persistence.scan.result;
 
+import dev.graphnous.core.model.Class;
+import dev.graphnous.core.model.File;
+import dev.graphnous.core.model.Module;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,12 +25,52 @@ class ScanResultGraphTest {
     }
 
     @Test
-    void storesAClassOnceWhenBothItsFileAndPackageListIt() {
+    void linksEachClassToItsFileAndPackage() {
         assertThat(graph.classes()).extracting(row -> row.get("qualifiedName"))
             .containsExactly("com.example.Order", "com.example.Entity", "com.example.Identified");
 
         assertThat(graph.fileClasses()).hasSize(3);
         assertThat(graph.packageClasses()).hasSize(3);
+    }
+
+    @Test
+    void storesNestedClassesInTheFileAndPackageOfTheirClass() {
+        final var builder = new Class();
+        builder.setName("Builder");
+        builder.setQualifiedName("com.example.Order.Builder");
+
+        final var order = new Class();
+        order.setName("Order");
+        order.setQualifiedName("com.example.Order");
+        order.getClasses().add(builder);
+
+        final var file = new File();
+        file.setPath("src/main/java/com/example/Order.java");
+        file.setPackage("com.example");
+        file.getClasses().add(order);
+
+        final var module = new Module();
+        module.setPath("orders");
+        module.getFiles().add(file);
+
+        final var target = new ScanTarget();
+        target.setPath("backend");
+        target.setLanguage(ScanTarget.Language.JAVA);
+
+        final var result = new ScanResult();
+        result.setTarget(target);
+        result.getModules().add(module);
+
+        final var nested = ScanResultGraph.of("scan", List.of(result));
+
+        assertThat(nested.classes()).extracting(row -> row.get("qualifiedName"))
+            .containsExactly("com.example.Order", "com.example.Order.Builder");
+        assertThat(nested.fileClasses()).extracting(row -> row.get("fileId")).containsOnly(
+            "scan|backend|orders|file:src/main/java/com/example/Order.java"
+        ).hasSize(2);
+        assertThat(nested.packageClasses()).extracting(row -> row.get("packageId")).containsOnly(
+            "scan|backend|orders|package:com.example"
+        ).hasSize(2);
     }
 
     @Test

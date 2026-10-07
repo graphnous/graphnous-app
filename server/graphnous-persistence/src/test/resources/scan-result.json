@@ -17,6 +17,7 @@
           "language": "JAVA",
           "sourceSet": "MAIN",
           "size": 120,
+          "package": "com.example",
           "classes": [
             {
               "name": "Order",
@@ -26,10 +27,18 @@
                 "PUBLIC",
                 "FINAL"
               ],
-              "superClass": "com.example.Entity<java.util.UUID>",
+              "superClasses": [
+                {
+                  "name": "com.example.Entity<java.util.UUID>"
+                }
+              ],
               "interfaces": [
-                "com.example.Identified",
-                "java.lang.Comparable<com.example.Order>"
+                {
+                  "name": "com.example.Identified"
+                },
+                {
+                  "name": "java.lang.Comparable<com.example.Order>"
+                }
               ],
               "annotations": [
                 {
@@ -69,7 +78,9 @@
                   "parameters": [
                     {
                       "name": "id",
-                      "type": "java.util.UUID",
+                      "type": {
+                        "name": "java.util.UUID"
+                      },
                       "annotations": [
                         {
                           "name": "PathParam",
@@ -95,11 +106,15 @@
                   "modifiers": [
                     "PUBLIC"
                   ],
-                  "returnType": "int",
+                  "returnType": {
+                    "name": "int"
+                  },
                   "parameters": [
                     {
                       "name": "other",
-                      "type": "com.example.Order"
+                      "type": {
+                        "name": "com.example.Order"
+                      }
                     }
                   ],
                   "annotations": [
@@ -112,7 +127,9 @@
               "fields": [
                 {
                   "name": "total",
-                  "type": "long",
+                  "type": {
+                    "name": "long"
+                  },
                   "qualifiedName": "com.example.Order.total",
                   "modifiers": [
                     "PRIVATE"
@@ -147,6 +164,7 @@
         },
         {
           "path": "src/main/java/com/example/Entity.java",
+          "package": "com.example",
           "classes": [
             {
               "name": "Entity",
@@ -167,24 +185,7 @@
       "packages": [
         {
           "name": "example",
-          "qualifiedName": "com.example",
-          "classes": [
-            {
-              "name": "Order",
-              "qualifiedName": "com.example.Order",
-              "kind": "CLASS"
-            },
-            {
-              "name": "Entity",
-              "qualifiedName": "com.example.Entity",
-              "kind": "CLASS"
-            },
-            {
-              "name": "Identified",
-              "qualifiedName": "com.example.Identified",
-              "kind": "INTERFACE"
-            }
-          ]
+          "qualifiedName": "com.example"
         }
       ],
       "dependencies": [

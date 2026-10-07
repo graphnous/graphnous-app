@@ -1,2 +1,44 @@
 @import "tailwindcss";
 @import "@graphnous/theme/theme.css";
+
+/*
+ * The chat (CopilotKit) in the Graphnous theme: CopilotKit sets its own,
+ * neutral palette on [data-copilotkit] under the same names as the theme's
+ * tokens, so they are set again here, from the theme's values. Captured on
+ * :root first, as inside the chat the names are CopilotKit's.
+ */
+:root {
+  --graphnous-surface: var(--surface);
+  --graphnous-surface-elevated: var(--surface-elevated);
+  --graphnous-foreground: var(--foreground);
+  --graphnous-foreground-muted: var(--foreground-muted);
+  --graphnous-border: var(--border);
+  --graphnous-primary: var(--primary);
+  --graphnous-primary-foreground: var(--primary-foreground);
+  --graphnous-primary-subtle: var(--primary-subtle);
+  --graphnous-error: var(--error);
+}
+
+.graphnous-chat [data-copilotkit] {
+  --background: var(--graphnous-surface);
+  --foreground: var(--graphnous-foreground);
+  --card: var(--graphnous-surface);
+  --card-foreground: var(--graphnous-foreground);
+  --popover: var(--graphnous-surface-elevated);
+  --popover-foreground: var(--graphnous-foreground);
+  --primary: var(--graphnous-primary);
+  --primary-foreground: var(--graphnous-primary-foreground);
+  --secondary: var(--graphnous-surface-elevated);
+  --secondary-foreground: var(--graphnous-foreground);
+  --muted: var(--graphnous-surface-elevated);
+  --muted-foreground: var(--graphnous-foreground-muted);
+  --accent: var(--graphnous-primary-subtle);
+  --accent-foreground: var(--graphnous-foreground);
+  --destructive: var(--graphnous-error);
+  --destructive-foreground: var(--graphnous-error);
+  --border: var(--graphnous-border);
+  --input: var(--graphnous-border);
+  --ring: var(--graphnous-primary);
+  --radius: 0.5rem;
+  --cpk-default-font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}

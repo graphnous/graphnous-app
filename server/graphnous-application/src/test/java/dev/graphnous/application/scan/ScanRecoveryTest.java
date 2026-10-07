@@ -1,5 +1,6 @@
 package dev.graphnous.application.scan;
 
+import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.scanner.ScanCanceller;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.domain.project.Project;
@@ -48,6 +49,9 @@ class ScanRecoveryTest {
     @Mock
     private ScanSteps scanSteps;
 
+    @Mock
+    private ScanNotifier scanNotifier;
+
     @Test
     void failsEveryActiveScanLeftByAPreviousRun() {
         final var pending = scan(Scan.ScanStatus.PENDING, NOW);
@@ -68,6 +72,8 @@ class ScanRecoveryTest {
         // The step that was running is failed with the same reason
         verify(scanSteps).failRunning(running.id(), "Scan interrupted by a server restart");
         verify(scanLogService).log(running.id(), ScanLogLevel.ERROR, "Scan interrupted by a server restart");
+        verify(scanNotifier).scanFailed(pending, "Scan interrupted by a server restart");
+        verify(scanNotifier).scanFailed(running, "Scan interrupted by a server restart");
     }
 
     @Test
@@ -91,6 +97,8 @@ class ScanRecoveryTest {
         verify(scanSteps).failRunning(stuck.id(), "Scan timed out: no progress in PT1H");
         verify(scanSteps, never()).failRunning(eq(recent.id()), anyString());
         verify(scanLogService, never()).log(eq(recent.id()), any(), anyString());
+        verify(scanNotifier).scanFailed(stuck, "Scan timed out: no progress in PT1H");
+        verify(scanNotifier, never()).scanFailed(eq(recent), anyString());
     }
 
     @Test
@@ -106,8 +114,9 @@ class ScanRecoveryTest {
 
         verify(scanRepository).save(argThat(scan -> scan.id().equals(other.id())));
         verify(scanLogService).log(eq(other.id()), eq(ScanLogLevel.ERROR), anyString());
-        // Not logged as failed, as it was not
+        // Not logged or notified as failed, as it was not
         verify(scanLogService, never()).log(eq(broken.id()), any(), anyString());
+        verify(scanNotifier, never()).scanFailed(eq(broken), anyString());
     }
 
     @Test
@@ -199,6 +208,7 @@ class ScanRecoveryTest {
             scanLogService,
             scanCanceller,
             scanSteps,
+            scanNotifier,
             TIMEOUT,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );

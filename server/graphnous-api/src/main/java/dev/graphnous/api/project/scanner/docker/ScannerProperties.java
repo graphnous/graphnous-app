@@ -8,16 +8,21 @@ import java.nio.file.Path;
  * Where scanners run; {@link ScannersProperties} configures the scanners
  * themselves.
  *
- * @param instance  the name of this server on the Docker daemon; its
- *                  containers carry it, so a server only stops its own
- * @param workspace where repositories are checked out for scanning
- * @param gitImage  the image the checkout runs in
+ * @param instance       the name of this server on the Docker daemon;
+ *                       its containers carry it, so a server only stops
+ *                       its own
+ * @param workspace      where repositories are checked out for scanning
+ * @param gitImage       the image the checkout runs in
+ * @param sshKnownHosts  the host keys of the git servers private
+ *                       repositories are fetched from over SSH, in the
+ *                       format of OpenSSH's {@code known_hosts}
  */
 @ConfigurationProperties("graphnous.scanner")
 public record ScannerProperties(
     String instance,
     Workspace workspace,
-    String gitImage
+    String gitImage,
+    String sshKnownHosts
 ) {
 
     /**

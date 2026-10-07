@@ -1,6 +1,6 @@
 package dev.graphnous.scanner.language;
 
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanTarget;
 
 import java.nio.file.Path;
 

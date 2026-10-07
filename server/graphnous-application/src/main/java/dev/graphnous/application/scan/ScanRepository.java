@@ -5,6 +5,7 @@ import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,6 +38,21 @@ public interface ScanRepository {
      */
     boolean hasActiveScans(
         final Project.ProjectId projectId
+    );
+
+    /**
+     * The finished scans created before {@code cutoff}.
+     */
+    List<Scan> findFinishedCreatedBefore(
+        final Instant cutoff
+    );
+
+    /**
+     * The {@code limit} oldest finished scans of the project, oldest first.
+     */
+    List<Scan.ScanId> findOldestFinished(
+        final Project.ProjectId projectId,
+        final int limit
     );
 
     /**

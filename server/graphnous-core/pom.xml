@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>dev.graphnous</groupId>
+        <artifactId>graphnous-server</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!--
+        What the scanners and enhancers share: the scan result model.
+    -->
+    <artifactId>graphnous-core</artifactId>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+
+        <jackson.version>2.22.2</jackson.version>
+
+        <!--
+            The scan result schema, as published from graphnous-schemas.
+            It is downloaded before generating, as jsonschema2pojo only reads
+            local files. Override with -Dgraphnous.scan.result.schema.url=...
+        -->
+        <graphnous.scan.result.schema.url>https://graphnous.github.io/graphnous-schemas/schema/scan/scan-result.schema.json</graphnous.scan.result.schema.url>
+        <graphnous.scan.result.schema.dir>${project.build.directory}/schemas/scan</graphnous.scan.result.schema.dir>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Fetches the scan result schema; declared first so it runs before generating -->
+                <groupId>com.googlecode.maven-download-plugin</groupId>
+                <artifactId>download-maven-plugin</artifactId>
+                <version>1.13.0</version>
+                <executions>
+                    <execution>
+                        <id>download-scan-result-schema</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>wget</goal>
+                        </goals>
+                        <configuration>
+                            <uri>${graphnous.scan.result.schema.url}</uri>
+                            <outputDirectory>${graphnous.scan.result.schema.dir}</outputDirectory>
+                            <!-- The file name names the root class: ScanResult -->
+                            <outputFileName>scan-result.json</outputFileName>
+                            <skipCache>true</skipCache>
+                            <overwrite>true</overwrite>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- Generates the scan result model from its JSON schema -->
+                <groupId>org.jsonschema2pojo</groupId>
+                <artifactId>jsonschema2pojo-maven-plugin</artifactId>
+                <version>1.2.2</version>
+                <configuration>
+                    <sourceDirectory>${graphnous.scan.result.schema.dir}</sourceDirectory>
+                    <targetPackage>dev.graphnous.core.model</targetPackage>
+                    <outputDirectory>${project.build.directory}/generated-sources/jsonschema2pojo</outputDirectory>
+
+                    <sourceType>jsonschema</sourceType>
+
+                    <includeHashcodeAndEquals>true</includeHashcodeAndEquals>
+                    <includeToString>true</includeToString>
+                    <includeJsr303Annotations>false</includeJsr303Annotations>
+
+                    <usePrimitives>false</usePrimitives>
+                    <initializeCollections>true</initializeCollections>
+
+                    <includeConstructors>false</includeConstructors>
+                    <generateBuilders>false</generateBuilders>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>generate-scan-result-model</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

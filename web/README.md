@@ -22,10 +22,12 @@ spec, so generating needs network access.
 
 Components get the client with `useApi()`, from the `ApiClientProvider` in
 the root layout. It calls the API at `NEXT_PUBLIC_GRAPHNOUS_API_URL`, which is
-read when the app is built, or else the server in the spec:
+read when the app is built, or else the server in the spec. Locally, set it
+in `.env.local`, which Next.js loads and git ignores, to the server on this
+machine:
 
-```bash
-NEXT_PUBLIC_GRAPHNOUS_API_URL=http://localhost:8080 npm run dev
+```ini
+NEXT_PUBLIC_GRAPHNOUS_API_URL=http://localhost:1337
 ```
 
 ## Components and theme

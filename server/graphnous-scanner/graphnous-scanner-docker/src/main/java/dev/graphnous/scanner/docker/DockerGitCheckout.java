@@ -6,6 +6,7 @@ import com.github.dockerjava.api.model.Mount;
 import com.github.dockerjava.api.model.MountType;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -32,10 +33,16 @@ public class DockerGitCheckout {
      * it, and falls back to fetching the branch (or everything) for servers
      * that refuse to serve a commit by its hash. Arguments are passed as
      * positional parameters so none of them is interpreted by the shell.
+     * A private repository is fetched over SSH with the key and known
+     * hosts copied to {@link #SSH_DIRECTORY}, when there is a key. Only
+     * servers in the known hosts are trusted.
      */
     private static final String SCRIPT = """
         set -eu
         dir="$1"; url="$2"; branch="$3"; revision="$4"
+        if [ -f "%1$s/id_key" ]; then
+          export GIT_SSH_COMMAND="ssh -i %1$s/id_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%1$s/known_hosts -o GlobalKnownHostsFile=/dev/null"
+        fi
         rm -rf "$dir"
         git init -q "$dir"
         cd "$dir"
@@ -52,6 +59,12 @@ public class DockerGitCheckout {
         fi
         echo "Checked out $(git rev-parse HEAD)"
         """;
+
+    /**
+     * Where the SSH key and known hosts are copied in the git container;
+     * outside the workspace, so they are never visible to the scanners.
+     */
+    private static final String SSH_DIRECTORY = "/graphnous-ssh";
 
     private final DockerClient docker;
     private final DockerWorkspace workspace;
@@ -169,7 +182,8 @@ public class DockerGitCheckout {
         final var exitCode = run(
             listener,
             labels,
-            "sh", "-c", SCRIPT, "checkout",
+            sshFiles(source),
+            "sh", "-c", SCRIPT.formatted(SSH_DIRECTORY), "checkout",
             directory.toString(),
             source.url(),
             orEmpty(source.branch()),
@@ -203,6 +217,7 @@ public class DockerGitCheckout {
         final var exitCode = run(
             listener,
             Map.of(),
+            Map.of(),
             "rm", "-rf", directory(name).toString()
         );
 
@@ -216,11 +231,13 @@ public class DockerGitCheckout {
     private int run(
         final ScanProcessListener listener,
         final Map<String, String> labels,
+        final Map<String, String> sshFiles,
         final String... command
     ) {
         String containerId = null;
 
         try {
+
             Containers.pullIfMissing(docker, image);
 
             containerId = docker
@@ -235,8 +252,22 @@ public class DockerGitCheckout {
                 .exec()
                 .getId();
 
+            if (!sshFiles.isEmpty()) {
+                docker.copyArchiveToContainerCmd(containerId)
+                    .withTarInputStream(new ByteArrayInputStream(
+                        ContainerArchive.privateFiles(SSH_DIRECTORY, sshFiles)
+                    ))
+                    .withRemotePath("/")
+                    .exec();
+            }
+
             return Containers.runAndForwardOutput(docker, containerId, listener);
 
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                "Failed to copy the SSH key to the git container",
+                e
+            );
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
 
@@ -264,17 +295,55 @@ public class DockerGitCheckout {
     }
 
     /**
+     * The files of {@link #SSH_DIRECTORY}, or none for a source without a
+     * key.
+     */
+    private static Map<String, String> sshFiles(final GitSource source) {
+        if (source.sshKey() == null) {
+            return Map.of();
+        }
+
+        return Map.of(
+            "id_key", withTrailingNewline(source.sshKey()),
+            "known_hosts", withTrailingNewline(source.knownHosts())
+        );
+    }
+
+    /**
+     * OpenSSH refuses a key whose last line is not terminated.
+     */
+    private static String withTrailingNewline(final String key) {
+        return key.endsWith("\n") ? key : key + "\n";
+    }
+
+    /**
      * @param url      the repository to clone
      * @param branch   the branch to check out, or {@code null} for the
      *                 default branch
      * @param revision the commit to check out, or {@code null} for the tip
      *                 of the branch
+     * @param sshKey     the private key to fetch an SSH url with, or
+     *                   {@code null} for a public repository; ignored for
+     *                   other urls, such as https
+     * @param knownHosts the servers' host keys, in the format of OpenSSH's
+     *                   {@code known_hosts}; required with an SSH key and
+     *                   an SSH url, as no other server is trusted
      */
     public record GitSource(
         String url,
         String branch,
-        String revision
+        String revision,
+        String sshKey,
+        String knownHosts
     ) {
+
+        public GitSource(
+            final String url,
+            final String branch,
+            final String revision
+        ) {
+            this(url, branch, revision, null, null);
+        }
 
         public GitSource {
             if (url == null || url.isBlank()) {
@@ -283,6 +352,21 @@ public class DockerGitCheckout {
 
             branch = blankToNull(branch);
             revision = blankToNull(revision);
+            sshKey = blankToNull(sshKey);
+            knownHosts = blankToNull(knownHosts);
+
+            // Only SSH uses them; a key configured for private repositories
+            // leaves public ones over https working without known hosts
+            if (!isSsh(url)) {
+                sshKey = null;
+                knownHosts = null;
+            }
+
+            if (sshKey != null && knownHosts == null) {
+                throw new IllegalArgumentException(
+                    "Known hosts are required with an SSH key, to verify the git server"
+                );
+            }
 
             // Keep values from being read as git options
             for (final var value : new String[] { url, branch, revision }) {
@@ -294,6 +378,40 @@ public class DockerGitCheckout {
 
         private static String blankToNull(final String value) {
             return value == null || value.isBlank() ? null : value;
+        }
+
+        /**
+         * Whether git fetches the url over SSH: an {@code ssh://} url, or
+         * the scp-like {@code [user@]host:path}, which has a colon before
+         * any slash and no scheme.
+         */
+        static boolean isSsh(final String url) {
+            final var scheme = url.indexOf("://");
+
+            if (scheme >= 0) {
+                final var name = url.substring(0, scheme);
+
+                return name.equals("ssh") || name.equals("git+ssh") || name.equals("ssh+git");
+            }
+
+            final var colon = url.indexOf(':');
+            final var slash = url.indexOf('/');
+
+            return colon > 0 && (slash < 0 || colon < slash);
+        }
+
+        /**
+         * Leaves the key out, so it does not end up in logs.
+         */
+        @Override
+        public String toString() {
+            return "GitSource[url=%s, branch=%s, revision=%s, sshKey=%s, knownHosts=%s]".formatted(
+                url,
+                branch,
+                revision,
+                sshKey == null ? null : "****",
+                knownHosts
+            );
         }
     }
 }

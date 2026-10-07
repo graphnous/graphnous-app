@@ -1,8 +1,8 @@
 package dev.graphnous.scanner.typescript.language;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.language.LanguageVersionDetector;
-import dev.graphnous.scanner.model.ScanTarget;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

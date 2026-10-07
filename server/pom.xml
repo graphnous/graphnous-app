@@ -20,12 +20,14 @@
     </properties>
 
     <modules>
+        <module>graphnous-core</module>
         <module>graphnous-domain</module>
         <module>graphnous-api</module>
         <module>graphnous-application</module>
         <module>graphnous-security</module>
         <module>graphnous-persistence</module>
         <module>graphnous-scanner</module>
+        <module>graphnous-enhancer</module>
     </modules>
 
     <!-- Published by .github/workflows/publish.yml -->

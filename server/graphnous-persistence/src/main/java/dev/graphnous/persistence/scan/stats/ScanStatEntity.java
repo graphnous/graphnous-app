@@ -1,11 +1,14 @@
 package dev.graphnous.persistence.scan.stats;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -29,8 +32,15 @@ public class ScanStatEntity {
     @Column(name = "project_id", nullable = false, updatable = false)
     private UUID projectId;
 
-    @Column(name = "number_of_files_scanned", nullable = false)
-    private int numberOfFilesScanned;
+    @Column(name = "number_of_modules_scanned", nullable = false)
+    private int numberOfModulesScanned;
+
+    /**
+     * The files by language, as JSON.
+     */
+    @Convert(converter = LanguagesConverter.class)
+    @Column(name = "languages", nullable = false, columnDefinition = "TEXT")
+    private Map<String, List<String>> languages;
 
     @Column(name = "number_of_classes_parsed", nullable = false)
     private int numberOfClassesParsed;
@@ -62,12 +72,20 @@ public class ScanStatEntity {
         this.projectId = projectId;
     }
 
-    public int getNumberOfFilesScanned() {
-        return numberOfFilesScanned;
+    public int getNumberOfModulesScanned() {
+        return numberOfModulesScanned;
     }
 
-    public void setNumberOfFilesScanned(final int numberOfFilesScanned) {
-        this.numberOfFilesScanned = numberOfFilesScanned;
+    public void setNumberOfModulesScanned(final int numberOfModulesScanned) {
+        this.numberOfModulesScanned = numberOfModulesScanned;
+    }
+
+    public Map<String, List<String>> getLanguages() {
+        return languages;
+    }
+
+    public void setLanguages(final Map<String, List<String>> languages) {
+        this.languages = languages;
     }
 
     public int getNumberOfClassesParsed() {

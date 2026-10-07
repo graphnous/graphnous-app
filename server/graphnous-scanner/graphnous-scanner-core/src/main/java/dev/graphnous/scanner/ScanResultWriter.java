@@ -1,7 +1,7 @@
 package dev.graphnous.scanner;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.graphnous.scanner.model.ScanResultSchema;
+import dev.graphnous.core.model.ScanResult;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -16,7 +16,7 @@ public class ScanResultWriter {
     }
 
     public void write(
-        final ScanResultSchema result,
+        final ScanResult result,
         final Path output
     ) {
         try {

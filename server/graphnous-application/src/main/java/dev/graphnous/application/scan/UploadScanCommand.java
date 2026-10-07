@@ -1,7 +1,7 @@
 package dev.graphnous.application.scan;
 
+import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project;
-import dev.graphnous.scanner.model.ScanResultSchema;
 
 import java.util.List;
 
@@ -13,7 +13,7 @@ public record UploadScanCommand(
     Project.ProjectId projectId,
     String revision,
     String branch,
-    List<ScanResultSchema> results
+    List<ScanResult> results
 ) {
 
     public UploadScanCommand {

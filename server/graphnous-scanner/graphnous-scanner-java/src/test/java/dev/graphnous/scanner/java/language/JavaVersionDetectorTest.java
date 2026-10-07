@@ -1,6 +1,6 @@
 package dev.graphnous.scanner.java.language;
 
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanTarget;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;

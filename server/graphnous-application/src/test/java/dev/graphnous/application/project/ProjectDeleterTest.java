@@ -1,6 +1,7 @@
 package dev.graphnous.application.project;
 
 import dev.graphnous.application.exception.ConflictException;
+import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.scan.ScanDeleter;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.system.System;
@@ -31,6 +32,9 @@ class ProjectDeleterTest {
     @Mock
     private ScanDeleter scanDeleter;
 
+    @Mock
+    private NotificationRepository notificationRepository;
+
     private final System.SystemId systemId = new System.SystemId(UUID.randomUUID());
 
     @Test
@@ -39,8 +43,9 @@ class ProjectDeleterTest {
 
         deleter().deleteProject(systemId, projectId);
 
-        final InOrder order = inOrder(scanDeleter, projectRepository);
+        final InOrder order = inOrder(scanDeleter, notificationRepository, projectRepository);
         order.verify(scanDeleter).deleteScans(projectId);
+        order.verify(notificationRepository).deleteByProjectId(projectId);
         order.verify(projectRepository).delete(systemId, projectId);
     }
 
@@ -71,6 +76,7 @@ class ProjectDeleterTest {
         assertThrows(ConflictException.class, () -> deleter().deleteProject(systemId, projectId));
 
         verify(scanDeleter, never()).deleteScans(any());
+        verify(notificationRepository, never()).deleteByProjectId(any());
         verify(projectRepository, never()).delete(any(), any());
     }
 
@@ -92,6 +98,6 @@ class ProjectDeleterTest {
     }
 
     private ProjectDeleter deleter() {
-        return new ProjectDeleter(projectRepository, scanDeleter);
+        return new ProjectDeleter(projectRepository, scanDeleter, notificationRepository);
     }
 }

@@ -7,6 +7,8 @@ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
  * Tar archives for Docker's copy API, which moves files in and out of a
@@ -17,6 +19,8 @@ import java.io.InputStream;
 final class ContainerArchive {
 
     private static final int WRITABLE_DIRECTORY_MODE = 040777;
+    private static final int PRIVATE_DIRECTORY_MODE = 040700;
+    private static final int PRIVATE_FILE_MODE = 0100600;
 
     private ContainerArchive() {
     }
@@ -32,6 +36,41 @@ final class ContainerArchive {
             tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
 
             directory(tar, relative(directory), WRITABLE_DIRECTORY_MODE);
+        }
+
+        return bytes.toByteArray();
+    }
+
+    /**
+     * An archive to extract at the container root, holding files only their
+     * owner can read, in a directory only its owner can enter, as OpenSSH
+     * requires of a private key.
+     *
+     * @param files the content of each file, by its name in the directory
+     */
+    static byte[] privateFiles(
+        final String directory,
+        final Map<String, String> files
+    ) throws IOException {
+        final var bytes = new ByteArrayOutputStream();
+        final var name = relative(directory);
+
+        try (final var tar = new TarArchiveOutputStream(bytes)) {
+            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
+
+            directory(tar, name, PRIVATE_DIRECTORY_MODE);
+
+            for (final var file : files.entrySet()) {
+                final var data = file.getValue().getBytes(StandardCharsets.UTF_8);
+
+                final var entry = new TarArchiveEntry(name + "/" + file.getKey());
+                entry.setMode(PRIVATE_FILE_MODE);
+                entry.setSize(data.length);
+
+                tar.putArchiveEntry(entry);
+                tar.write(data);
+                tar.closeArchiveEntry();
+            }
         }
 
         return bytes.toByteArray();

@@ -1,8 +1,8 @@
 package dev.graphnous.scanner;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,7 +30,7 @@ class ScanResultWriterTest {
         writer.write(result, output);
 
         assertThat(output).exists();
-        assertThat(objectMapper.readValue(output.toFile(), ScanResultSchema.class))
+        assertThat(objectMapper.readValue(output.toFile(), ScanResult.class))
             .isEqualTo(result);
     }
 
@@ -43,13 +43,13 @@ class ScanResultWriterTest {
             .hasMessageContaining(output.toString());
     }
 
-    private static ScanResultSchema result() {
+    private static ScanResult result() {
         final var target = new ScanTarget();
         target.setPath(".");
         target.setLanguage(ScanTarget.Language.JAVA);
         target.setLanguageVersion("25");
 
-        final var result = new ScanResultSchema();
+        final var result = new ScanResult();
         result.setFormat("graphnous-scan-result");
         result.setVersion("1");
         result.setTarget(target);

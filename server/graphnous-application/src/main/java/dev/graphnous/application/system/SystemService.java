@@ -3,6 +3,8 @@ package dev.graphnous.application.system;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.RequestContext;
+import dev.graphnous.application.chat.ChatThreadRepository;
+import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.project.ProjectDeleter;
@@ -22,6 +24,8 @@ public class SystemService {
     private final EntitlementService entitlementService;
 
     private final ProjectDeleter projectDeleter;
+    private final NotificationRepository notificationRepository;
+    private final ChatThreadRepository chatThreadRepository;
 
     private static final Logger log = LoggerFactory.getLogger(SystemService.class);
 
@@ -29,7 +33,9 @@ public class SystemService {
         final SystemRepository systemRepository,
         final AuthorizationService authorizationService,
         final EntitlementService entitlementService,
-        final ProjectDeleter projectDeleter
+        final ProjectDeleter projectDeleter,
+        final NotificationRepository notificationRepository,
+        final ChatThreadRepository chatThreadRepository
     ) {
         this.systemRepository = systemRepository;
 
@@ -37,6 +43,8 @@ public class SystemService {
         this.entitlementService = entitlementService;
 
         this.projectDeleter = projectDeleter;
+        this.notificationRepository = notificationRepository;
+        this.chatThreadRepository = chatThreadRepository;
     }
 
     public Page<System> getSystems(
@@ -165,6 +173,9 @@ public class SystemService {
         this.getSystem(context, id);
 
         projectDeleter.deleteProjects(id);
+
+        notificationRepository.deleteBySystemId(id);
+        chatThreadRepository.deleteBySystemId(id);
 
         systemRepository.delete(
             context.organization().id(),

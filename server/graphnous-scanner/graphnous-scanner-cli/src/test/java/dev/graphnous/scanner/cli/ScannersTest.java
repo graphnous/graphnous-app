@@ -1,7 +1,7 @@
 package dev.graphnous.scanner.cli;
 
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.docker.DockerWorkspace;
-import dev.graphnous.scanner.model.ScanTarget;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

@@ -1,8 +1,8 @@
 package dev.graphnous.api.project.scanner.docker;
 
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.definition.ScannerDefinition;
-import dev.graphnous.scanner.model.ScanTarget;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.List;

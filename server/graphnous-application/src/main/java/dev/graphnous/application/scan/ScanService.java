@@ -13,11 +13,11 @@ import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.system.SystemService;
+import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep;
 import dev.graphnous.domain.scan.ScanStep.ScanStepType;
-import dev.graphnous.scanner.model.ScanResultSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,13 +32,14 @@ public class ScanService {
     private final ScanRepository scanRepository;
     private final ScanDeleter scanDeleter;
     private final ScanSteps scanSteps;
+    private final ScanRetention scanRetention;
 
     private final AuthorizationService authorizationService;
     private final EntitlementService entitlementService;
 
     private final ProjectService projectService;
 
-    private static final Logger log = LoggerFactory.getLogger(SystemService.class);
+    private static final Logger log = LoggerFactory.getLogger(ScanService.class);
 
 
     public ScanService(
@@ -46,6 +47,7 @@ public class ScanService {
         final ScanRepository scanRepository,
         final ScanDeleter scanDeleter,
         final ScanSteps scanSteps,
+        final ScanRetention scanRetention,
         final ProjectService projectService,
         final AuthorizationService authorizationService,
         final EntitlementService entitlementService
@@ -55,6 +57,7 @@ public class ScanService {
         this.scanRepository = scanRepository;
         this.scanDeleter = scanDeleter;
         this.scanSteps = scanSteps;
+        this.scanRetention = scanRetention;
 
         this.authorizationService = authorizationService;
         this.entitlementService = entitlementService;
@@ -193,6 +196,9 @@ public class ScanService {
         // Only for an existing project the caller may read
         this.projectService.getProject(context, projectId);
 
+        // Before the limit is checked, so old scans make way for new ones
+        this.scanRetention.makeRoomFor(projectId);
+
         this.entitlementService.requireWithinLimit(
             context.organization(),
             Entitlement.SCANS,
@@ -227,7 +233,7 @@ public class ScanService {
      * Uploaded results are stored as one graph per target, so each needs a
      * target of its own.
      */
-    private static void validate(final List<ScanResultSchema> results) {
+    private static void validate(final List<ScanResult> results) {
         if (results.isEmpty()) {
             throw new ValidationException("Upload at least one scan result");
         }

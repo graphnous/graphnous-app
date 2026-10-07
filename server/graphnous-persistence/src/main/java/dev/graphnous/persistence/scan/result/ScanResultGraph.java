@@ -2,15 +2,16 @@ package dev.graphnous.persistence.scan.result;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.graphnous.scanner.model.Annotation;
-import dev.graphnous.scanner.model.Class;
-import dev.graphnous.scanner.model.Field;
-import dev.graphnous.scanner.model.File;
-import dev.graphnous.scanner.model.Method;
-import dev.graphnous.scanner.model.Module;
-import dev.graphnous.scanner.model.Package;
-import dev.graphnous.scanner.model.Parameter;
-import dev.graphnous.scanner.model.ScanResultSchema;
+import dev.graphnous.core.model.Annotation;
+import dev.graphnous.core.model.Class;
+import dev.graphnous.core.model.Field;
+import dev.graphnous.core.model.File;
+import dev.graphnous.core.model.Method;
+import dev.graphnous.core.model.Module;
+import dev.graphnous.core.model.Package;
+import dev.graphnous.core.model.Parameter;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.TypeRef;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,8 +25,10 @@ import java.util.Map;
  * <p>
  * Node ids extend the id of their parent, which keeps them unique within
  * the graph: a class is identified by its module, a method by its class.
- * A class is listed both by its file and by its package; both refer to the
- * same node.
+ * A class belongs to the file that declares it, and to the package that
+ * file names. Classes nested in others belong to the same file and package.
+ * Types are stored by their declared names, e.g.
+ * {@code java.util.List<com.example.Order>}.
  * <p>
  * Every annotation becomes a node of the class, method or field it is on;
  * annotations of parameters belong to their method. Each argument is a
@@ -55,7 +58,7 @@ record ScanResultGraph(
 
     static ScanResultGraph of(
         final String scanId,
-        final List<ScanResultSchema> results
+        final List<ScanResult> results
     ) {
         final var builder = new Builder(scanId);
 
@@ -72,6 +75,17 @@ record ScanResultGraph(
         final var arguments = type.indexOf('<');
 
         return (arguments < 0 ? type : type.substring(0, arguments)).trim();
+    }
+
+    /**
+     * The type as declared, e.g. {@code java.util.List<com.example.Order>}.
+     */
+    private static String name(final TypeRef type) {
+        return type == null ? null : type.getName();
+    }
+
+    private static List<String> names(final List<TypeRef> types) {
+        return types.stream().map(ScanResultGraph::name).toList();
     }
 
     private static final class Builder {
@@ -104,7 +118,7 @@ record ScanResultGraph(
             this.scanId = scanId;
         }
 
-        private void addResult(final ScanResultSchema result) {
+        private void addResult(final ScanResult result) {
             final var target = result.getTarget();
             targetId = scanId + "|" + target.getPath();
 
@@ -157,10 +171,36 @@ record ScanResultGraph(
                 "checksum", file.getChecksum()
             ));
 
-            file.getClasses().forEach(type -> fileClasses.add(row(
+            final var packageId = file.getPackage() == null ? null : moduleId + "|package:" + file.getPackage();
+
+            file.getClasses().forEach(type -> addDeclaredClass(moduleId, fileId, packageId, type));
+        }
+
+        /**
+         * Adds the class and the classes nested in it, each belonging to the
+         * file and package that declare them.
+         */
+        private void addDeclaredClass(
+            final String moduleId,
+            final String fileId,
+            final String packageId,
+            final Class type
+        ) {
+            final var classId = addClass(moduleId, type);
+
+            fileClasses.add(row(
                 "fileId", fileId,
-                "classId", addClass(moduleId, type)
-            )));
+                "classId", classId
+            ));
+
+            if (packageId != null) {
+                packageClasses.add(row(
+                    "packageId", packageId,
+                    "classId", classId
+                ));
+            }
+
+            type.getClasses().forEach(nested -> addDeclaredClass(moduleId, fileId, packageId, nested));
         }
 
         private void addPackage(final String moduleId, final Package pkg) {
@@ -174,11 +214,6 @@ record ScanResultGraph(
                 "name", pkg.getName(),
                 "qualifiedName", pkg.getQualifiedName()
             ));
-
-            pkg.getClasses().forEach(type -> packageClasses.add(row(
-                "packageId", packageId,
-                "classId", addClass(moduleId, type)
-            )));
         }
 
         /**
@@ -200,21 +235,19 @@ record ScanResultGraph(
                 "kind", string(type.getKind()),
                 "modifiers", strings(type.getModifiers()),
                 "typeParameters", type.getTypeParameters(),
-                "superClass", type.getSuperClass(),
-                "interfaces", type.getInterfaces(),
+                "superClass", type.getSuperClasses().isEmpty() ? null : name(type.getSuperClasses().getFirst()),
+                "interfaces", names(type.getInterfaces()),
                 "annotations", annotations(type.getAnnotations())
             ));
 
-            if (type.getSuperClass() != null) {
-                extendsTypes.add(row(
-                    "classId", classId,
-                    "qualifiedName", rawType(type.getSuperClass())
-                ));
-            }
-
-            type.getInterfaces().forEach(name -> implementsTypes.add(row(
+            type.getSuperClasses().forEach(superClass -> extendsTypes.add(row(
                 "classId", classId,
-                "qualifiedName", rawType(name)
+                "qualifiedName", rawType(name(superClass))
+            )));
+
+            type.getInterfaces().forEach(anInterface -> implementsTypes.add(row(
+                "classId", classId,
+                "qualifiedName", rawType(name(anInterface))
             )));
 
             addAnnotations(classAnnotations, classId, classId, type.getAnnotations(), null, null);
@@ -237,9 +270,9 @@ record ScanResultGraph(
                 "kind", string(method.getKind()),
                 "modifiers", strings(method.getModifiers()),
                 "typeParameters", method.getTypeParameters(),
-                "returnType", method.getReturnType(),
+                "returnType", name(method.getReturnType()),
                 "parameterNames", method.getParameters().stream().map(Parameter::getName).toList(),
-                "parameterTypes", method.getParameters().stream().map(Parameter::getType).toList(),
+                "parameterTypes", method.getParameters().stream().map(parameter -> name(parameter.getType())).toList(),
                 "annotations", annotations(method.getAnnotations())
             ));
 
@@ -268,7 +301,7 @@ record ScanResultGraph(
                 "classId", classId,
                 "name", field.getName(),
                 "qualifiedName", field.getQualifiedName(),
-                "type", field.getType(),
+                "type", name(field.getType()),
                 "modifiers", strings(field.getModifiers()),
                 "annotations", annotations(field.getAnnotations())
             ));

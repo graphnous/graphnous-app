@@ -2,6 +2,7 @@ package dev.graphnous.api.project.scanner.docker;
 
 import dev.graphnous.application.project.scanner.ScanLogger;
 import dev.graphnous.application.project.scanner.SourceCheckout;
+import dev.graphnous.application.ssh.SshKeyRetriever;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.log.ScanLog.ScanLogLevel;
 import dev.graphnous.scanner.docker.DockerGitCheckout;
@@ -11,19 +12,26 @@ import java.nio.file.Path;
 
 /**
  * Checks out each scan into its own directory of the workspace, named
- * after the scan.
+ * after the scan. Private repositories are fetched with the key of the
+ * {@link SshKeyRetriever}, from servers in the known hosts only.
  */
 public class DockerSourceCheckout implements SourceCheckout {
 
     private final DockerGitCheckout gitCheckout;
     private final DockerScanContainers containers;
+    private final SshKeyRetriever sshKeyRetriever;
+    private final String sshKnownHosts;
 
     public DockerSourceCheckout(
         final DockerGitCheckout gitCheckout,
-        final DockerScanContainers containers
+        final DockerScanContainers containers,
+        final SshKeyRetriever sshKeyRetriever,
+        final String sshKnownHosts
     ) {
         this.gitCheckout = gitCheckout;
         this.containers = containers;
+        this.sshKeyRetriever = sshKeyRetriever;
+        this.sshKnownHosts = sshKnownHosts;
     }
 
     @Override
@@ -36,7 +44,9 @@ public class DockerSourceCheckout implements SourceCheckout {
         final var source = new DockerGitCheckout.GitSource(
             gitUrl,
             revision == null ? null : revision.branch(),
-            revision == null ? null : revision.revision()
+            revision == null ? null : revision.revision(),
+            sshKeyRetriever.retrieve(),
+            sshKnownHosts
         );
 
         return gitCheckout.checkout(name(scanId), source, output(logger), containers.labels(scanId));

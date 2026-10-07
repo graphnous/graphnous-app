@@ -3,13 +3,18 @@ package dev.graphnous.api.configuration;
 import dev.graphnous.api.event.SpringEventPublisher;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.entitlement.EntitlementService;
+import dev.graphnous.application.notification.NotificationRepository;
+import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.project.scanner.ScanCanceller;
 import dev.graphnous.application.scan.ScanDeleter;
 import dev.graphnous.application.scan.ScanRecovery;
 import dev.graphnous.application.scan.ScanRepository;
+import dev.graphnous.application.scan.ScanRetention;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanStepRepository;
+import dev.graphnous.application.scan.graph.ScanGraphRepository;
+import dev.graphnous.application.scan.graph.ScanGraphService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.log.ScanLogService;
@@ -41,6 +46,7 @@ public class ScanConfiguration {
         final ScanLogService scanLogService,
         final ScanCanceller scanCanceller,
         final ScanSteps scanSteps,
+        final ScanNotifier scanNotifier,
         @Value("${graphnous.scans.timeout}") final Duration timeout
     ) {
         return new ScanRecovery(
@@ -48,6 +54,7 @@ public class ScanConfiguration {
             scanLogService,
             scanCanceller,
             scanSteps,
+            scanNotifier,
             timeout,
             Clock.systemUTC()
         );
@@ -59,15 +66,25 @@ public class ScanConfiguration {
         final ScanLogRepository scanLogRepository,
         final ScanResultRepository scanResultRepository,
         final ScanStepRepository scanStepRepository,
-        final ScanStatRepository scanStatRepository
+        final ScanStatRepository scanStatRepository,
+        final NotificationRepository notificationRepository
     ) {
         return new ScanDeleter(
             scanRepository,
             scanLogRepository,
             scanResultRepository,
             scanStepRepository,
-            scanStatRepository
+            scanStatRepository,
+            notificationRepository
         );
+    }
+
+    @Bean
+    ScanGraphService scanGraphService(
+        final ScanService scanService,
+        final ScanGraphRepository scanGraphRepository
+    ) {
+        return new ScanGraphService(scanService, scanGraphRepository);
     }
 
     @Bean
@@ -81,6 +98,7 @@ public class ScanConfiguration {
         final ScanRepository scanRepository,
         final ScanDeleter scanDeleter,
         final ScanSteps scanSteps,
+        final ScanRetention scanRetention,
         final ProjectService projectService,
         final AuthorizationService authorizationService,
         final EntitlementService entitlementService
@@ -90,6 +108,7 @@ public class ScanConfiguration {
             scanRepository,
             scanDeleter,
             scanSteps,
+            scanRetention,
             projectService,
             authorizationService,
             entitlementService

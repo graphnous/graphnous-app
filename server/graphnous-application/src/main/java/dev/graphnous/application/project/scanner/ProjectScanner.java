@@ -1,12 +1,10 @@
 package dev.graphnous.application.project.scanner;
 
 import dev.graphnous.application.context.RequestContext;
-import dev.graphnous.application.enhancer.Enhancement;
-import dev.graphnous.application.enhancer.EnhancerPipeline;
-import dev.graphnous.application.enhancer.EnhancerRegistry;
-import dev.graphnous.application.enhancer.RuleOutcome;
+import dev.graphnous.application.enhancer.EnhancementRepository;
 import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanCompletedEvent;
 import dev.graphnous.application.scan.ScanService;
@@ -17,12 +15,15 @@ import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep.ScanStepType;
 import dev.graphnous.domain.scan.log.ScanLog.ScanLogLevel;
+import dev.graphnous.enhancer.Enhancements;
+import dev.graphnous.enhancer.EnhancerProvider;
 
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.ScanFailure;
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -40,12 +41,14 @@ public class ProjectScanner {
     private final RepositoryScanner repositoryScanner;
     private final ScanResultRepository scanResultRepository;
 
-    private final EnhancerPipeline enhancerPipeline;
-    private final EnhancerRegistry enhancerRegistry;
+    private final EnhancerProvider enhancerProvider;
+    private final EnhancementRepository enhancementRepository;
 
     private final ScanSteps scanSteps;
 
     private final EventPublisher eventPublisher;
+
+    private final ScanNotifier scanNotifier;
 
     public ProjectScanner(
         final ScanService scanService,
@@ -55,10 +58,11 @@ public class ProjectScanner {
         final SourceCheckout sourceCheckout,
         final RepositoryScanner repositoryScanner,
         final ScanResultRepository scanResultRepository,
-        final EnhancerPipeline enhancerPipeline,
-        final EnhancerRegistry enhancerRegistry,
+        final EnhancerProvider enhancerProvider,
+        final EnhancementRepository enhancementRepository,
         final ScanSteps scanSteps,
-        final EventPublisher eventPublisher
+        final EventPublisher eventPublisher,
+        final ScanNotifier scanNotifier
     ) {
         this.scanService = scanService;
         this.projectService = projectService;
@@ -71,12 +75,14 @@ public class ProjectScanner {
         this.repositoryScanner = repositoryScanner;
         this.scanResultRepository = scanResultRepository;
 
-        this.enhancerPipeline = enhancerPipeline;
-        this.enhancerRegistry = enhancerRegistry;
+        this.enhancerProvider = enhancerProvider;
+        this.enhancementRepository = enhancementRepository;
 
         this.scanSteps = scanSteps;
 
         this.eventPublisher = eventPublisher;
+
+        this.scanNotifier = scanNotifier;
     }
 
     public void startScan(
@@ -123,6 +129,7 @@ public class ProjectScanner {
         try {
             this.scanService.startScan(context, scanId);
             this.scanService.updateStatus(context, scanId, Scan.ScanStatus.RUNNING);
+            this.scanNotifier.scanStarted(scan);
 
             step = start(scanId, ScanStepType.CHECKOUT);
             logger.log(
@@ -170,13 +177,15 @@ public class ProjectScanner {
                 return;
             }
 
+            final var enhanced = enhance(report.results());
+
             step = start(scanId, ScanStepType.STORE);
             this.scanResultRepository.save(scanId, report.results());
             this.scanSteps.complete(scanId, step);
 
             // The results are stored, so enhancing does not fail the scan
             step = null;
-            enhance(scanId, report.results(), logger);
+            storeEnhancements(scanId, enhanced, logger);
 
             complete(scan, report.results(), context);
         } catch (Exception e) {
@@ -194,7 +203,7 @@ public class ProjectScanner {
      */
     public void storeUploaded(
         final Scan.ScanId scanId,
-        final List<ScanResultSchema> results,
+        final List<ScanResult> results,
         final RequestContext context
     ) {
         final var scan = this.scanService.getScan(context, scanId);
@@ -208,7 +217,7 @@ public class ProjectScanner {
 
     private void executeUpload(
         final Scan scan,
-        final List<ScanResultSchema> results,
+        final List<ScanResult> results,
         final RequestContext context
     ) {
         final ScanLogger logger = (level, message) ->
@@ -221,8 +230,11 @@ public class ProjectScanner {
         try {
             this.scanService.startScan(context, scanId);
             this.scanService.updateStatus(context, scanId, Scan.ScanStatus.RUNNING);
+            this.scanNotifier.scanStarted(scan);
 
             logger.log(ScanLogLevel.INFO, "Storing " + results.size() + " uploaded scan result(s)");
+
+            final var enhanced = enhance(results);
 
             step = start(scanId, ScanStepType.STORE);
             this.scanResultRepository.save(scanId, results);
@@ -230,7 +242,7 @@ public class ProjectScanner {
 
             // The results are stored, so enhancing does not fail the scan
             step = null;
-            enhance(scanId, results, logger);
+            storeEnhancements(scanId, enhanced, logger);
 
             complete(scan, results, context);
         } catch (Exception e) {
@@ -243,10 +255,11 @@ public class ProjectScanner {
      */
     private void complete(
         final Scan scan,
-        final List<ScanResultSchema> results,
+        final List<ScanResult> results,
         final RequestContext context
     ) {
         this.scanService.updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+        this.scanNotifier.scanCompleted(scan);
 
         this.eventPublisher.publish(
             new ScanCompletedEvent(scan.id(), scan.projectId(), results)
@@ -275,6 +288,7 @@ public class ProjectScanner {
         }
 
         this.scanService.updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
+        this.scanNotifier.scanFailed(scan, message(error));
     }
 
     private ScanStepType start(
@@ -287,69 +301,65 @@ public class ProjectScanner {
     }
 
     /**
-     * Runs the installed enhancers on the scan's results, as two steps: the
-     * target-scoped enhancers on each result, then the scan-scoped ones on
-     * all of them. A step that fails is recorded and logged, but does not
-     * fail the scan; the scan-wide step is skipped after a failed first one.
+     * What the enhancers added to the scan's results, or why enhancing
+     * them failed.
      */
-    private void enhance(
-        final Scan.ScanId scanId,
-        final List<ScanResultSchema> results,
-        final ScanLogger logger
+    private record Enhanced(
+        List<Enhancements> enhancements,
+        RuntimeException failure
     ) {
-        final var manifests = this.enhancerRegistry.installed();
-        final var enhancers = !manifests.isEmpty() && !results.isEmpty();
-
-        final var enhanced = runEnhanceStep(scanId, ScanStepType.ENHANCE_RESULTS, logger, () -> {
-            if (!enhancers) {
-                return;
-            }
-
-            for (final var target : this.enhancerPipeline.enhanceTargets(scanId, results, manifests)) {
-                for (final var enhancement : target.enhancements()) {
-                    log(logger, "Enhanced " + describe(target.target()) + " with ", enhancement);
-                }
-            }
-        });
-
-        if (!enhanced) {
-            return;
-        }
-
-        runEnhanceStep(scanId, ScanStepType.ENHANCE_SCAN, logger, () -> {
-            if (!enhancers) {
-                return;
-            }
-
-            for (final var enhancement : this.enhancerPipeline.enhanceScan(scanId, results, manifests)) {
-                log(logger, "Enhanced the scan with ", enhancement);
-            }
-        });
     }
 
     /**
-     * @return whether the step completed
+     * Runs the enhancers on each result, before the results are stored.
+     * A failure is kept for the enhance step, so it cannot fail the scan.
      */
-    private boolean runEnhanceStep(
+    private Enhanced enhance(final List<ScanResult> results) {
+        try {
+            final var enhancements = results.stream()
+                .flatMap(result -> this.enhancerProvider.enhanceScan(result).stream())
+                .toList();
+
+            return new Enhanced(enhancements, null);
+        } catch (final RuntimeException e) {
+            return new Enhanced(List.of(), e);
+        }
+    }
+
+    /**
+     * Stores the enhancements in the graph of the stored results, as the
+     * step that enhances the results. Failing to enhance or to store them
+     * fails that step but not the scan, and leaves the results as stored.
+     * Nothing enhances the scan as a whole yet, so that step is skipped.
+     */
+    private void storeEnhancements(
         final Scan.ScanId scanId,
-        final ScanStepType step,
-        final ScanLogger logger,
-        final Runnable enhance
+        final Enhanced enhanced,
+        final ScanLogger logger
     ) {
-        this.scanSteps.start(scanId, step);
+        this.scanSteps.start(scanId, ScanStepType.ENHANCE_RESULTS);
 
         try {
-            enhance.run();
+            if (enhanced.failure() != null) {
+                throw enhanced.failure();
+            }
+
+            if (!enhanced.enhancements().isEmpty()) {
+                this.enhancementRepository.save(scanId, enhanced.enhancements());
+                describeEnhancements(enhanced.enhancements()).forEach(description ->
+                    logger.log(ScanLogLevel.INFO, "Enhanced the results with " + description)
+                );
+            }
         } catch (final RuntimeException e) {
             logQuietly(logger, ScanLogLevel.WARN, "Enhancing failed: " + message(e));
-            failQuietly(scanId, step, message(e));
+            // Skips the scan-wide step too
+            failQuietly(scanId, ScanStepType.ENHANCE_RESULTS, message(e));
 
-            return false;
+            return;
         }
 
-        this.scanSteps.complete(scanId, step);
-
-        return true;
+        this.scanSteps.complete(scanId, ScanStepType.ENHANCE_RESULTS);
+        this.scanSteps.skip(scanId, ScanStepType.ENHANCE_SCAN);
     }
 
     private void failQuietly(
@@ -364,6 +374,32 @@ public class ProjectScanner {
         }
     }
 
+    /**
+     * What each enhancer added over all results, e.g. "spring 1.0.0: 3
+     * node(s) and 2 relationship(s)".
+     */
+    private static List<String> describeEnhancements(final List<Enhancements> enhancements) {
+        final var nodes = new LinkedHashMap<String, Integer>();
+        final var relationships = new LinkedHashMap<String, Integer>();
+
+        for (final var enhancer : enhancements) {
+            final var name = enhancer.name() + " " + enhancer.version();
+
+            for (final var enhancement : enhancer.enhancements()) {
+                nodes.merge(name, enhancement.nodes().size(), Integer::sum);
+                relationships.merge(name, enhancement.relationships().size(), Integer::sum);
+            }
+
+            nodes.putIfAbsent(name, 0);
+            relationships.putIfAbsent(name, 0);
+        }
+
+        return nodes.keySet()
+            .stream()
+            .map(name -> name + ": " + nodes.get(name) + " node(s) and " + relationships.get(name) + " relationship(s)")
+            .toList();
+    }
+
     private static String describe(final List<ScanFailure> failures) {
         return failures.stream()
             .map(failure -> describe(failure.target()) + ": " + message(failure.error()))
@@ -374,38 +410,6 @@ public class ProjectScanner {
         final var path = target.getPath() == null || target.getPath().isEmpty() ? "." : target.getPath();
 
         return target.getLanguage() + " " + path;
-    }
-
-    /**
-     * Logs what an enhancer that applied did, e.g. "io.acme.spring:
-     * controllers matched 3, services matched 0". Rules that left matched
-     * nodes without an 'exactlyOne' relationship make it a warning.
-     */
-    private static void log(
-        final ScanLogger logger,
-        final String prefix,
-        final Enhancement enhancement
-    ) {
-        if (!enhancement.applied()) {
-            return;
-        }
-
-        final var rules = enhancement.rules()
-            .stream()
-            .map(ProjectScanner::describe)
-            .collect(Collectors.joining(", "));
-
-        final var skipped = enhancement.rules().stream().anyMatch(rule -> rule.skipped() > 0);
-
-        logger.log(
-            skipped ? ScanLogLevel.WARN : ScanLogLevel.INFO,
-            prefix + enhancement.enhancerId() + (rules.isEmpty() ? "" : ": " + rules)
-        );
-    }
-
-    private static String describe(final RuleOutcome rule) {
-        return rule.ruleId() + " matched " + rule.matched()
-            + (rule.skipped() > 0 ? " (" + rule.skipped() + " without a unique target)" : "");
     }
 
     /**

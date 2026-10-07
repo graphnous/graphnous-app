@@ -1,30 +1,25 @@
 package dev.graphnous.application.enhancer;
 
-import dev.graphnous.application.enhancer.model.EnhancerManifestSchema;
-import dev.graphnous.application.enhancer.model.Rule;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.enhancer.Enhancements;
+
+import java.util.List;
 
 /**
- * Applies enhancer rules to the graph of a scan's results.
+ * Stores what enhancers added to a scan in the graph of its results.
  */
 public interface EnhancementRepository {
 
     /**
-     * Matches the rule's nodes in the scan and applies its actions to them,
-     * with everything it produces named in the manifest's namespace.
+     * Records each enhancer that ran on the scan, by its name and version,
+     * then creates the nodes it added, each enhancing its source node, and
+     * then their relationships, matching both ends by id among the scan's
+     * nodes. Runs apart from storing the results, so a failure leaves the
+     * stored results alone.
      *
-     * @param targetPath the path of the scanned target a target-scoped rule
-     *                   is limited to; null for a scan-scoped rule, which
-     *                   sees every target of the scan
-     * @throws IllegalArgumentException when the rule cannot be applied, such
-     *                                  as for an unknown node kind or an
-     *                                  invalid name
+     * @throws IllegalArgumentException when a label or relationship type is
+     *                                  not a valid name
      */
-    RuleOutcome apply(
-        Scan.ScanId scanId,
-        String targetPath,
-        EnhancerManifestSchema manifest,
-        Rule rule
-    );
+    void save(Scan.ScanId scanId, List<Enhancements> enhancements);
 
 }

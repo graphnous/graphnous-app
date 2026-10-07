@@ -117,6 +117,31 @@ public class ScanRepositoryImpl implements ScanRepository {
     }
 
     @Override
+    public List<Scan> findFinishedCreatedBefore(final Instant cutoff) {
+        return this.jpaRepository.findAllByStatusNotInAndCreatedAtBefore(ACTIVE, cutoff)
+            .stream()
+            .map(this.scanMapper::toDomain)
+            .toList();
+    }
+
+    @Override
+    public List<Scan.ScanId> findOldestFinished(final Project.ProjectId projectId, final int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+
+        return this.jpaRepository
+            .findIdsByProjectIdAndStatusNotInOldestFirst(
+                projectId.id(),
+                ACTIVE,
+                org.springframework.data.domain.PageRequest.of(0, limit)
+            )
+            .stream()
+            .map(Scan.ScanId::new)
+            .toList();
+    }
+
+    @Override
     public void delete(final Scan.ScanId scanId) {
         // Graph first: the scan row is how a failed delete is found again
         this.neo4jRepository.deleteScan(scanId.id());

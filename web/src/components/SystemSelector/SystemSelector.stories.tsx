@@ -93,3 +93,18 @@ export const NothingMatches: Story = {
     await expect(screen.getByRole("option", { name: "No systems match" })).toHaveAttribute("aria-disabled", "true");
   },
 };
+
+export const WithCreate: Story = {
+  args: { onCreateSystem: fn() },
+  play: async ({ args, canvas }) => {
+    await userEvent.click(canvas.getByRole("combobox", { name: "System" }));
+
+    // The last option, below the systems
+    const options = screen.getAllByRole("option");
+    await expect(options.at(-1)).toHaveTextContent("Create new system");
+
+    await userEvent.click(screen.getByRole("option", { name: "Create new system" }));
+    await expect(args.onCreateSystem).toHaveBeenCalled();
+    await expect(args.onSystemChange).not.toHaveBeenCalled();
+  },
+};

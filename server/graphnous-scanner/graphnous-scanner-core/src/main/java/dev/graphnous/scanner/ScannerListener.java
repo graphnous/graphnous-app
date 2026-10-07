@@ -1,6 +1,6 @@
 package dev.graphnous.scanner;
 
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.plan.ScanPlan;
 
 public interface ScannerListener {

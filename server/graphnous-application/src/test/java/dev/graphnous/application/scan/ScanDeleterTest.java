@@ -1,6 +1,7 @@
 package dev.graphnous.application.scan;
 
 import dev.graphnous.application.exception.ConflictException;
+import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.application.scan.stats.ScanStatRepository;
@@ -40,6 +41,9 @@ class ScanDeleterTest {
     @Mock
     private ScanStatRepository scanStatRepository;
 
+    @Mock
+    private NotificationRepository notificationRepository;
+
     private final Project.ProjectId projectId = Project.ProjectId.generate();
 
     @Test
@@ -51,13 +55,14 @@ class ScanDeleterTest {
 
         deleter().deleteScans(projectId);
 
-        final InOrder order = inOrder(scanResultRepository, scanLogRepository, scanStepRepository, scanStatRepository, scanRepository);
+        final InOrder order = inOrder(scanResultRepository, scanLogRepository, scanStepRepository, scanStatRepository, notificationRepository, scanRepository);
 
         for (final var scanId : List.of(first, second)) {
             order.verify(scanResultRepository).delete(scanId);
             order.verify(scanLogRepository).deleteByScanId(scanId);
             order.verify(scanStepRepository).deleteByScanId(scanId);
             order.verify(scanStatRepository).deleteByScanId(scanId);
+            order.verify(notificationRepository).deleteByScanId(scanId);
 
             // Last, so a delete that fails halfway still finds the scan
             order.verify(scanRepository).delete(scanId);
@@ -70,12 +75,13 @@ class ScanDeleterTest {
 
         deleter().deleteScan(scanId);
 
-        final InOrder order = inOrder(scanResultRepository, scanLogRepository, scanStepRepository, scanStatRepository, scanRepository);
+        final InOrder order = inOrder(scanResultRepository, scanLogRepository, scanStepRepository, scanStatRepository, notificationRepository, scanRepository);
 
         order.verify(scanResultRepository).delete(scanId);
         order.verify(scanLogRepository).deleteByScanId(scanId);
         order.verify(scanStepRepository).deleteByScanId(scanId);
         order.verify(scanStatRepository).deleteByScanId(scanId);
+        order.verify(notificationRepository).deleteByScanId(scanId);
 
         order.verify(scanRepository).delete(scanId);
     }
@@ -105,6 +111,6 @@ class ScanDeleterTest {
     }
 
     private ScanDeleter deleter() {
-        return new ScanDeleter(scanRepository, scanLogRepository, scanResultRepository, scanStepRepository, scanStatRepository);
+        return new ScanDeleter(scanRepository, scanLogRepository, scanResultRepository, scanStepRepository, scanStatRepository, notificationRepository);
     }
 }

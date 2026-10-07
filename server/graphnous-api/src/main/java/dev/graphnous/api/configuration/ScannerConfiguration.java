@@ -3,17 +3,13 @@ package dev.graphnous.api.configuration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
 import dev.graphnous.api.event.SpringEventPublisher;
-import dev.graphnous.api.enhancer.ClasspathEnhancerRegistry;
 import dev.graphnous.api.project.scanner.docker.DockerRepositoryScanner;
 import dev.graphnous.api.project.scanner.docker.DockerScanContainers;
 import dev.graphnous.api.project.scanner.docker.DockerSourceCheckout;
 import dev.graphnous.api.project.scanner.docker.ScannerProperties;
 import dev.graphnous.api.project.scanner.docker.ScannersProperties;
 import dev.graphnous.application.enhancer.EnhancementRepository;
-import dev.graphnous.application.enhancer.Enhancer;
-import dev.graphnous.application.enhancer.EnhancerPipeline;
-import dev.graphnous.application.enhancer.EnhancerRegistry;
-import dev.graphnous.application.enhancer.ScanEnhancer;
+import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.project.scanner.ProjectScanner;
 import dev.graphnous.application.project.scanner.RepositoryScanner;
@@ -23,6 +19,8 @@ import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultRepository;
+import dev.graphnous.application.ssh.SshKeyRetriever;
+import dev.graphnous.enhancer.EnhancerProvider;
 import dev.graphnous.scanner.docker.DockerGitCheckout;
 import dev.graphnous.scanner.docker.DockerSandbox;
 import dev.graphnous.scanner.docker.DockerWorkspace;
@@ -31,11 +29,9 @@ import dev.graphnous.scanner.java.targetdetector.MavenScanTargetDetector;
 import dev.graphnous.scanner.plan.DefaultScanPlanner;
 import dev.graphnous.scanner.typescript.language.NodeVersionDetector;
 import dev.graphnous.scanner.typescript.targetdetector.NpmTargetDetector;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.support.ResourcePatternResolver;
 
 import java.util.List;
 
@@ -58,10 +54,11 @@ public class ScannerConfiguration {
         final SourceCheckout sourceCheckout,
         final RepositoryScanner repositoryScanner,
         final ScanResultRepository scanResultRepository,
-        final EnhancerPipeline enhancerPipeline,
-        final EnhancerRegistry enhancerRegistry,
+        final EnhancerProvider enhancerProvider,
+        final EnhancementRepository enhancementRepository,
         final ScanSteps scanSteps,
-        final SpringEventPublisher eventPublisher
+        final SpringEventPublisher eventPublisher,
+        final ScanNotifier scanNotifier
     ) {
         return new ProjectScanner(
             scanService,
@@ -71,27 +68,12 @@ public class ScannerConfiguration {
             sourceCheckout,
             repositoryScanner,
             scanResultRepository,
-            enhancerPipeline,
-            enhancerRegistry,
+            enhancerProvider,
+            enhancementRepository,
             scanSteps,
-            eventPublisher
+            eventPublisher,
+            scanNotifier
         );
-    }
-
-    @Bean
-    public EnhancerPipeline enhancerPipeline(final EnhancementRepository enhancementRepository) {
-        return new EnhancerPipeline(
-            new Enhancer(enhancementRepository),
-            new ScanEnhancer(enhancementRepository)
-        );
-    }
-
-    @Bean
-    public EnhancerRegistry enhancerRegistry(
-        @Value("${graphnous.enhancers.location}") final String location,
-        final ResourcePatternResolver resourcePatternResolver
-    ) {
-        return new ClasspathEnhancerRegistry(location, resourcePatternResolver, scannerObjectMapper);
     }
 
     @Bean
@@ -131,9 +113,16 @@ public class ScannerConfiguration {
     @Bean
     public SourceCheckout sourceCheckout(
         final DockerGitCheckout dockerGitCheckout,
-        final DockerScanContainers dockerScanContainers
+        final DockerScanContainers dockerScanContainers,
+        final SshKeyRetriever sshKeyRetriever,
+        final ScannerProperties properties
     ) {
-        return new DockerSourceCheckout(dockerGitCheckout, dockerScanContainers);
+        return new DockerSourceCheckout(
+            dockerGitCheckout,
+            dockerScanContainers,
+            sshKeyRetriever,
+            properties.sshKnownHosts()
+        );
     }
 
     @Bean

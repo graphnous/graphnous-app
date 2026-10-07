@@ -10,6 +10,8 @@ import dev.graphnous.application.entitlement.EntitlementService;
 import dev.graphnous.application.exception.AuthorizationException;
 import dev.graphnous.application.exception.EntitlementException;
 import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.chat.ChatThreadRepository;
+import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.ProjectDeleter;
 import dev.graphnous.domain.system.System;
@@ -47,6 +49,12 @@ class SystemServiceTest {
 
     @Mock
     private ProjectDeleter projectDeleter;
+
+    @Mock
+    private NotificationRepository notificationRepository;
+
+    @Mock
+    private ChatThreadRepository chatThreadRepository;
 
     private final OrganizationId organizationId = new OrganizationId(UUID.randomUUID());
 
@@ -143,16 +151,18 @@ class SystemServiceTest {
     }
 
     @Test
-    void deletesTheProjectsBeforeTheSystem() {
+    void deletesTheProjectsAndNotificationsBeforeTheSystem() {
         final var system = system(Instant.now());
 
         when(systemRepository.findById(organizationId, system.id())).thenReturn(system);
 
         service().delete(context, system.id());
 
-        final InOrder order = inOrder(authorizationService, projectDeleter, systemRepository);
+        final InOrder order = inOrder(authorizationService, projectDeleter, notificationRepository, systemRepository);
         order.verify(authorizationService).authorize(context, Permission.SYSTEM_DELETE);
         order.verify(projectDeleter).deleteProjects(system.id());
+        order.verify(notificationRepository).deleteBySystemId(system.id());
+        verify(chatThreadRepository).deleteBySystemId(system.id());
         order.verify(systemRepository).delete(organizationId, system.id());
     }
 
@@ -165,6 +175,7 @@ class SystemServiceTest {
         assertThrows(NotFoundException.class, () -> service().delete(context, id));
 
         verify(projectDeleter, never()).deleteProjects(any());
+        verify(notificationRepository, never()).deleteBySystemId(any());
         verify(systemRepository, never()).delete(any(), any());
     }
 
@@ -184,6 +195,6 @@ class SystemServiceTest {
     }
 
     private SystemService service() {
-        return new SystemService(systemRepository, authorizationService, entitlementService, projectDeleter);
+        return new SystemService(systemRepository, authorizationService, entitlementService, projectDeleter, notificationRepository, chatThreadRepository);
     }
 }

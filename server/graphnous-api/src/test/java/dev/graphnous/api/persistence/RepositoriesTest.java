@@ -1,6 +1,8 @@
 package dev.graphnous.api.persistence;
 
 import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.chat.ChatThreadRepository;
+import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.pagination.Sort;
@@ -10,6 +12,8 @@ import dev.graphnous.application.scan.ScanStepRepository;
 import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.stats.ScanStatRepository;
 import dev.graphnous.application.system.SystemRepository;
+import dev.graphnous.domain.chat.ChatThread;
+import dev.graphnous.domain.notification.Notification;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep;
@@ -25,7 +29,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.neo4j.Neo4jContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -54,11 +60,22 @@ class RepositoriesTest {
     private static final Neo4jContainer NEO4J = new Neo4jContainer("neo4j:5-community")
         .withAdminPassword(NEO4J_PASSWORD);
 
+    // The schema comes from the Flyway migrations, which Hibernate validates
+    // the entities against
+    @Container
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17");
+
     @DynamicPropertySource
-    static void neo4j(final DynamicPropertyRegistry registry) {
+    static void databases(final DynamicPropertyRegistry registry) {
         registry.add("spring.neo4j.uri", NEO4J::getBoltUrl);
         registry.add("spring.neo4j.authentication.username", () -> "neo4j");
         registry.add("spring.neo4j.authentication.password", () -> NEO4J_PASSWORD);
+
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.flyway.enabled", () -> "true");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
     @Autowired
@@ -78,6 +95,12 @@ class RepositoriesTest {
 
     @Autowired
     private ScanStatRepository scanStatRepository;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
+    private ChatThreadRepository chatThreadRepository;
 
     @Autowired
     private Driver driver;
@@ -189,6 +212,11 @@ class RepositoriesTest {
         assertThat(second).isEqualTo(first);
     }
 
+    private static final Map<String, List<String>> LANGUAGES = Map.of(
+        "JAVA", List.of("backend/src/main/java/Order.java", "backend/src/main/java/Customer.java"),
+        "TYPESCRIPT", List.of("web/src/index.ts")
+    );
+
     // Scans
 
     @Test
@@ -237,6 +265,40 @@ class RepositoriesTest {
         assertThat(page.content()).extracting(Scan::id).containsExactly(second.id(), first.id());
         assertThat(scanRepository.count(backend.id())).isEqualTo(2);
         assertThat(scanRepository.findIdsByProjectId(backend.id())).containsExactlyInAnyOrder(first.id(), second.id());
+    }
+
+    @Test
+    void findsTheFinishedScansCreatedBeforeACutoff() {
+        final var backend = project(system("Shop"), "backend");
+        final var cutoff = Instant.now().minus(Duration.ofDays(30));
+
+        final var completed = scan(backend, Scan.ScanStatus.COMPLETED, cutoff.minusSeconds(60));
+        final var failed = scan(backend, Scan.ScanStatus.FAILED, cutoff.minusSeconds(60));
+        scan(backend, Scan.ScanStatus.RUNNING, cutoff.minusSeconds(60));
+        scan(backend, Scan.ScanStatus.COMPLETED, cutoff.plusSeconds(60));
+
+        assertThat(scanRepository.findFinishedCreatedBefore(cutoff))
+            .contains(completed, failed)
+            .allSatisfy(scan -> {
+                assertThat(scan.status().isEndState()).isTrue();
+                assertThat(scan.createdAt()).isBefore(cutoff);
+            });
+    }
+
+    @Test
+    void findsTheOldestFinishedScansOfAProject() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var now = Instant.now();
+
+        scan(backend, Scan.ScanStatus.RUNNING, now.minusSeconds(400));
+        final var oldest = scan(backend, Scan.ScanStatus.FAILED, now.minusSeconds(300));
+        final var older = scan(backend, Scan.ScanStatus.COMPLETED, now.minusSeconds(200));
+        scan(backend, Scan.ScanStatus.COMPLETED, now.minusSeconds(100));
+        scan(project(shop, "frontend"), Scan.ScanStatus.COMPLETED, now.minusSeconds(500));
+
+        assertThat(scanRepository.findOldestFinished(backend.id(), 2)).containsExactly(oldest.id(), older.id());
+        assertThat(scanRepository.findOldestFinished(backend.id(), 0)).isEmpty();
     }
 
     @Test
@@ -378,7 +440,7 @@ class RepositoriesTest {
         final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
 
         final var stats = scanStatRepository.save(
-            new ScanStats(ScanStats.ScanStatId.generate(), scan.id(), backend.id(), 12, 8, 31)
+            new ScanStats(ScanStats.ScanStatId.generate(), scan.id(), backend.id(), 2, LANGUAGES, 8, 31)
         );
 
         assertThat(scanStatRepository.findByScanId(scan.id())).contains(stats);
@@ -391,11 +453,11 @@ class RepositoriesTest {
         final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
         final var id = ScanStats.ScanStatId.generate();
 
-        scanStatRepository.save(new ScanStats(id, scan.id(), backend.id(), 1, 1, 1));
-        scanStatRepository.save(new ScanStats(id, scan.id(), backend.id(), 12, 8, 31));
+        scanStatRepository.save(new ScanStats(id, scan.id(), backend.id(), 1, Map.of("JAVA", List.of("Order.java")), 1, 1));
+        scanStatRepository.save(new ScanStats(id, scan.id(), backend.id(), 2, LANGUAGES, 8, 31));
 
         assertThat(scanStatRepository.findByScanId(scan.id()))
-            .contains(new ScanStats(id, scan.id(), backend.id(), 12, 8, 31));
+            .contains(new ScanStats(id, scan.id(), backend.id(), 2, LANGUAGES, 8, 31));
     }
 
     @Test
@@ -404,8 +466,8 @@ class RepositoriesTest {
         final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
         final var other = scan(backend, Scan.ScanStatus.COMPLETED);
 
-        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), scan.id(), backend.id(), 1, 1, 1));
-        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), other.id(), backend.id(), 1, 1, 1));
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), scan.id(), backend.id(), 1, Map.of("JAVA", List.of("Order.java")), 1, 1));
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), other.id(), backend.id(), 1, Map.of("JAVA", List.of("Order.java")), 1, 1));
 
         scanStatRepository.deleteByScanId(scan.id());
 
@@ -420,6 +482,136 @@ class RepositoriesTest {
             organization,
             new System(System.SystemId.generate(), name, null, now, now)
         );
+    }
+
+    // Notifications
+
+    @Test
+    void pagesTheNotificationsOfASystemProjectAndScan() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
+
+        final var ofSystem = notification(shop, null, null, Instant.now().minusSeconds(120));
+        final var ofProject = notification(shop, backend, null, Instant.now().minusSeconds(60));
+        final var ofScan = notification(shop, backend, scan, Instant.now());
+
+        final var byDate = query(0, 10, "createdAt", Sort.Direction.ASC);
+
+        assertThat(notificationRepository.findAll(shop.id(), byDate).content())
+            .extracting(Notification::id)
+            .containsExactly(ofSystem.id(), ofProject.id(), ofScan.id());
+        assertThat(notificationRepository.findAll(backend.id(), byDate).content())
+            .extracting(Notification::id)
+            .containsExactly(ofProject.id(), ofScan.id());
+        assertThat(notificationRepository.findAll(scan.id(), byDate).content())
+            .extracting(Notification::id)
+            .containsExactly(ofScan.id());
+
+        assertThat(notificationRepository.findById(ofScan.id())).isEqualTo(ofScan);
+    }
+
+    @Test
+    void storesWhetherANotificationIsRead() {
+        final var shop = system("Shop");
+        final var notification = notification(shop, null, null, Instant.now());
+
+        notificationRepository.save(notification.withRead(true));
+
+        assertThat(notificationRepository.findById(notification.id()).read()).isTrue();
+    }
+
+    @Test
+    void deletesTheNotificationsOfAScanProjectOrSystem() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
+
+        final var ofSystem = notification(shop, null, null, Instant.now());
+        final var ofProject = notification(shop, backend, null, Instant.now());
+        final var ofScan = notification(shop, backend, scan, Instant.now());
+
+        notificationRepository.deleteByScanId(scan.id());
+
+        assertThatThrownBy(() -> notificationRepository.findById(ofScan.id())).isInstanceOf(NotFoundException.class);
+        assertThat(notificationRepository.findById(ofProject.id())).isEqualTo(ofProject);
+
+        notificationRepository.deleteByProjectId(backend.id());
+
+        assertThatThrownBy(() -> notificationRepository.findById(ofProject.id())).isInstanceOf(NotFoundException.class);
+        assertThat(notificationRepository.findById(ofSystem.id())).isEqualTo(ofSystem);
+
+        notificationRepository.deleteBySystemId(shop.id());
+
+        assertThatThrownBy(() -> notificationRepository.findById(ofSystem.id())).isInstanceOf(NotFoundException.class);
+    }
+
+    // Chat threads
+
+    @Test
+    void keepsTheConversationOfAThread() {
+        final var shop = system("Shop");
+        final var thread = chatThreadRepository.save(ChatThread.start(shop.id(), UUID.randomUUID(), now()));
+
+        final var messages = "[{\"id\":\"1\",\"role\":\"user\",\"content\":\"%s\"}]".formatted("x".repeat(5000));
+        chatThreadRepository.save(thread.withMessages(messages, "Question", now()));
+
+        assertThat(chatThreadRepository.findById(thread.id())).hasValueSatisfying(found -> {
+            assertThat(found.messages()).isEqualTo(messages);
+            assertThat(found.title()).isEqualTo("Question");
+        });
+    }
+
+    @Test
+    void pagesTheThreadsOfAUserAboutASystem() {
+        final var shop = system("Shop");
+        final var user = UUID.randomUUID();
+
+        final var older = chatThreadRepository.save(ChatThread.start(shop.id(), user, now().minusSeconds(60)));
+        final var newer = chatThreadRepository.save(ChatThread.start(shop.id(), user, now()));
+        chatThreadRepository.save(ChatThread.start(shop.id(), UUID.randomUUID(), now()));
+        final var anonymous = chatThreadRepository.save(ChatThread.start(shop.id(), null, now()));
+
+        final var byLastUse = new PageQuery(0, 10, new Sort("updatedAt", Sort.Direction.DESC));
+
+        assertThat(chatThreadRepository.findAll(shop.id(), user, byLastUse).content())
+            .extracting(ChatThread::id)
+            .containsExactly(newer.id(), older.id());
+        assertThat(chatThreadRepository.findAll(shop.id(), null, byLastUse).content())
+            .extracting(ChatThread::id)
+            .containsExactly(anonymous.id());
+    }
+
+    @Test
+    void deletesTheThreadsOfASystem() {
+        final var shop = system("Shop");
+        final var other = system("Other");
+
+        final var ofShop = chatThreadRepository.save(ChatThread.start(shop.id(), null, now()));
+        final var ofOther = chatThreadRepository.save(ChatThread.start(other.id(), null, now()));
+
+        chatThreadRepository.deleteBySystemId(shop.id());
+
+        assertThat(chatThreadRepository.findById(ofShop.id())).isEmpty();
+        assertThat(chatThreadRepository.findById(ofOther.id())).isPresent();
+    }
+
+    private static Instant now() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    private Notification notification(final System system, final Project project, final Scan scan, final Instant createdAt) {
+        return notificationRepository.save(new Notification(
+            Notification.NotificationId.generate(),
+            system.id(),
+            project == null ? null : project.id(),
+            scan == null ? null : scan.id(),
+            "Title",
+            "Content",
+            false,
+            // Rounded as the database stores it, so saved and loaded notifications compare equal
+            createdAt.truncatedTo(ChronoUnit.MICROS)
+        ));
     }
 
     private Project project(final System system, final String name) {

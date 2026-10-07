@@ -1,6 +1,6 @@
 package dev.graphnous.scanner;
 
-import dev.graphnous.scanner.model.ScanResultSchema;
+import dev.graphnous.core.model.ScanResult;
 
 import java.util.List;
 
@@ -8,7 +8,7 @@ import java.util.List;
  * The results of the targets that were scanned, and the targets that failed.
  */
 public record ScanReport(
-    List<ScanResultSchema> results,
+    List<ScanResult> results,
     List<ScanFailure> failures
 ) {
 

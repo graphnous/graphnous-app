@@ -1,8 +1,8 @@
 package dev.graphnous.scanner.cli;
 
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.definition.ScannerDefinition;
-import dev.graphnous.scanner.model.ScanTarget;
 
 import java.util.ArrayList;
 import java.util.List;

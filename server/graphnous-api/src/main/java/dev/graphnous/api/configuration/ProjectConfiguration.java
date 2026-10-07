@@ -2,6 +2,7 @@ package dev.graphnous.api.configuration;
 
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.entitlement.EntitlementService;
+import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.project.ProjectDeleter;
 import dev.graphnous.application.project.ProjectRepository;
 import dev.graphnous.application.project.ProjectService;
@@ -33,11 +34,13 @@ public class ProjectConfiguration {
     @Bean
     ProjectDeleter projectDeleter(
         final ProjectRepository projectRepository,
-        final ScanDeleter scanDeleter
+        final ScanDeleter scanDeleter,
+        final NotificationRepository notificationRepository
     ) {
         return new ProjectDeleter(
             projectRepository,
-            scanDeleter
+            scanDeleter,
+            notificationRepository
         );
     }
 

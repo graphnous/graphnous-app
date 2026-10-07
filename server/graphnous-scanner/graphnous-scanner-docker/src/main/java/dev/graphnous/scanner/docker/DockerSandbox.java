@@ -7,10 +7,10 @@ import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ScannerDefinition;
 import dev.graphnous.scanner.listener.ScanProcessListener;
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
 import dev.graphnous.scanner.sandbox.ScanSandbox;
 
 import java.io.ByteArrayInputStream;
@@ -95,7 +95,7 @@ public class DockerSandbox implements ScanSandbox {
     }
 
     @Override
-    public ScanResultSchema execute(
+    public ScanResult execute(
         final ScannerDefinition definition,
         final Path path,
         final ScanTarget target
@@ -107,8 +107,9 @@ public class DockerSandbox implements ScanSandbox {
 
         String containerId = null;
 
+        final String platform = "linux/amd64";
         try {
-            Containers.pullIfMissing(docker, image);
+            Containers.pullIfMissing(docker, image, platform);
 
             containerId = docker
                 .createContainerCmd(image)
@@ -118,6 +119,7 @@ public class DockerSandbox implements ScanSandbox {
                     HostConfig.newHostConfig()
                         .withMounts(List.of(repository.mount()))
                 )
+                .withPlatform(platform)
                 .exec()
                 .getId();
 
@@ -157,14 +159,14 @@ public class DockerSandbox implements ScanSandbox {
         }
     }
 
-    private ScanResultSchema readResult(
+    private ScanResult readResult(
         final String containerId,
         final String output
     ) throws IOException {
         try (final var archive = docker.copyArchiveFromContainerCmd(containerId, output).exec()) {
             return objectMapper.readValue(
                 ContainerArchive.firstFile(archive),
-                ScanResultSchema.class
+                ScanResult.class
             );
         } catch (NotFoundException e) {
             throw new IllegalStateException(

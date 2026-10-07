@@ -1,11 +1,11 @@
 package dev.graphnous.scanner.executor;
 
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.ScanFailure;
 import dev.graphnous.scanner.ScanReport;
 import dev.graphnous.scanner.ScannerListener;
 import dev.graphnous.scanner.definition.ScannerDefinition;
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
 import dev.graphnous.scanner.plan.ScanPlan;
 import dev.graphnous.scanner.sandbox.ScanSandbox;
 
@@ -43,7 +43,7 @@ public class DefaultScanExecutor implements ScanExecutor {
         final Path path,
         final ScanPlan plan
     ) {
-        final var results = new ArrayList<ScanResultSchema>();
+        final var results = new ArrayList<ScanResult>();
         final var failures = new ArrayList<ScanFailure>();
 
         for (int i = 0; i < plan.targets().size(); i++) {
@@ -80,7 +80,7 @@ public class DefaultScanExecutor implements ScanExecutor {
         return new ScanReport(results, failures);
     }
 
-    private ScanResultSchema execute(final Path path, final ScanTarget target) {
+    private ScanResult execute(final Path path, final ScanTarget target) {
         final var scanner = findScanner(target);
 
         return sandbox.execute(scanner, path, target);

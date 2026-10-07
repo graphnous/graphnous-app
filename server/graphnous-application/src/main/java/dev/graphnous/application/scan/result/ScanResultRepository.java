@@ -1,7 +1,7 @@
 package dev.graphnous.application.scan.result;
 
+import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.scan.Scan;
-import dev.graphnous.scanner.model.ScanResultSchema;
 
 import java.util.List;
 
@@ -13,7 +13,7 @@ public interface ScanResultRepository {
     /**
      * Replaces the stored results of the scan with these.
      */
-    void save(Scan.ScanId scanId, List<ScanResultSchema> results);
+    void save(Scan.ScanId scanId, List<ScanResult> results);
 
     /**
      * Deletes the stored results of the scan, and the dependencies no other

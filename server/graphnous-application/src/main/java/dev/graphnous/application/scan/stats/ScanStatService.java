@@ -1,21 +1,33 @@
 package dev.graphnous.application.scan.stats;
 
+import dev.graphnous.core.model.Class;
+import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.stats.ScanStats;
-import dev.graphnous.scanner.model.Class;
-import dev.graphnous.scanner.model.ScanResultSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Keeps the stats of scans, counted from their results.
  */
 public class ScanStatService {
+
+    /**
+     * The language of files whose target has none.
+     */
+    static final String UNKNOWN_LANGUAGE = "UNKNOWN";
 
     private final ScanStatRepository scanStatRepository;
 
@@ -34,7 +46,7 @@ public class ScanStatService {
     public ScanStats createOrUpdate(
         final Scan.ScanId scanId,
         final Project.ProjectId projectId,
-        final List<ScanResultSchema> results
+        final List<ScanResult> results
     ) {
         final var id = this.scanStatRepository.findByScanId(scanId)
             .map(ScanStats::id)
@@ -43,9 +55,10 @@ public class ScanStatService {
         final var stats = this.scanStatRepository.save(count(id, scanId, projectId, results));
 
         log.info(
-            "Saved scan stats scanId={} files={} classes={} methods={}",
+            "Saved scan stats scanId={} modules={} files={} classes={} methods={}",
             scanId.id(),
-            stats.numberOfFilesScanned(),
+            stats.numberOfModulesScanned(),
+            stats.languages().values().stream().mapToInt(List::size).sum(),
             stats.numberOfClassesParsed(),
             stats.numberOfMethodsParsed()
         );
@@ -54,35 +67,39 @@ public class ScanStatService {
     }
 
     /**
-     * Counts as the results are stored in the graph: a class listed both
-     * in a file and in a package is one class of its module.
+     * Counts as the results are stored in the graph: classes nested in
+     * others count too, and a class listed twice is one class of its
+     * module. Files are
+     * listed under the language of their target, by their path from the
+     * repository's root.
      */
     private static ScanStats count(
         final ScanStats.ScanStatId id,
         final Scan.ScanId scanId,
         final Project.ProjectId projectId,
-        final List<ScanResultSchema> results
+        final List<ScanResult> results
     ) {
-        final var files = new HashSet<String>();
+        final var modules = new HashSet<String>();
+        final var languages = new TreeMap<String, Set<String>>();
         final var classes = new HashSet<String>();
 
         int methods = 0;
 
         for (final var result : results) {
             final var target = result.getTarget() == null ? null : result.getTarget().getPath();
+            final var language = language(result);
 
             for (final var module : result.getModules()) {
                 final var moduleId = target + "|" + module.getPath();
+                modules.add(moduleId);
 
                 final var listed = new ArrayList<Class>();
 
                 for (final var file : module.getFiles()) {
-                    files.add(moduleId + "|" + file.getPath());
-                    listed.addAll(file.getClasses());
-                }
-
-                for (final var pkg : module.getPackages()) {
-                    listed.addAll(pkg.getClasses());
+                    languages
+                        .computeIfAbsent(language, key -> new LinkedHashSet<>())
+                        .add(path(target, module.getPath(), file.getPath()));
+                    file.getClasses().forEach(type -> addWithNested(listed, type));
                 }
 
                 for (final var type : listed) {
@@ -93,6 +110,33 @@ public class ScanStatService {
             }
         }
 
-        return new ScanStats(id, scanId, projectId, files.size(), classes.size(), methods);
+        final var files = new LinkedHashMap<String, List<String>>();
+        languages.forEach((language, paths) -> files.put(language, List.copyOf(paths)));
+
+        return new ScanStats(id, scanId, projectId, modules.size(), files, classes.size(), methods);
+    }
+
+    private static void addWithNested(final List<Class> listed, final Class type) {
+        listed.add(type);
+        type.getClasses().forEach(nested -> addWithNested(listed, nested));
+    }
+
+    private static String language(final ScanResult result) {
+        if (result.getTarget() == null || result.getTarget().getLanguage() == null) {
+            return UNKNOWN_LANGUAGE;
+        }
+
+        return result.getTarget().getLanguage().value().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * The path from the repository's root, leaving out the {@code .} of a
+     * target or module at the root of its parent.
+     */
+    private static String path(final String... segments) {
+        return Arrays.stream(segments)
+            .filter(segment -> segment != null && !segment.isBlank() && !segment.equals("."))
+            .map(segment -> segment.replaceAll("^\\./|/+$", ""))
+            .collect(Collectors.joining("/"));
     }
 }

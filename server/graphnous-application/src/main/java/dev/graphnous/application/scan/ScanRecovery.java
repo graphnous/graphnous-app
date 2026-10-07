@@ -1,5 +1,6 @@
 package dev.graphnous.application.scan;
 
+import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.scanner.ScanCanceller;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.domain.scan.Scan;
@@ -25,6 +26,7 @@ public class ScanRecovery {
     private final ScanLogService scanLogService;
     private final ScanCanceller scanCanceller;
     private final ScanSteps scanSteps;
+    private final ScanNotifier scanNotifier;
 
     private final Duration timeout;
     private final Clock clock;
@@ -36,6 +38,7 @@ public class ScanRecovery {
         final ScanLogService scanLogService,
         final ScanCanceller scanCanceller,
         final ScanSteps scanSteps,
+        final ScanNotifier scanNotifier,
         final Duration timeout,
         final Clock clock
     ) {
@@ -43,6 +46,7 @@ public class ScanRecovery {
         this.scanLogService = scanLogService;
         this.scanCanceller = scanCanceller;
         this.scanSteps = scanSteps;
+        this.scanNotifier = scanNotifier;
 
         this.timeout = timeout;
         this.clock = clock;
@@ -119,6 +123,8 @@ public class ScanRecovery {
         } catch (final RuntimeException e) {
             log.warn("Logging failure of scan scanId={} failed", scan.id().id(), e);
         }
+
+        this.scanNotifier.scanFailed(scan, reason);
 
         return true;
     }

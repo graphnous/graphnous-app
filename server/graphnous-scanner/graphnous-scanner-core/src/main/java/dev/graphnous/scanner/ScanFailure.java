@@ -1,6 +1,6 @@
 package dev.graphnous.scanner;
 
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanTarget;
 
 /**
  * A scan target whose scanner failed; the other targets are still scanned.

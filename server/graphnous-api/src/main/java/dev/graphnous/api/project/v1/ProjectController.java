@@ -17,9 +17,9 @@ import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.scan.CreateScanCommand;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.UploadScanCommand;
+import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project.ProjectId;
 import dev.graphnous.domain.system.System;
-import dev.graphnous.scanner.model.ScanResultSchema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -186,7 +186,7 @@ public class ProjectController {
         @RequestParam("revision") @NotBlank final String revision,
         @RequestPart("files") final List<MultipartFile> files
     ) {
-        final var results = new ArrayList<ScanResultSchema>();
+        final var results = new ArrayList<ScanResult>();
 
         for (final var file : files) {
             results.add(read(file));
@@ -207,9 +207,9 @@ public class ProjectController {
         );
     }
 
-    private static ScanResultSchema read(final MultipartFile file) {
+    private static ScanResult read(final MultipartFile file) {
         try (final var input = file.getInputStream()) {
-            return SCAN_RESULTS.readValue(input, ScanResultSchema.class);
+            return SCAN_RESULTS.readValue(input, ScanResult.class);
         } catch (final JsonProcessingException e) {
             throw new ValidationException(
                 "File " + file.getOriginalFilename() + " is not a valid scan result: " + e.getOriginalMessage()

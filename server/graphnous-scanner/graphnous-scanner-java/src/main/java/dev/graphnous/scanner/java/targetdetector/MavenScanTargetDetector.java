@@ -1,7 +1,7 @@
 package dev.graphnous.scanner.java.targetdetector;
 
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.java.maven.MavenPomFinder;
-import dev.graphnous.scanner.model.ScanTarget;
 import dev.graphnous.scanner.targetdetector.ScanTargetDetector;
 
 import java.nio.file.Path;

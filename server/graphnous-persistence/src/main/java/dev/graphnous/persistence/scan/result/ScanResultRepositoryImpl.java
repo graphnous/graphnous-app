@@ -1,8 +1,8 @@
 package dev.graphnous.persistence.scan.result;
 
 import dev.graphnous.application.scan.result.ScanResultRepository;
+import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.scan.Scan;
-import dev.graphnous.scanner.model.ScanResultSchema;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.TransactionContext;
 import org.springframework.stereotype.Repository;
@@ -24,7 +24,8 @@ import java.util.Map;
  * (Module)-[:DEPENDS_ON {scope}]->(Dependency)
  * </pre>
  * Every node except {@code Dependency} belongs to one scan and carries its
- * {@code scanId}. Dependencies are shared between scans, so it is possible
+ * {@code scanId}, as do the nodes enhancers add; replacing or deleting the
+ * results deletes those too. Dependencies are shared between scans, so it is possible
  * to ask which projects use a library, and are deleted once no scan uses
  * them any more. Inheritance is only linked to
  * classes found in the same scan; the declared names of all supertypes are
@@ -37,8 +38,13 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
 
     private static final int BATCH_SIZE = 2_000;
 
-    private static final List<String> SCAN_LABELS = List.of(
-        "ScanTarget", "Module", "File", "Package", "Class", "Method", "Field", "Annotation"
+    /**
+     * The labels of the nodes that belong to one scan, including the nodes
+     * enhancers add (see {@link EnhancementRepositoryImpl}).
+     */
+    static final List<String> SCAN_LABELS = List.of(
+        "ScanTarget", "Module", "File", "Package", "Class", "Method", "Field", "Annotation",
+        EnhancementRepositoryImpl.ENHANCEMENT, EnhancementRepositoryImpl.ENHANCED
     );
 
     private final Driver driver;
@@ -52,7 +58,7 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
     @Override
     public void save(
         final Scan.ScanId scanId,
-        final List<ScanResultSchema> results
+        final List<ScanResult> results
     ) {
         createSchema();
 

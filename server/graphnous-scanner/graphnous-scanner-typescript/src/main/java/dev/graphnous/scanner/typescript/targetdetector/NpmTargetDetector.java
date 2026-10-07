@@ -1,6 +1,6 @@
 package dev.graphnous.scanner.typescript.targetdetector;
 
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.targetdetector.ScanTargetDetector;
 
 import java.io.IOException;

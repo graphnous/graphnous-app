@@ -1,6 +1,6 @@
 package dev.graphnous.scanner.plan;
 
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanTarget;
 
 import java.util.List;
 

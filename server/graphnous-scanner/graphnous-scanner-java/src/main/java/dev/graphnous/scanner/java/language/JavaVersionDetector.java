@@ -1,8 +1,8 @@
 package dev.graphnous.scanner.java.language;
 
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.java.maven.MavenPom;
 import dev.graphnous.scanner.language.LanguageVersionDetector;
-import dev.graphnous.scanner.model.ScanTarget;
 
 import java.nio.file.Path;
 import java.util.List;

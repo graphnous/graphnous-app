@@ -38,7 +38,8 @@ public class ScanStatRepositoryImpl implements ScanStatRepository {
         entity.setId(stats.id().id());
         entity.setScanId(stats.scanId().id());
         entity.setProjectId(stats.projectId().id());
-        entity.setNumberOfFilesScanned(stats.numberOfFilesScanned());
+        entity.setNumberOfModulesScanned(stats.numberOfModulesScanned());
+        entity.setLanguages(stats.languages());
         entity.setNumberOfClassesParsed(stats.numberOfClassesParsed());
         entity.setNumberOfMethodsParsed(stats.numberOfMethodsParsed());
 
@@ -50,7 +51,8 @@ public class ScanStatRepositoryImpl implements ScanStatRepository {
             new ScanStats.ScanStatId(entity.getId()),
             new Scan.ScanId(entity.getScanId()),
             new Project.ProjectId(entity.getProjectId()),
-            entity.getNumberOfFilesScanned(),
+            entity.getNumberOfModulesScanned(),
+            entity.getLanguages(),
             entity.getNumberOfClassesParsed(),
             entity.getNumberOfMethodsParsed()
         );

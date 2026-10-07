@@ -3,14 +3,10 @@ package dev.graphnous.application.project.scanner;
 import dev.graphnous.application.context.OrganizationContext;
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.context.UserContext;
-import dev.graphnous.application.enhancer.Enhancement;
-import dev.graphnous.application.enhancer.EnhancerPipeline;
-import dev.graphnous.application.enhancer.EnhancerRegistry;
-import dev.graphnous.application.enhancer.RuleOutcome;
-import dev.graphnous.application.enhancer.TargetEnhancements;
-import dev.graphnous.application.enhancer.model.EnhancerManifestSchema;
+import dev.graphnous.application.enhancer.EnhancementRepository;
 import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.InMemoryScanStepRepository;
@@ -19,14 +15,19 @@ import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultRepository;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.log.ScanLog.ScanLogLevel;
 import dev.graphnous.domain.system.System;
+import dev.graphnous.enhancer.Enhancement;
+import dev.graphnous.enhancer.Enhancements;
+import dev.graphnous.enhancer.EnhancerProvider;
+import dev.graphnous.enhancer.Node;
+import dev.graphnous.enhancer.Relationship;
 import dev.graphnous.scanner.ScanFailure;
 import dev.graphnous.scanner.ScanReport;
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
 import dev.graphnous.scanner.plan.ScanPlan;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static dev.graphnous.domain.scan.ScanStep.ScanStepStatus.COMPLETED;
@@ -53,10 +55,10 @@ import static dev.graphnous.domain.scan.ScanStep.ScanStepType.STORE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -84,13 +86,16 @@ class ProjectScannerTest {
     private ScanResultRepository scanResultRepository;
 
     @Mock
-    private EnhancerPipeline enhancerPipeline;
+    private EnhancerProvider enhancerProvider;
 
     @Mock
-    private EnhancerRegistry enhancerRegistry;
+    private EnhancementRepository enhancementRepository;
 
     @Mock
     private EventPublisher eventPublisher;
+
+    @Mock
+    private ScanNotifier scanNotifier;
 
     private final InMemoryScanStepRepository steps = new InMemoryScanStepRepository();
 
@@ -122,7 +127,6 @@ class ProjectScannerTest {
         lenient().when(sourceCheckout.checkout(eq(scan.id()), anyString(), any(), any()))
             .thenReturn(Path.of("/checkouts/scan"));
         lenient().when(repositoryScanner.plan(any(), any())).thenReturn(plan);
-        lenient().when(enhancerRegistry.installed()).thenReturn(List.of());
     }
 
     @Test
@@ -135,8 +139,14 @@ class ProjectScannerTest {
 
         verify(scanResultRepository).save(scan.id(), List.of());
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
-        assertThat(steps.statuses(scan.id()).values()).containsOnly(COMPLETED).hasSize(6);
+        assertThat(steps.statuses(scan.id()).values())
+            .containsExactly(COMPLETED, COMPLETED, COMPLETED, COMPLETED, COMPLETED, SKIPPED);
         assertThat(steps.step(scan.id(), CHECKOUT).startedAt()).isNotNull();
+
+        final var order = inOrder(scanNotifier);
+        order.verify(scanNotifier).scanStarted(scan);
+        order.verify(scanNotifier).scanCompleted(scan);
+        verify(scanNotifier, never()).scanFailed(any(), any());
     }
 
     @Test
@@ -169,6 +179,8 @@ class ProjectScannerTest {
             .containsExactly(FAILED, SKIPPED, SKIPPED, SKIPPED, SKIPPED, SKIPPED);
         verify(repositoryScanner, never()).plan(any(), any());
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
+        verify(scanNotifier).scanFailed(scan, "Repository not found");
+        verify(scanNotifier, never()).scanCompleted(any());
     }
 
     @Test
@@ -288,92 +300,89 @@ class ProjectScannerTest {
 
         verify(scanService, never()).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
         verify(scanLogService, never()).log(eq(scan.id()), eq(ScanLogLevel.ERROR), anyString());
+        // Whatever failed it already notified of that
+        verify(scanNotifier, never()).scanFailed(any(), any());
     }
 
     @Test
-    void logsTheEnhancersThatRanOnTheResults() {
+    void storesTheEnhancementsAfterTheResults() {
         final var result = scanResult();
-        final var manifest = new EnhancerManifestSchema();
+        final var enhancement = enhancement();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
         when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
-        when(enhancerRegistry.installed()).thenReturn(List.of(manifest));
-        when(enhancerPipeline.enhanceTargets(scan.id(), List.of(result), List.of(manifest))).thenReturn(List.of(
-            new TargetEnhancements(result.getTarget(), List.of(
-                new Enhancement("io.acme.spring", true, List.of(
-                    new RuleOutcome("controllers", 3, 3, 6, 0, 0),
-                    new RuleOutcome("services", 0, 0, 0, 0, 0)
-                )),
-                Enhancement.notApplied("io.acme.fetch")
-            ))
-        ));
-        when(enhancerPipeline.enhanceScan(scan.id(), List.of(result), List.of(manifest))).thenReturn(List.of(
-            new Enhancement("io.acme.http-links", true, List.of(new RuleOutcome("calls", 2, 0, 1, 1, 1)))
-        ));
+        when(enhancerProvider.enhanceScan(result)).thenReturn(List.of(enhancement));
 
         start();
 
-        verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Enhanced JAVA backend with io.acme.spring: controllers matched 3, services matched 0");
-        // A target missing for an 'exactlyOne' relationship makes it a warning
-        verify(scanLogService).log(scan.id(), ScanLogLevel.WARN, "Enhanced the scan with io.acme.http-links: calls matched 2 (1 without a unique target)");
-        verify(scanLogService, never()).log(eq(scan.id()), any(), contains("io.acme.fetch"));
-        assertThat(steps.statuses(scan.id()).values()).containsOnly(COMPLETED);
+        final var order = inOrder(enhancerProvider, scanResultRepository, enhancementRepository);
+        order.verify(enhancerProvider).enhanceScan(result);
+        order.verify(scanResultRepository).save(scan.id(), List.of(result));
+        order.verify(enhancementRepository).save(scan.id(), List.of(enhancement));
+
+        verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Enhanced the results with spring 1.0.0: 2 node(s) and 1 relationship(s)");
+        assertThat(steps.step(scan.id(), ENHANCE_RESULTS).status()).isEqualTo(COMPLETED);
+        // Nothing enhances the scan as a whole yet
+        assertThat(steps.step(scan.id(), ENHANCE_SCAN).status()).isEqualTo(SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
     }
 
     @Test
-    void completesTheScanWhenEnhancingTheResultsFails() {
+    void storesTheResultsWhenEnhancingFails() {
         final var result = scanResult();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
         when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
-        when(enhancerRegistry.installed()).thenReturn(List.of(new EnhancerManifestSchema()));
-        when(enhancerPipeline.enhanceTargets(any(), any(), any())).thenThrow(new IllegalStateException("Enhancer broke"));
+        when(enhancerProvider.enhanceScan(result)).thenThrow(new IllegalStateException("Enhancer broke"));
 
         start();
 
         verify(scanResultRepository).save(scan.id(), List.of(result));
+        verify(enhancementRepository, never()).save(any(), any());
         verify(scanLogService).log(scan.id(), ScanLogLevel.WARN, "Enhancing failed: Enhancer broke");
         assertThat(steps.step(scan.id(), ENHANCE_RESULTS).error()).isEqualTo("Enhancer broke");
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(COMPLETED, COMPLETED, COMPLETED, COMPLETED, FAILED, SKIPPED);
-        verify(enhancerPipeline, never()).enhanceScan(any(), any(), any());
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
     }
 
     @Test
-    void completesTheScanWhenEnhancingTheScanFails() {
+    void keepsTheStoredResultsWhenStoringTheEnhancementsFails() {
         final var result = scanResult();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
         when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
-        when(enhancerRegistry.installed()).thenReturn(List.of(new EnhancerManifestSchema()));
-        when(enhancerPipeline.enhanceTargets(any(), any(), any())).thenReturn(List.of());
-        when(enhancerPipeline.enhanceScan(any(), any(), any())).thenThrow(new IllegalStateException("Rule timed out"));
+        when(enhancerProvider.enhanceScan(result)).thenReturn(List.of(enhancement()));
+        doThrow(new IllegalArgumentException("Invalid label Spring Endpoint")).when(enhancementRepository).save(any(), any());
 
         start();
 
-        assertThat(steps.step(scan.id(), ENHANCE_SCAN).error()).isEqualTo("Rule timed out");
+        verify(scanResultRepository).save(scan.id(), List.of(result));
+        verify(scanResultRepository, never()).delete(any());
+        verify(scanLogService).log(scan.id(), ScanLogLevel.WARN, "Enhancing failed: Invalid label Spring Endpoint");
         assertThat(steps.statuses(scan.id()).values())
-            .containsExactly(COMPLETED, COMPLETED, COMPLETED, COMPLETED, COMPLETED, FAILED);
+            .containsExactly(COMPLETED, COMPLETED, COMPLETED, COMPLETED, FAILED, SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
     }
 
     @Test
-    void completesTheEnhanceStepsWithoutInstalledEnhancers() {
+    void enhancesUploadedResults() {
+        final var result = scanResult();
+        final var enhancement = enhancement();
+        skipScanning();
+
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(scanResult()), List.of()));
+        when(enhancerProvider.enhanceScan(result)).thenReturn(List.of(enhancement));
 
-        start();
+        scanner().storeUploaded(scan.id(), List.of(result), context);
 
-        verify(enhancerPipeline, never()).enhanceTargets(any(), any(), any());
-        verify(enhancerPipeline, never()).enhanceScan(any(), any(), any());
-        assertThat(steps.step(scan.id(), ENHANCE_RESULTS).status()).isEqualTo(COMPLETED);
-        assertThat(steps.step(scan.id(), ENHANCE_SCAN).status()).isEqualTo(COMPLETED);
+        final var order = inOrder(scanResultRepository, enhancementRepository);
+        order.verify(scanResultRepository).save(scan.id(), List.of(result));
+        order.verify(enhancementRepository).save(scan.id(), List.of(enhancement));
     }
 
     @Test
-    void storesAndEnhancesUploadedResultsWithoutCheckingOut() {
+    void storesUploadedResultsWithoutCheckingOut() {
         final var result = scanResult();
         skipScanning();
 
@@ -386,9 +395,11 @@ class ProjectScannerTest {
         verify(repositoryScanner, never()).plan(any(), any());
         verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Storing 1 uploaded scan result(s)");
         assertThat(steps.statuses(scan.id()).values())
-            .containsExactly(SKIPPED, SKIPPED, SKIPPED, COMPLETED, COMPLETED, COMPLETED);
+            .containsExactly(SKIPPED, SKIPPED, SKIPPED, COMPLETED, COMPLETED, SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
         assertThat(completedEvent().getResults()).containsExactly(result);
+        verify(scanNotifier).scanStarted(scan);
+        verify(scanNotifier).scanCompleted(scan);
     }
 
     @Test
@@ -405,6 +416,7 @@ class ProjectScannerTest {
             .containsExactly(SKIPPED, SKIPPED, SKIPPED, FAILED, SKIPPED, SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
         verify(eventPublisher, never()).publish(any());
+        verify(scanNotifier).scanFailed(scan, "Neo4j unavailable");
     }
 
     /**
@@ -418,15 +430,25 @@ class ProjectScannerTest {
         scanSteps.skip(scan.id(), SCAN);
     }
 
-    private static ScanResultSchema scanResult() {
+    private static ScanResult scanResult() {
         final var target = new ScanTarget();
         target.setPath("backend");
         target.setLanguage(ScanTarget.Language.JAVA);
 
-        final var result = new ScanResultSchema();
+        final var result = new ScanResult();
         result.setTarget(target);
 
         return result;
+    }
+
+    private static Enhancements enhancement() {
+        return new Enhancements("spring", "1.0.0", List.of(new Enhancement(
+            List.of(
+                new Node("backend|.|class:com.acme.Orders|controller", "backend|.|class:com.acme.Orders", List.of("Controller"), Map.of()),
+                new Node("backend|.|class:com.acme.Orders|endpoint:GET /orders", "backend|.|class:com.acme.Orders", List.of("Endpoint"), Map.of())
+            ),
+            List.of(new Relationship("backend|.|class:com.acme.Orders|controller", "backend|.|class:com.acme.Orders|endpoint:GET /orders", "HAS_ENDPOINT"))
+        )));
     }
 
     private ScanCompletedEvent completedEvent() {
@@ -451,10 +473,11 @@ class ProjectScannerTest {
             sourceCheckout,
             repositoryScanner,
             scanResultRepository,
-            enhancerPipeline,
-            enhancerRegistry,
+            enhancerProvider,
+            enhancementRepository,
             new ScanSteps(steps, Clock.systemUTC()),
-            eventPublisher
+            eventPublisher,
+            scanNotifier
         );
     }
 

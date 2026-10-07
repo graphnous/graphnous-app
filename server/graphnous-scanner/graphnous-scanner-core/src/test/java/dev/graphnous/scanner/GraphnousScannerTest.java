@@ -1,7 +1,7 @@
 package dev.graphnous.scanner;
 
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.plan.ScanPlan;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +17,7 @@ class GraphnousScannerTest {
     void plansAndExecutesTheScanForThePath() {
         final var path = Path.of("repo");
         final var plan = new ScanPlan(List.of(new ScanTarget()));
-        final var result = new ScanResultSchema();
+        final var result = new ScanResult();
 
         final var plannedPaths = new ArrayList<Path>();
         final var executed = new ArrayList<ScanPlan>();

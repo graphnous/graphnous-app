@@ -1,10 +1,10 @@
 package dev.graphnous.scanner.executor;
 
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.ScanFailure;
 import dev.graphnous.scanner.ScannerListener;
 import dev.graphnous.scanner.definition.ScannerDefinition;
-import dev.graphnous.scanner.model.ScanResultSchema;
-import dev.graphnous.scanner.model.ScanTarget;
 import dev.graphnous.scanner.plan.ScanPlan;
 import dev.graphnous.scanner.sandbox.ScanSandbox;
 import org.junit.jupiter.api.Test;
@@ -48,7 +48,7 @@ class DefaultScanExecutorTest {
         );
 
         assertThat(report.results())
-            .extracting(ScanResultSchema::getTarget)
+            .extracting(ScanResult::getTarget)
             .containsExactly(javaTarget, typescriptTarget);
 
         assertThat(report.hasFailures()).isFalse();
@@ -106,7 +106,7 @@ class DefaultScanExecutorTest {
             .containsExactly(first, broken, last);
 
         assertThat(report.results())
-            .extracting(ScanResultSchema::getTarget)
+            .extracting(ScanResult::getTarget)
             .containsExactly(first, last);
 
         assertThat(report.failures()).singleElement().satisfies(failure -> {
@@ -128,7 +128,7 @@ class DefaultScanExecutorTest {
         final var report = executor.execute(REPOSITORY, new ScanPlan(List.of(typescript, java)));
 
         assertThat(report.results())
-            .extracting(ScanResultSchema::getTarget)
+            .extracting(ScanResult::getTarget)
             .containsExactly(java);
 
         assertThat(report.failures()).singleElement().satisfies(failure -> {
@@ -216,7 +216,7 @@ class DefaultScanExecutorTest {
         }
 
         @Override
-        public ScanResultSchema execute(
+        public ScanResult execute(
             final ScannerDefinition definition,
             final Path path,
             final ScanTarget target
@@ -234,7 +234,7 @@ class DefaultScanExecutorTest {
                 throw error;
             }
 
-            final var result = new ScanResultSchema();
+            final var result = new ScanResult();
             result.setTarget(target);
 
             return result;

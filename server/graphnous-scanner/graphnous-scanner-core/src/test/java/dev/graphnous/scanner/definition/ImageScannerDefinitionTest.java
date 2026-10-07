@@ -1,6 +1,6 @@
 package dev.graphnous.scanner.definition;
 
-import dev.graphnous.scanner.model.ScanTarget;
+import dev.graphnous.core.model.ScanTarget;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

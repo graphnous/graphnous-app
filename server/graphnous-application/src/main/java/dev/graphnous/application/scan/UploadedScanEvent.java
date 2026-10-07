@@ -2,8 +2,8 @@ package dev.graphnous.application.scan;
 
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.event.ApplicationEvent;
+import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.scan.Scan;
-import dev.graphnous.scanner.model.ScanResultSchema;
 
 import java.util.List;
 
@@ -14,12 +14,12 @@ import java.util.List;
 public class UploadedScanEvent implements ApplicationEvent {
 
     private final Scan.ScanId scanId;
-    private final List<ScanResultSchema> results;
+    private final List<ScanResult> results;
     private final RequestContext context;
 
     public UploadedScanEvent(
         final Scan.ScanId scanId,
-        final List<ScanResultSchema> results,
+        final List<ScanResult> results,
         final RequestContext context
     ) {
         this.scanId = scanId;
@@ -31,7 +31,7 @@ public class UploadedScanEvent implements ApplicationEvent {
         return this.scanId;
     }
 
-    public List<ScanResultSchema> getResults() {
+    public List<ScanResult> getResults() {
         return this.results;
     }
 

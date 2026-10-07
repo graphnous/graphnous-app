@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { ToastProvider } from "@graphnous/theme";
+import {
+  ToastProvider
+} from "@graphnous/theme";
 
 import { AppLinkProvider } from "@/components/AppLinkProvider";
 import { ApiClientProvider } from "@/lib/api/client";
 
 import "./globals.css";
+import { AppLayout } from "./AppLayout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,10 +35,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <ApiClientProvider>
           <AppLinkProvider>
-            <ToastProvider>{children}</ToastProvider>
+            <ToastProvider>
+              <AppLayout>
+                {children}
+              </AppLayout>
+            </ToastProvider>
           </AppLinkProvider>
         </ApiClientProvider>
       </body>
     </html>
   );
 }
+
+

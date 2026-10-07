@@ -15,6 +15,10 @@ export type EventStreamOptions<T> = {
    */
   onEvent: (data: T) => void;
   /**
+   * Whether the event stream should be active.
+   */
+  enabled?: boolean;
+  /**
    * Sends cookies to a stream on another origin.
    */
   withCredentials?: boolean;
@@ -28,27 +32,43 @@ export type EventStreamOptions<T> = {
  */
 export function useEventStream<T>(
   url: string | null,
-  { event = "message", onEvent, withCredentials = false }: EventStreamOptions<T>,
+  { event = "message", onEvent, enabled = true, withCredentials = false }: EventStreamOptions<T>,
 ): EventStreamStatus {
-  const [status, setStatus] = useState<{ url: string; status: EventStreamStatus } | null>(null);
+  const [status, setStatus] = useState<{
+    url: string;
+    status: EventStreamStatus;
+  } | null>(null);
+
   const handle = useEffectEvent((data: T) => onEvent(data));
 
   useEffect(() => {
-    if (!url) {
+    if (!url || !enabled) {
+      setStatus((current) =>
+        current?.url === url
+          ? { url, status: "closed" }
+          : current,
+      );
       return;
     }
 
     const source = new EventSource(url, { withCredentials });
+
     const update = () =>
       setStatus({
         url,
-        status: source.readyState === EventSource.OPEN ? "open" : source.readyState === EventSource.CONNECTING ? "connecting" : "closed",
+        status:
+          source.readyState === EventSource.OPEN
+            ? "open"
+            : source.readyState === EventSource.CONNECTING
+              ? "connecting"
+              : "closed",
       });
+
     const listener = (message: MessageEvent<string>) => {
       try {
         handle(JSON.parse(message.data) as T);
       } catch {
-        // Skips an event that is not JSON
+        // Skip an event that is not JSON
       }
     };
 
@@ -56,16 +76,19 @@ export function useEventStream<T>(
     source.addEventListener("error", update);
     source.addEventListener(event, listener);
 
+    update();
+
     return () => {
+      source.removeEventListener("open", update);
+      source.removeEventListener("error", update);
       source.removeEventListener(event, listener);
       source.close();
     };
-  }, [url, event, withCredentials]);
+  }, [url, event, enabled, withCredentials]);
 
-  if (!url) {
+  if (!url || !enabled) {
     return "closed";
   }
 
-  // Connecting until the stream for this url says otherwise
   return status?.url === url ? status.status : "connecting";
 }
