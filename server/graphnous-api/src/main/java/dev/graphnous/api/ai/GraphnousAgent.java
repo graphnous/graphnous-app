@@ -32,8 +32,11 @@ import java.util.stream.Collectors;
  * only known there, as the agent runs on after the request returns, and the
  * API key comes from the {@link AiApiTokenRetriever} each time, so a changed
  * key is used without a restart. Without a key the run fails with an AG-UI
- * error rather than the server failing to start. The conversation is kept
- * in the run's chat thread, when it is one of the user's.
+ * error rather than the server failing to start.
+ * <p>
+ * The conversation is not kept in the run's chat thread: ag-ui 2.0.0 ends a
+ * run without the snapshot of its messages that {@link ChatThreadRecorder}
+ * stores.
  */
 public class GraphnousAgent implements Agent {
 
@@ -130,8 +133,6 @@ public class GraphnousAgent implements Agent {
 
         return SpringAiAgent.builder(chatClient)
             .tools(List.of(MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks()))
-            // The whole conversation at the end of each run, to keep it
-            .emitMessagesSnapshot(true)
             .build();
     }
 
