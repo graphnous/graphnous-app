@@ -29,6 +29,7 @@ import { CreateScanModal, CreateScanModalRef } from "@/components/CreateScanModa
 import { Scan } from "@/types";
 import { StatsCard } from "@/components/StatsCard/StatsCard";
 import { ProjectGraph } from "@/components/ProjectGraph/ProjectGraph";
+import { LatestScanChanges, ProjectScanComparison } from "@/components/ScanComparison/ScanComparison";
 
 export default function ProjectPage() {
     const { id } = useParams<{ id: string }>();
@@ -117,6 +118,7 @@ export default function ProjectPage() {
                         <Tab value={"overview"}>Overview</Tab>
                         <Tab value={"code"}>Code</Tab>
                         <Tab value={"graph"}>Graph</Tab>
+                        <Tab value={"compare"}>Compare</Tab>
                         <Tab value={"dependencies"}>Dependencies</Tab>
                         <Tab value={"impact"}>Impact</Tab>
                         <Tab value={"chat"}>Chat</Tab>
@@ -145,9 +147,9 @@ export default function ProjectPage() {
                                 </CardBody>
                             </Card>
                             <Card className="flex-1">
-                                <CardHeader title="Changes since previous scan" description="Snapshot #41 → Snapshot #42" />
+                                <CardHeader title="Changes since previous scan" description="The latest completed scan against the one before it" />
                                 <CardBody>
-                                    None
+                                    <LatestScanChanges scans={scansPage.content} />
                                 </CardBody>
                             </Card>
                         </section>
@@ -157,6 +159,9 @@ export default function ProjectPage() {
                     </TabPanel>
                     <TabPanel value={"graph"}>
                         <ProjectGraph scans={scansPage.content} />
+                    </TabPanel>
+                    <TabPanel value={"compare"}>
+                        <ProjectScanComparison scans={scansPage.content} />
                     </TabPanel>
                     <TabPanel value={"dependencies"}>
                         <Text size="lg" as="div">
