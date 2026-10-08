@@ -43,9 +43,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The repositories against their real stores: the relational database
- * (in-memory H2, as configured) and Neo4j in a container. Skipped when
- * Docker is not available.
+ * The repositories against their real stores: PostgreSQL, with the Flyway
+ * migrations, and Neo4j, each in a container. Skipped when Docker is not
+ * available.
  * <p>
  * The repositories live in graphnous-persistence; they are tested here, where
  * the application wires them.
