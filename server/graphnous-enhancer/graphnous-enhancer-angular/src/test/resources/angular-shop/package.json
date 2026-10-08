@@ -1,0 +1,1 @@
+{ "name": "shop", "version": "1.0.0", "dependencies": { "@angular/core": "^20.0.0", "@angular/common": "^20.0.0", "rxjs": "^7.8.0" } }

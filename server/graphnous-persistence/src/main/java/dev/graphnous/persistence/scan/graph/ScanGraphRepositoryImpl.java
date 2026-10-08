@@ -3,6 +3,7 @@ package dev.graphnous.persistence.scan.graph;
 import dev.graphnous.application.scan.graph.ScanGraph;
 import dev.graphnous.application.scan.graph.ScanGraphRepository;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.persistence.scan.result.EnhancementRepositoryImpl;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.TransactionContext;
@@ -255,11 +256,14 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
     ) {
         final var found = new HashMap<String, ScanGraph.Node>();
 
+        // A node an enhancer added is of its own label, not the one they all have
         tx.run("""
                 MATCH (n) WHERE elementId(n) IN $ids
-                RETURN elementId(n) AS elementId, labels(n)[0] AS type, properties(n) AS properties
+                RETURN elementId(n) AS elementId,
+                       [label IN labels(n) WHERE label <> $enhanced][0] AS type,
+                       properties(n) AS properties
                 """,
-            Map.of("ids", elementIds)
+            Map.of("ids", elementIds, "enhanced", EnhancementRepositoryImpl.ENHANCED)
         ).list().forEach(record -> {
             final var elementId = record.get("elementId").asString();
             final var type = record.get("type").asString();
