@@ -17,6 +17,12 @@ import dev.graphnous.application.scan.files.ScanFileService;
 import dev.graphnous.application.scan.methods.ScanMethod;
 import dev.graphnous.application.scan.methods.ScanMethodFilter;
 import dev.graphnous.application.scan.methods.ScanMethodService;
+import dev.graphnous.application.scan.modules.ScanModule;
+import dev.graphnous.application.scan.modules.ScanModuleFilter;
+import dev.graphnous.application.scan.modules.ScanModuleService;
+import dev.graphnous.application.scan.packages.ScanPackage;
+import dev.graphnous.application.scan.packages.ScanPackageFilter;
+import dev.graphnous.application.scan.packages.ScanPackageService;
 import dev.graphnous.domain.scan.Scan;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,7 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * The files, classes, methods and dependencies of a scan, a page at a time.
+ * The modules, packages, files, classes, methods and dependencies of a scan,
+ * a page at a time.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -44,6 +51,12 @@ class ScanListingControllersTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private ScanModuleService scanModuleService;
+
+    @MockitoBean
+    private ScanPackageService scanPackageService;
 
     @MockitoBean
     private ScanFileService scanFileService;
@@ -61,6 +74,52 @@ class ScanListingControllersTest {
     private RequestContextProvider contextProvider;
 
     private final Scan.ScanId scanId = Scan.ScanId.generate();
+
+    @Test
+    void listsTheModulesOfAScan() throws Exception {
+        when(scanModuleService.getModules(
+            any(),
+            eq(scanId),
+            eq(new ScanModuleFilter("ord", "backend")),
+            eq(new PageQuery(0, 50, new Sort("name", Sort.Direction.ASC)))
+        )).thenReturn(new Page<>(
+            List.of(new ScanModule(scanId.id() + "|backend|orders", "backend", "orders", "orders", 2, 1, 3, 2, 2)),
+            0, 50, 1, 1
+        ));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/modules", scanId.id())
+                .queryParam("query", "ord")
+                .queryParam("target", "backend")
+                .queryParam("sort", "name"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].id").value(scanId.id() + "|backend|orders"))
+            .andExpect(jsonPath("$.content[0].target").value("backend"))
+            .andExpect(jsonPath("$.content[0].path").value("orders"))
+            .andExpect(jsonPath("$.content[0].files").value(2))
+            .andExpect(jsonPath("$.content[0].classes").value(3))
+            .andExpect(jsonPath("$.content[0].methods").value(2))
+            .andExpect(jsonPath("$.content[0].dependencies").value(2))
+            .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void listsThePackagesOfAScanByQualifiedNameByDefault() throws Exception {
+        when(scanPackageService.getPackages(
+            any(),
+            eq(scanId),
+            eq(new ScanPackageFilter(null, "orders")),
+            eq(new PageQuery(0, 50, new Sort("qualifiedName", Sort.Direction.ASC)))
+        )).thenReturn(new Page<>(
+            List.of(new ScanPackage("package", "orders", "example", "com.example", 3, 0, 0)),
+            0, 50, 1, 1
+        ));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/packages", scanId.id()).queryParam("module", "orders"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].qualifiedName").value("com.example"))
+            .andExpect(jsonPath("$.content[0].module").value("orders"))
+            .andExpect(jsonPath("$.content[0].classes").value(3));
+    }
 
     @Test
     void listsTheFilesOfAScan() throws Exception {
@@ -175,6 +234,8 @@ class ScanListingControllersTest {
     @Test
     void answersBadRequestForAnInvalidPage() throws Exception {
         for (final var request : List.of(
+            get("/api/v1/scans/{id}/modules", scanId.id()).queryParam("sort", "files"),
+            get("/api/v1/scans/{id}/packages", scanId.id()).queryParam("size", "0"),
             get("/api/v1/scans/{id}/files", scanId.id()).queryParam("sort", "name"),
             get("/api/v1/scans/{id}/files", scanId.id()).queryParam("sourceSet", "both"),
             get("/api/v1/scans/{id}/classes", scanId.id()).queryParam("size", "101"),
@@ -186,6 +247,8 @@ class ScanListingControllersTest {
             mockMvc.perform(request).andExpect(status().isBadRequest());
         }
 
-        verifyNoInteractions(scanFileService, scanClassService, scanMethodService, scanDependencyService);
+        verifyNoInteractions(
+            scanModuleService, scanPackageService, scanFileService, scanClassService, scanMethodService, scanDependencyService
+        );
     }
 }

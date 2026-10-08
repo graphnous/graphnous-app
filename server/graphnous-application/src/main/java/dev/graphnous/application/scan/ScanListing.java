@@ -6,8 +6,9 @@ import dev.graphnous.application.pagination.PageQuery;
 import java.util.Set;
 
 /**
- * What the lists of a scan's files, classes, methods and dependencies share:
- * which properties they sort by, and their optional filters.
+ * What the lists of a scan's modules, packages, files, classes, methods and
+ * dependencies share: which properties they sort by, and their optional
+ * filters.
  */
 public final class ScanListing {
 

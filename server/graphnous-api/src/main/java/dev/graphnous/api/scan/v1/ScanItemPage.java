@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * A page of what a scan found: its files, classes, methods or
- * dependencies. Shaped like the API's other pages; not in the published
- * OpenAPI spec yet, so it is its own.
+ * A page of what a scan found: its modules, packages, files, classes,
+ * methods or dependencies. Shaped like the API's other pages; not in the
+ * published OpenAPI spec yet, so it is its own.
  *
  * @param page          the page's number, from 0
  * @param totalElements of every page

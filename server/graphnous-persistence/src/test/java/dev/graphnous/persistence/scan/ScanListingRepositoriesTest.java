@@ -11,12 +11,18 @@ import dev.graphnous.application.scan.files.ScanFile;
 import dev.graphnous.application.scan.files.ScanFileFilter;
 import dev.graphnous.application.scan.methods.ScanMethod;
 import dev.graphnous.application.scan.methods.ScanMethodFilter;
+import dev.graphnous.application.scan.modules.ScanModule;
+import dev.graphnous.application.scan.modules.ScanModuleFilter;
+import dev.graphnous.application.scan.packages.ScanPackage;
+import dev.graphnous.application.scan.packages.ScanPackageFilter;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.persistence.scan.classes.ScanClassRepositoryImpl;
 import dev.graphnous.persistence.scan.dependencies.ScanDependencyRepositoryImpl;
 import dev.graphnous.persistence.scan.files.ScanFileRepositoryImpl;
 import dev.graphnous.persistence.scan.methods.ScanMethodRepositoryImpl;
+import dev.graphnous.persistence.scan.modules.ScanModuleRepositoryImpl;
+import dev.graphnous.persistence.scan.packages.ScanPackageRepositoryImpl;
 import dev.graphnous.persistence.scan.result.ScanResultRepositoryImpl;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -37,8 +43,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 /**
- * Lists the files, classes, methods and dependencies of a scan with a Java
- * target and a Python one, stored by ScanResultRepositoryImpl, in Neo4j in a
+ * Lists the modules, packages, files, classes, methods and dependencies of a
+ * scan with a Java target and a Python one, stored by ScanResultRepositoryImpl, in Neo4j in a
  * container; skipped when Docker is not available.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -74,6 +80,62 @@ class ScanListingRepositoriesTest {
             read("/scan-result.json"),
             read("/scan-result-python.json")
         ));
+    }
+
+    @Test
+    void listsTheModulesWithWhatTheyHold() {
+        final var modules = new ScanModuleRepositoryImpl(driver).findModules(scanId, ScanModuleFilter.none(), sortedBy("path"));
+
+        assertThat(modules.content())
+            .extracting(
+                ScanModule::target, ScanModule::name, ScanModule::path, ScanModule::files, ScanModule::packages,
+                ScanModule::classes, ScanModule::methods, ScanModule::dependencies
+            )
+            .containsExactly(
+                // The methods of the Python module include its two functions
+                tuple("shop", "shop", ".", 2L, 1L, 1L, 3L, 0L),
+                tuple("backend", "orders", "orders", 2L, 1L, 3L, 2L, 2L)
+            );
+        assertThat(modules.content().get(1).id()).isEqualTo(scan() + "|backend|orders");
+    }
+
+    @Test
+    void filtersModules() {
+        final var repository = new ScanModuleRepositoryImpl(driver);
+
+        assertThat(repository.findModules(scanId, new ScanModuleFilter("ORD", null), sortedBy("name")).content())
+            .extracting(ScanModule::path)
+            .containsExactly("orders");
+        assertThat(repository.findModules(scanId, new ScanModuleFilter(null, "shop"), sortedBy("name")).content())
+            .extracting(ScanModule::path)
+            .containsExactly(".");
+    }
+
+    @Test
+    void listsThePackagesWithWhatTheyContain() {
+        final var packages = new ScanPackageRepositoryImpl(driver).findPackages(scanId, ScanPackageFilter.none(), sortedBy("qualifiedName"));
+
+        assertThat(packages.content())
+            .extracting(
+                ScanPackage::id, ScanPackage::module, ScanPackage::name, ScanPackage::qualifiedName,
+                ScanPackage::classes, ScanPackage::functions, ScanPackage::variables
+            )
+            .containsExactly(
+                tuple(scan() + "|shop|.|package:app", ".", "app", "app", 1L, 1L, 1L),
+                tuple(scan() + "|backend|orders|package:com.example", "orders", "example", "com.example", 3L, 0L, 0L)
+            );
+    }
+
+    @Test
+    void filtersPackages() {
+        final var repository = new ScanPackageRepositoryImpl(driver);
+
+        assertThat(repository.findPackages(scanId, new ScanPackageFilter("EXAMPLE", null), sortedBy("name")).content())
+            .extracting(ScanPackage::qualifiedName)
+            .containsExactly("com.example");
+        assertThat(repository.findPackages(scanId, new ScanPackageFilter(null, "."), sortedBy("name")).content())
+            .extracting(ScanPackage::qualifiedName)
+            .containsExactly("app");
     }
 
     @Test
@@ -215,6 +277,8 @@ class ScanListingRepositoriesTest {
     void listsNothingOfAnotherScan() {
         final var other = createScan();
 
+        assertThat(new ScanModuleRepositoryImpl(driver).findModules(other, ScanModuleFilter.none(), sortedBy("path")).totalElements()).isZero();
+        assertThat(new ScanPackageRepositoryImpl(driver).findPackages(other, ScanPackageFilter.none(), sortedBy("name")).totalElements()).isZero();
         assertThat(new ScanFileRepositoryImpl(driver).findFiles(other, ScanFileFilter.none(), sortedBy("path")).totalElements()).isZero();
         assertThat(new ScanClassRepositoryImpl(driver).findClasses(other, ScanClassFilter.none(), sortedBy("name")).totalElements()).isZero();
         assertThat(new ScanMethodRepositoryImpl(driver).findMethods(other, ScanMethodFilter.none(), sortedBy("name")).totalElements()).isZero();
