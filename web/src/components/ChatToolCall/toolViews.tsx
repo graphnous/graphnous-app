@@ -3,6 +3,7 @@
 import { Badge, Code, DescriptionList, Link, Text, type BadgeTone } from "@graphnous/theme";
 import type { ReactNode } from "react";
 
+import { ScanRevision } from "@/components/ScanRevision/ScanRevision";
 import { ScanStatusBadge } from "@/components/ScanStatusBadge/ScanStatusBadge";
 
 import type {
@@ -203,7 +204,7 @@ export function ScansView({ scans, projectId }: { scans: ScanSummary[]; projectI
                 },
                 {
                     header: "Revision",
-                    cell: (scan) => (scan.revision ? <Code className="text-xs">{scan.revision.slice(0, 10)}</Code> : "—"),
+                    cell: (scan) => <ScanRevision revision={scan.revision} requestedRevision={scan.requestedRevision} />,
                 },
                 { header: "Created", cell: (scan) => formatInstant(scan.createdAt) },
             ]}

@@ -45,6 +45,32 @@ class ScanTest {
         assertThat(failed.startedAt()).isNull();
     }
 
+    @Test
+    void isOfTheCommitItCheckedOutAndKeepsWhatItWasAskedFor() {
+        final var commit = "4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890";
+        final var requested = new Scan(
+            Scan.ScanId.generate(),
+            Project.ProjectId.generate(),
+            Scan.ScanStatus.RUNNING,
+            Scan.SourceRevision.requested("v1.2.0", "main"),
+            CREATED,
+            CREATED,
+            CREATED
+        );
+
+        assertThat(requested.revision()).isEqualTo(new Scan.SourceRevision(null, "main", "v1.2.0"));
+
+        final var checkedOut = requested.withRevision(commit);
+
+        assertThat(checkedOut.revision()).isEqualTo(new Scan.SourceRevision(commit, "main", "v1.2.0"));
+        assertThat(checkedOut).usingRecursiveComparison().ignoringFields("revision").isEqualTo(requested);
+    }
+
+    @Test
+    void wasAskedForTheRevisionItWasUploadedWith() {
+        assertThat(new Scan.SourceRevision("abc123", "main").requestedRevision()).isEqualTo("abc123");
+    }
+
     private static Scan scan(final Scan.ScanStatus status) {
         return new Scan(
             Scan.ScanId.generate(),

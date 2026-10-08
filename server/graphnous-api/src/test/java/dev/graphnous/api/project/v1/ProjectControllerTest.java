@@ -196,6 +196,32 @@ class ProjectControllerTest {
     }
 
     @Test
+    void createsAScanOfTheTipOfABranch() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), projectId, Scan.ScanStatus.PENDING,
+            Scan.SourceRevision.requested(null, "main"), now, now, null
+        );
+
+        when(scanService.create(any(), any(CreateScanCommand.class))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\"}")
+        )
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.branch").value("main"))
+        // Known once the scan has checked out the tip
+        .andExpect(jsonPath("$.revision").isEmpty())
+        .andExpect(jsonPath("$.requestedRevision").isEmpty())
+        .andExpect(openApi().isValid(OPENAPI_SPEC));
+
+        verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main")));
+    }
+
+    @Test
     void listsAFinishedScanWithWhenItCompleted() throws Exception {
         final var projectId = Project.ProjectId.generate();
         final var created = Instant.parse("2026-09-30T10:00:00Z");

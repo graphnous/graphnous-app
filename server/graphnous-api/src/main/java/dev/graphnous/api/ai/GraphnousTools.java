@@ -58,7 +58,19 @@ class GraphnousTools {
     record ProjectSummary(UUID id, String name, String description, String gitUrl, String path) {
     }
 
-    record ScanSummary(UUID id, String status, String branch, String revision, Instant createdAt, Instant startedAt) {
+    /**
+     * @param revision          the commit the scan checked out; null until it has
+     * @param requestedRevision what the scan was asked for, such as a tag; null for the tip of its branch
+     */
+    record ScanSummary(
+        UUID id,
+        String status,
+        String branch,
+        String revision,
+        String requestedRevision,
+        Instant createdAt,
+        Instant startedAt
+    ) {
     }
 
     record ScanGraphSummary(String status, List<ScanGraph.Target> targets) {
@@ -119,6 +131,7 @@ class GraphnousTools {
                 scan.status().name(),
                 scan.revision() == null ? null : scan.revision().branch(),
                 scan.revision() == null ? null : scan.revision().revision(),
+                scan.revision() == null ? null : scan.revision().requestedRevision(),
                 scan.createdAt(),
                 scan.startedAt()
             ))

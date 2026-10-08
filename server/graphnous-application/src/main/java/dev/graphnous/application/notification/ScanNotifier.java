@@ -139,7 +139,9 @@ public class ScanNotifier {
         }
 
         final var branch = revision.branch() == null || revision.branch().isBlank() ? null : revision.branch();
-        final var commit = revision.revision() == null || revision.revision().isBlank() ? null : revision.revision();
+        // The commit once the scan has checked it out, what it was asked for until then
+        final var known = revision.revision() == null ? revision.requestedRevision() : revision.revision();
+        final var commit = known == null || known.isBlank() ? null : known;
 
         if (branch != null && commit != null) {
             return " (branch %s, revision %s)".formatted(branch, commit);

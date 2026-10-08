@@ -163,8 +163,18 @@ public class ScanRepositoryImpl implements ScanRepository {
             scan.id().id(),
             scan.revision().branch(),
             scan.revision().revision(),
+            scan.revision().requestedRevision(),
             scan.status(),
             Instant.now()
         );
+    }
+
+    @Override
+    public void updateRevision(final Scan.ScanId scanId, final String revision) {
+        if (this.jpaRepository.updateRevision(scanId.id(), revision) == 0) {
+            throw new NotFoundException("Scan " + scanId.id() + " not found");
+        }
+
+        this.neo4jRepository.updateRevision(scanId.id(), revision);
     }
 }

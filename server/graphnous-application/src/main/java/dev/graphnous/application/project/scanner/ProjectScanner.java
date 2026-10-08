@@ -121,7 +121,10 @@ public class ProjectScanner {
 
         final var scanId = scan.id();
 
-        Path checkout = null;
+        SourceCheckout.CheckedOut checkout = null;
+
+        // The scan, with the commit it checked out once it has
+        var current = scan;
 
         // The step that fails the scan when something goes wrong
         ScanStepType step = null;
@@ -137,9 +140,14 @@ public class ProjectScanner {
                 "Checking out " + project.gitUrl() + describe(scan.revision())
             );
             checkout = this.sourceCheckout.checkout(scanId, project.gitUrl(), scan.revision(), logger);
+
+            // Known from here on, even when a later step fails
+            this.scanService.recordRevision(context, scanId, checkout.revision());
+            current = scan.withRevision(checkout.revision());
+            logger.log(ScanLogLevel.INFO, "Scanning revision " + checkout.revision());
             this.scanSteps.complete(scanId, step);
 
-            final var path = scanPath(checkout, project.path());
+            final var path = scanPath(checkout.path(), project.path());
 
             step = start(scanId, ScanStepType.PLAN);
             final var plan = this.repositoryScanner.plan(path, logger);
@@ -187,9 +195,9 @@ public class ProjectScanner {
             step = null;
             storeEnhancements(scanId, enhanced, logger);
 
-            complete(scan, report.results(), context);
+            complete(current, report.results(), context);
         } catch (Exception e) {
-            fail(scan, context, logger, step, e);
+            fail(current, context, logger, step, e);
         } finally {
             if (checkout != null) {
                 removeCheckout(scan, logger);
@@ -486,8 +494,8 @@ public class ProjectScanner {
             parts.append(" (branch ").append(revision.branch());
         }
 
-        if (revision.revision() != null && !revision.revision().isBlank()) {
-            parts.append(parts.isEmpty() ? " (" : ", ").append("revision ").append(revision.revision());
+        if (revision.requestedRevision() != null && !revision.requestedRevision().isBlank()) {
+            parts.append(parts.isEmpty() ? " (" : ", ").append("revision ").append(revision.requestedRevision());
         }
 
         return parts.isEmpty() ? "" : parts.append(')').toString();

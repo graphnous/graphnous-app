@@ -122,6 +122,40 @@ class ScanServiceTest {
     }
 
     @Test
+    void createsAScanOfTheTipOfABranch() {
+        final var projectId = Project.ProjectId.generate();
+
+        when(scanRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        final var scan = service().create(context, new CreateScanCommand(projectId, " ", "main"));
+
+        assertThat(scan.revision()).isEqualTo(new Scan.SourceRevision(null, "main", null));
+    }
+
+    @Test
+    void recordsTheCommitAScanCheckedOut() {
+        final var scan = scan(Scan.ScanStatus.RUNNING);
+        final var commit = "4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890";
+
+        when(scanRepository.findById(scan.id())).thenReturn(scan);
+
+        service().recordRevision(context, scan.id(), commit);
+
+        // Checks the scan's project is accessible to the caller
+        verify(projectService).getProject(context, scan.projectId());
+        verify(scanRepository).updateRevision(scan.id(), commit);
+    }
+
+    @Test
+    void refusesToRecordNoRevision() {
+        final var scanId = Scan.ScanId.generate();
+
+        assertThrows(ValidationException.class, () -> service().recordRevision(context, scanId, " "));
+
+        verify(scanRepository, never()).updateRevision(any(), any());
+    }
+
+    @Test
     void createsAPendingScanAndStartsIt() {
         final var projectId = Project.ProjectId.generate();
 
@@ -132,7 +166,8 @@ class ScanServiceTest {
 
         assertThat(scan.status()).isEqualTo(Scan.ScanStatus.PENDING);
         assertThat(scan.projectId()).isEqualTo(projectId);
-        assertThat(scan.revision()).isEqualTo(new Scan.SourceRevision("abc123", "main"));
+        // The commit is known once the scan has checked it out
+        assertThat(scan.revision()).isEqualTo(new Scan.SourceRevision(null, "main", "abc123"));
 
         verify(authorizationService).authorize(context, Permission.SCAN_CREATE);
         verify(entitlementService).requireWithinLimit(context.organization(), Entitlement.SCANS, 3);

@@ -29,9 +29,16 @@ public class DockerGitCheckout {
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
 
     /**
+     * A full commit hash: SHA-1, or SHA-256 in a repository that uses it.
+     */
+    private static final Pattern COMMIT = Pattern.compile("[0-9a-f]{40}|[0-9a-f]{64}");
+
+    /**
      * Fetches only the requested revision or branch when the server allows
-     * it, and falls back to fetching the branch (or everything) for servers
-     * that refuse to serve a commit by its hash. Arguments are passed as
+     * it, and falls back to fetching the branch (or everything) and the tags
+     * for servers that refuse to serve a commit by its hash, as they do for
+     * a short one. What a fetch by name gets is only in FETCH_HEAD, so that
+     * is what is checked out; a tag too. Arguments are passed as
      * positional parameters so none of them is interpreted by the shell.
      * A private repository is fetched over SSH with the key and known
      * hosts copied to {@link #SSH_DIRECTORY}, when there is a key. Only
@@ -49,9 +56,12 @@ public class DockerGitCheckout {
         git remote add origin "$url"
         if [ -n "$revision" ]; then
           echo "Fetching $revision"
-          git fetch --depth 1 origin "$revision" \\
-            || git fetch origin ${branch:+"$branch"}
-          git -c advice.detachedHead=false checkout -q "$revision"
+          if git fetch --depth 1 origin "$revision"; then
+            git -c advice.detachedHead=false checkout -q FETCH_HEAD
+          else
+            git fetch --tags origin ${branch:+"$branch"}
+            git -c advice.detachedHead=false checkout -q "$revision"
+          fi
         else
           echo "Fetching ${branch:-HEAD}"
           git fetch --depth 1 origin "${branch:-HEAD}"
@@ -156,9 +166,10 @@ public class DockerGitCheckout {
 
     /**
      * Checks out the source into the workspace directory {@code name},
-     * replacing whatever is there, and returns its path.
+     * replacing whatever is there, and returns where, and the commit it
+     * checked out.
      */
-    public Path checkout(
+    public Checkout checkout(
         final String name,
         final GitSource source,
         final ScanProcessListener listener
@@ -171,7 +182,7 @@ public class DockerGitCheckout {
      * labels on the git container, so it can be found again, for example
      * to stop it.
      */
-    public Path checkout(
+    public Checkout checkout(
         final String name,
         final GitSource source,
         final ScanProcessListener listener,
@@ -203,7 +214,29 @@ public class DockerGitCheckout {
             );
         }
 
-        return directory;
+        return new Checkout(directory, revision(directory));
+    }
+
+    /**
+     * The commit checked out: the script leaves HEAD detached, so HEAD
+     * holds its hash rather than naming a branch.
+     */
+    static String revision(final Path checkout) {
+        final var head = checkout.resolve(".git").resolve("HEAD");
+
+        final String revision;
+
+        try {
+            revision = Files.readString(head).trim();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read the commit checked out from " + head, e);
+        }
+
+        if (!COMMIT.matcher(revision).matches()) {
+            throw new IllegalStateException("The checkout at " + checkout + " is not of a commit: " + revision);
+        }
+
+        return revision;
     }
 
     /**
@@ -413,5 +446,12 @@ public class DockerGitCheckout {
                 knownHosts
             );
         }
+    }
+
+    /**
+     * @param path     the checkout's directory
+     * @param revision the commit checked out, as its full hash
+     */
+    public record Checkout(Path path, String revision) {
     }
 }

@@ -8,7 +8,6 @@ import dev.graphnous.domain.scan.log.ScanLog.ScanLogLevel;
 import dev.graphnous.scanner.docker.DockerGitCheckout;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 
-import java.nio.file.Path;
 
 /**
  * Checks out each scan into its own directory of the workspace, named
@@ -35,7 +34,7 @@ public class DockerSourceCheckout implements SourceCheckout {
     }
 
     @Override
-    public Path checkout(
+    public CheckedOut checkout(
         final Scan.ScanId scanId,
         final String gitUrl,
         final Scan.SourceRevision revision,
@@ -44,12 +43,14 @@ public class DockerSourceCheckout implements SourceCheckout {
         final var source = new DockerGitCheckout.GitSource(
             gitUrl,
             revision == null ? null : revision.branch(),
-            revision == null ? null : revision.revision(),
+            revision == null ? null : revision.requestedRevision(),
             sshKeyRetriever.retrieve(),
             sshKnownHosts
         );
 
-        return gitCheckout.checkout(name(scanId), source, output(logger), containers.labels(scanId));
+        final var checkout = gitCheckout.checkout(name(scanId), source, output(logger), containers.labels(scanId));
+
+        return new CheckedOut(checkout.path(), checkout.revision());
     }
 
     @Override

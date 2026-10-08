@@ -53,7 +53,7 @@ class ScanControllerTest {
         final var now = Instant.now();
         final var scan = new Scan(
             Scan.ScanId.generate(), Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
-            new Scan.SourceRevision("abc123", "main"), now, now, now
+            new Scan.SourceRevision("4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890", "main", "v1.2.0"), now, now, now
         );
 
         when(scanService.getScan(any(), eq(scan.id()))).thenReturn(scan);
@@ -62,6 +62,8 @@ class ScanControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value(scan.id().id().toString()))
             .andExpect(jsonPath("$.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.revision").value("4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890"))
+            .andExpect(jsonPath("$.requestedRevision").value("v1.2.0"))
             .andExpect(openApi().isValid(OPENAPI_SPEC));
     }
 

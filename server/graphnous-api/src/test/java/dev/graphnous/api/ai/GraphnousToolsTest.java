@@ -120,7 +120,7 @@ class GraphnousToolsTest {
         when(scanService.getScans(eq(context), any(), eq(projectId))).thenReturn(page(scan));
 
         assertThat(tools().listScans(projectId.id().toString()))
-            .containsExactly(new GraphnousTools.ScanSummary(scan.id().id(), "FAILED", "main", "abc123", NOW, NOW));
+            .containsExactly(new GraphnousTools.ScanSummary(scan.id().id(), "FAILED", "main", "abc123", "abc123", NOW, NOW));
     }
 
     @Test

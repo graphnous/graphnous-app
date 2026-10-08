@@ -105,7 +105,10 @@ export const CreateScanModal = forwardRef<
                 />
             </Field>
 
-            <Field label="Revision">
+            <Field
+                label="Revision"
+                description="A commit, tag or other git revision; the tip of the branch when empty."
+            >
                 <TextInput
                     value={revision}
                     onChange={(e) => setRevision(e.target.value)}

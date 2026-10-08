@@ -119,13 +119,15 @@ class ProjectScannerTest {
 
     private final ScanPlan plan = new ScanPlan(List.of(), List.of());
 
+    private static final String COMMIT = "4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890";
+
     @BeforeEach
     void setUp() {
         new ScanSteps(steps, Clock.systemUTC()).create(scan.id());
 
         lenient().when(projectService.getProject(context, project.id())).thenReturn(project);
         lenient().when(sourceCheckout.checkout(eq(scan.id()), anyString(), any(), any()))
-            .thenReturn(Path.of("/checkouts/scan"));
+            .thenReturn(new SourceCheckout.CheckedOut(Path.of("/checkouts/scan"), COMMIT));
         lenient().when(repositoryScanner.plan(any(), any())).thenReturn(plan);
     }
 
@@ -145,8 +147,24 @@ class ProjectScannerTest {
 
         final var order = inOrder(scanNotifier);
         order.verify(scanNotifier).scanStarted(scan);
-        order.verify(scanNotifier).scanCompleted(scan);
+        // Of the commit it checked out
+        order.verify(scanNotifier).scanCompleted(scan.withRevision(COMMIT));
         verify(scanNotifier, never()).scanFailed(any(), any());
+    }
+
+    @Test
+    void recordsTheCommitItCheckedOutBeforeScanning() {
+        when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.plan(any(), any())).thenThrow(new IllegalStateException("Unreadable pom.xml"));
+
+        start();
+
+        // Even though planning failed afterwards
+        final var order = inOrder(sourceCheckout, scanService, repositoryScanner);
+        order.verify(sourceCheckout).checkout(eq(scan.id()), anyString(), eq(scan.revision()), any());
+        order.verify(scanService).recordRevision(context, scan.id(), COMMIT);
+        order.verify(repositoryScanner).plan(any(), any());
+        verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Scanning revision " + COMMIT);
     }
 
     @Test
@@ -178,6 +196,7 @@ class ProjectScannerTest {
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(FAILED, SKIPPED, SKIPPED, SKIPPED, SKIPPED, SKIPPED);
         verify(repositoryScanner, never()).plan(any(), any());
+        verify(scanService, never()).recordRevision(any(), any(), any());
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
         verify(scanNotifier).scanFailed(scan, "Repository not found");
         verify(scanNotifier, never()).scanCompleted(any());

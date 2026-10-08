@@ -2,6 +2,7 @@
 
 import { Combobox, formatRelative, type ComboboxProps } from "@graphnous/theme";
 
+import { revisionLabel } from "@/components/ScanRevision/ScanRevision";
 import type { Scan } from "@/types";
 
 export type ScanSelectorProps = Omit<ComboboxProps, "options" | "value" | "onValueChange"> & {
@@ -42,7 +43,7 @@ export function ScanSelector({
 
   const options = completed.map((scan) => ({
     value: scan.id,
-    label: scan.revision ? `${scan.branch} · ${scan.revision.slice(0, 7)}` : scan.branch,
+    label: [scan.branch, revisionLabel(scan)].filter(Boolean).join(" · "),
     description: formatRelative(new Date(scan.createdAt)),
   }));
 

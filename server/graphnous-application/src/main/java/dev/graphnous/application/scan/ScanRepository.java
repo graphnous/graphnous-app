@@ -72,4 +72,12 @@ public interface ScanRepository {
         final Scan.ScanId scanId
     );
 
+    /**
+     * Sets the scan's revision, and only that, so it does not undo a change
+     * of its status made meanwhile; in the graph too.
+     */
+    void updateRevision(
+        final Scan.ScanId scanId,
+        final String revision
+    );
 }

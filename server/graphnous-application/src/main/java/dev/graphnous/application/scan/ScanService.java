@@ -128,7 +128,12 @@ public class ScanService {
             command.projectId().id()
         );
 
-        final var scan = newScan(context, command.projectId(), command.revision(), command.branch());
+        // Its commit is known once the scan has checked it out
+        final var scan = newScan(
+            context,
+            command.projectId(),
+            Scan.SourceRevision.requested(blankToNull(command.revision()), command.branch())
+        );
 
         this.eventPublisher.publish(
             new StartScanEvent(
@@ -164,7 +169,11 @@ public class ScanService {
 
         validate(command.results());
 
-        final var scan = newScan(context, command.projectId(), command.revision(), command.branch());
+        final var scan = newScan(
+            context,
+            command.projectId(),
+            new Scan.SourceRevision(command.revision(), command.branch())
+        );
 
         for (final var step : List.of(ScanStepType.CHECKOUT, ScanStepType.PLAN, ScanStepType.SCAN)) {
             this.scanSteps.skip(scan.id(), step);
@@ -181,14 +190,17 @@ public class ScanService {
         return scan;
     }
 
+    private static String blankToNull(final String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     /**
      * A new pending scan of the project, with its steps.
      */
     private Scan newScan(
         final RequestContext context,
         final Project.ProjectId projectId,
-        final String revision,
-        final String branch
+        final Scan.SourceRevision revision
     ) {
         this.authorizationService.authorize(context, Permission.SCAN_CREATE);
         this.entitlementService.require(context.organization(), Entitlement.SCANS);
@@ -210,7 +222,7 @@ public class ScanService {
                 Scan.ScanId.generate(),
                 projectId,
                 Scan.ScanStatus.PENDING,
-                new Scan.SourceRevision(revision, branch),
+                revision,
                 Instant.now(),
                 Instant.now(),
                 null
@@ -304,6 +316,31 @@ public class ScanService {
         this.scanRepository.startScan(
             this.projectService.getSnapshotId(project.id()),
             scan.id()
+        );
+    }
+
+    /**
+     * Records the commit the scan checked out, as its full hash; what it
+     * was asked for stays its requested revision.
+     */
+    public void recordRevision(
+        final RequestContext context,
+        final Scan.ScanId scanId,
+        final String revision
+    ) {
+        if (revision == null || revision.isBlank()) {
+            throw new ValidationException("revision is required");
+        }
+
+        final var scan = this.getScan(context, scanId);
+
+        this.scanRepository.updateRevision(scan.id(), revision);
+
+        log.info(
+            "Recorded scan revision organizationId={} scanId={} revision={}",
+            context.organization().id(),
+            scanId.id(),
+            revision
         );
     }
 
