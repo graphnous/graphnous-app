@@ -75,6 +75,29 @@ class ScanGraphRepositoryImplTest {
     }
 
     @Test
+    void countsFunctionsOutsideClassesAsMethods() throws IOException {
+        final var shop = createScan();
+        new ScanResultRepositoryImpl(driver).save(shop, List.of(read("/scan-result-python.json")));
+
+        assertThat(repository.getOverview(shop).targets())
+            .flatExtracting(ScanGraph.Target::modules)
+            .containsExactly(new ScanGraph.Module("shop", ".", 2, 1, 1, 3, 0));
+    }
+
+    @Test
+    void findsDecoratedFunctionsOutsideClasses() throws IOException {
+        final var shop = createScan();
+        new ScanResultRepositoryImpl(driver).save(shop, List.of(read("/scan-result-python.json")));
+
+        assertThat(repository.findAnnotated(shop, "cache", 10)).containsExactly(new ScanGraph.AnnotatedElement(
+            "FUNCTION",
+            null,
+            "app.orders.total",
+            new ScanGraph.Annotation("cache", "functools.cache", null, null)
+        ));
+    }
+
+    @Test
     void outlinesNothingForAScanWithoutResults() {
         assertThat(repository.getOverview(createScan()).targets()).isEmpty();
     }
@@ -256,7 +279,11 @@ class ScanGraphRepositoryImplTest {
     }
 
     private static ScanResult orders() throws IOException {
-        try (final var json = ScanGraphRepositoryImplTest.class.getResourceAsStream("/scan-result.json")) {
+        return read("/scan-result.json");
+    }
+
+    private static ScanResult read(final String resource) throws IOException {
+        try (final var json = ScanGraphRepositoryImplTest.class.getResourceAsStream(resource)) {
             return new ObjectMapper().readValue(json, ScanResult.class);
         }
     }

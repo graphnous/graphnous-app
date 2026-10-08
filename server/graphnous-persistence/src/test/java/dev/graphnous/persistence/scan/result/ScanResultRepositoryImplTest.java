@@ -77,6 +77,47 @@ class ScanResultRepositoryImplTest {
     }
 
     @Test
+    void storesFunctionsAndVariablesOutsideClassesBelowTheirFile() {
+        final var scanId = createScan();
+
+        repository.save(scanId, List.of(ScanResults.shop()));
+
+        assertThat(count("""
+            MATCH (file:File {path: 'app/orders.py'})-[:DECLARES]->(function:Method {scanId: $scanId, kind: 'FUNCTION'})
+            MATCH (:Package {qualifiedName: 'app'})-[:CONTAINS]->(function)
+            MATCH (function)-[:ANNOTATED_WITH]->(:Annotation {qualifiedName: 'functools.cache'})
+            WHERE function.qualifiedName = 'app.orders.total'
+              AND function.fileId IS NULL AND function.packageId IS NULL
+            RETURN count(function)
+            """, scanId)).isEqualTo(1);
+
+        assertThat(count("""
+            MATCH (:File {path: 'app/orders.py'})-[:DECLARES]->(variable:Field {scanId: $scanId, name: 'TAX_RATE'})
+            MATCH (:Package {qualifiedName: 'app'})-[:CONTAINS]->(variable)
+            RETURN count(variable)
+            """, scanId)).isEqualTo(1);
+
+        // main.py names no package
+        assertThat(count("""
+            MATCH (:File {path: 'main.py'})-[:DECLARES]->(function:Method {scanId: $scanId, name: 'main'})
+            WHERE NOT (function)<-[:CONTAINS]-()
+            RETURN count(function)
+            """, scanId)).isEqualTo(1);
+
+        assertThat(count("MATCH (:Class)-[:HAS_METHOD]->(method:Method {scanId: $scanId}) RETURN count(method)", scanId)).isEqualTo(1);
+    }
+
+    @Test
+    void deletesFunctionsAndVariablesWithTheScan() {
+        final var scanId = createScan();
+
+        repository.save(scanId, List.of(ScanResults.shop()));
+        repository.delete(scanId);
+
+        assertThat(count("MATCH (node {scanId: $scanId}) RETURN count(node)", scanId)).isZero();
+    }
+
+    @Test
     void linksInheritanceWithinTheScan() {
         final var scanId = createScan();
 

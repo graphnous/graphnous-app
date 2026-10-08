@@ -19,6 +19,8 @@ import java.util.Map;
  * (Module)-[:HAS_PACKAGE]->(Package)-[:CONTAINS]->(Class)
  * (Class)-[:HAS_METHOD]->(Method)
  * (Class)-[:HAS_FIELD]->(Field)
+ * (File)-[:DECLARES]->(Method|Field)
+ * (Package)-[:CONTAINS]->(Method|Field)
  * (Class)-[:EXTENDS|IMPLEMENTS]->(Class)
  * (Class|Method|Field)-[:ANNOTATED_WITH]->(Annotation)
  * (Module)-[:DEPENDS_ON {scope}]->(Dependency)
@@ -29,7 +31,9 @@ import java.util.Map;
  * to ask which projects use a library, and are deleted once no scan uses
  * them any more. Inheritance is only linked to
  * classes found in the same scan; the declared names of all supertypes are
- * kept on the class. The annotations of a method's parameters are linked
+ * kept on the class. Functions and variables declared outside any class
+ * are stored as methods and fields of their file, and of the package it
+ * names, with {@code kind: 'FUNCTION'} on the functions. The annotations of a method's parameters are linked
  * to the method, with the {@code parameter} and {@code parameterIndex} on
  * the relationship; see {@link ScanResultGraph} for the arguments.
  */
@@ -145,6 +149,9 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
                     CREATE (class)-[:HAS_FIELD]->(field)
                     """);
 
+                writeTopLevel(tx, id, "Method", graph.functions());
+                writeTopLevel(tx, id, "Field", graph.variables());
+
                 writeAnnotations(tx, id, "Class", graph.classAnnotations());
                 writeAnnotations(tx, id, "Method", graph.methodAnnotations());
                 writeAnnotations(tx, id, "Field", graph.fieldAnnotations());
@@ -183,6 +190,30 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
                 deleteUnusedDependencies(tx, delete(tx, scanId.id().toString()))
             );
         }
+    }
+
+    /**
+     * Writes the functions or variables declared in a file outside any
+     * class, and links them to the package the file names, if it is one of
+     * the module's.
+     */
+    private static void writeTopLevel(
+        final TransactionContext tx,
+        final String scanId,
+        final String label,
+        final List<Map<String, Object>> rows
+    ) {
+        write(tx, scanId, rows, """
+            UNWIND $rows AS row
+            MATCH (file:File {id: row.fileId})
+            CREATE (node:%s)
+            SET node = row, node.scanId = $scanId
+            REMOVE node.fileId, node.packageId
+            CREATE (file)-[:DECLARES]->(node)
+            WITH node, row
+            MATCH (package:Package {id: row.packageId})
+            CREATE (package)-[:CONTAINS]->(node)
+            """.formatted(label));
     }
 
     private static void writeAnnotations(

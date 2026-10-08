@@ -19,7 +19,8 @@ import java.util.UUID;
  *                               JAVA or TYPESCRIPT; each a path from the
  *                               repository's root
  * @param numberOfClassesParsed  the classes, each counted once per module
- * @param numberOfMethodsParsed  the methods of those classes
+ * @param numberOfMethodsParsed  the methods of those classes, and the
+ *                               functions declared outside any class
  */
 public record ScanStats(
     ScanStatId id,

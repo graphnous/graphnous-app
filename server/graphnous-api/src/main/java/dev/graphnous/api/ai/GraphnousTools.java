@@ -128,7 +128,8 @@ class GraphnousTools {
     @Tool(
         name = "getScanGraph",
         description = "Gets the outline of a scan's graph: its targets, each a language and build system, and their modules, "
-            + "with how many files, packages, classes, methods and dependencies each module has. "
+            + "with how many files, packages, classes, methods and dependencies each module has; methods include "
+            + "the functions declared outside any class. "
             + "Only a COMPLETED scan has a graph; to answer about a project, use its newest COMPLETED scan from listScans."
     )
     ScanGraphSummary getScanGraph(
@@ -170,6 +171,7 @@ class GraphnousTools {
     @Tool(
         name = "findAnnotated",
         description = "Finds the classes, methods and fields of a scan with an annotation, with its arguments as JSON, "
+            + "and the functions and variables declared outside any class with a decorator or attribute, "
             + "e.g. RestController or GetMapping for the endpoints of a Spring application, or Entity for its "
             + "persisted types."
     )

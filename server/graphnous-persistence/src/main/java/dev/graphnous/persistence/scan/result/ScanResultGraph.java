@@ -27,6 +27,9 @@ import java.util.Map;
  * the graph: a class is identified by its module, a method by its class.
  * A class belongs to the file that declares it, and to the package that
  * file names. Classes nested in others belong to the same file and package.
+ * Functions and variables declared outside any class, as in TypeScript,
+ * Python or Go, are methods and fields of their file instead, and belong to
+ * its package in the same way.
  * Types are stored by their declared names, e.g.
  * {@code java.util.List<com.example.Order>}.
  * <p>
@@ -46,6 +49,8 @@ record ScanResultGraph(
     List<Map<String, Object>> packageClasses,
     List<Map<String, Object>> methods,
     List<Map<String, Object>> fields,
+    List<Map<String, Object>> functions,
+    List<Map<String, Object>> variables,
     List<Map<String, Object>> dependencies,
     List<Map<String, Object>> extendsTypes,
     List<Map<String, Object>> implementsTypes,
@@ -107,6 +112,8 @@ record ScanResultGraph(
         private final List<Map<String, Object>> packageClasses = new ArrayList<>();
         private final List<Map<String, Object>> methods = new ArrayList<>();
         private final List<Map<String, Object>> fields = new ArrayList<>();
+        private final List<Map<String, Object>> functions = new ArrayList<>();
+        private final List<Map<String, Object>> variables = new ArrayList<>();
         private final List<Map<String, Object>> dependencies = new ArrayList<>();
         private final List<Map<String, Object>> extendsTypes = new ArrayList<>();
         private final List<Map<String, Object>> implementsTypes = new ArrayList<>();
@@ -174,6 +181,8 @@ record ScanResultGraph(
             final var packageId = file.getPackage() == null ? null : moduleId + "|package:" + file.getPackage();
 
             file.getClasses().forEach(type -> addDeclaredClass(moduleId, fileId, packageId, type));
+            file.getFunctions().forEach(function -> addFunction(fileId, packageId, function));
+            file.getVariables().forEach(variable -> addVariable(fileId, packageId, variable));
         }
 
         /**
@@ -260,11 +269,32 @@ record ScanResultGraph(
 
         private void addMethod(final String classId, final Method method) {
             final var methodId = classId + "|method:" + method.getQualifiedName();
+            final var row = method(methodId, method);
 
-            methods.add(row(
+            row.put("classId", classId);
+            methods.add(row);
+        }
+
+        /**
+         * Adds a function declared outside any class; the package is the
+         * one its file names, if any.
+         */
+        private void addFunction(final String fileId, final String packageId, final Method function) {
+            final var functionId = fileId + "|function:" + function.getQualifiedName();
+            final var row = method(functionId, function);
+
+            row.put("fileId", fileId);
+            row.put("packageId", packageId);
+            functions.add(row);
+        }
+
+        /**
+         * The row of the method or function, whose annotations it adds.
+         */
+        private Map<String, Object> method(final String methodId, final Method method) {
+            final var row = row(
                 "id", methodId,
                 "targetId", targetId,
-                "classId", classId,
                 "name", method.getName(),
                 "qualifiedName", method.getQualifiedName(),
                 "kind", string(method.getKind()),
@@ -274,7 +304,7 @@ record ScanResultGraph(
                 "parameterNames", method.getParameters().stream().map(Parameter::getName).toList(),
                 "parameterTypes", method.getParameters().stream().map(parameter -> name(parameter.getType())).toList(),
                 "annotations", annotations(method.getAnnotations())
-            ));
+            );
 
             addAnnotations(methodAnnotations, methodId, methodId, method.getAnnotations(), null, null);
 
@@ -290,27 +320,53 @@ record ScanResultGraph(
                     i
                 );
             }
+
+            return row;
         }
 
         private void addField(final String classId, final Field field) {
             final var fieldId = classId + "|field:" + field.getName();
+            final var row = field(fieldId, field);
 
-            fields.add(row(
+            row.put("classId", classId);
+            fields.add(row);
+        }
+
+        /**
+         * Adds a variable or constant declared outside any class; the
+         * package is the one its file names, if any.
+         */
+        private void addVariable(final String fileId, final String packageId, final Field variable) {
+            final var variableId = fileId + "|variable:" + variable.getName();
+            final var row = field(variableId, variable);
+
+            row.put("fileId", fileId);
+            row.put("packageId", packageId);
+            variables.add(row);
+        }
+
+        /**
+         * The row of the field or variable, whose annotations it adds.
+         */
+        private Map<String, Object> field(final String fieldId, final Field field) {
+            final var row = row(
                 "id", fieldId,
                 "targetId", targetId,
-                "classId", classId,
                 "name", field.getName(),
                 "qualifiedName", field.getQualifiedName(),
                 "type", name(field.getType()),
                 "modifiers", strings(field.getModifiers()),
                 "annotations", annotations(field.getAnnotations())
-            ));
+            );
 
             addAnnotations(fieldAnnotations, fieldId, fieldId, field.getAnnotations(), null, null);
+
+            return row;
         }
 
         /**
-         * @param ownerId   the class, method or field the annotations belong to
+         * @param ownerId   the class, method or field the annotations belong to,
+         *                  or the function or variable
          * @param idPrefix  what the annotation ids extend; differs from the
          *                  owner for the annotations of a parameter
          * @param parameter the annotated parameter of the method, if any
@@ -365,6 +421,8 @@ record ScanResultGraph(
                 packageClasses,
                 distinctById(methods),
                 distinctById(fields),
+                distinctById(functions),
+                distinctById(variables),
                 dependencies,
                 extendsTypes,
                 implementsTypes,

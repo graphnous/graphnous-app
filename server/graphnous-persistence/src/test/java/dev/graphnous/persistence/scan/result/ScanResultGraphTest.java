@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 class ScanResultGraphTest {
 
@@ -71,6 +72,36 @@ class ScanResultGraphTest {
         assertThat(nested.packageClasses()).extracting(row -> row.get("packageId")).containsOnly(
             "scan|backend|orders|package:com.example"
         ).hasSize(2);
+    }
+
+    @Test
+    void storesFunctionsAndVariablesOutsideClassesWithTheirFileAndPackage() {
+        final var shop = ScanResultGraph.of("scan", List.of(ScanResults.shop()));
+        final var orders = "scan|shop|.|file:app/orders.py";
+
+        assertThat(shop.functions())
+            .extracting(row -> row.get("id"), row -> row.get("fileId"), row -> row.get("packageId"))
+            .containsExactly(
+                tuple(orders + "|function:app.orders.total", orders, "scan|shop|.|package:app"),
+                tuple("scan|shop|.|file:main.py|function:main.main", "scan|shop|.|file:main.py", null)
+            );
+        assertThat(shop.functions().getFirst())
+            .containsEntry("kind", "FUNCTION")
+            .containsEntry("returnType", "float")
+            .containsEntry("parameterNames", List.of("order"))
+            .containsEntry("annotations", List.of("functools.cache"))
+            .doesNotContainKey("classId");
+
+        assertThat(shop.variables())
+            .extracting(row -> row.get("id"), row -> row.get("type"), row -> row.get("packageId"))
+            .containsExactly(tuple(orders + "|variable:TAX_RATE", "float", "scan|shop|.|package:app"));
+
+        // Only the method of the class is one of its methods
+        assertThat(shop.methods()).extracting(row -> row.get("qualifiedName")).containsExactly("app.orders.Order.add");
+
+        assertThat(shop.methodAnnotations())
+            .extracting(row -> row.get("id"), row -> row.get("ownerId"))
+            .containsExactly(tuple(orders + "|function:app.orders.total|annotation:0", orders + "|function:app.orders.total"));
     }
 
     @Test

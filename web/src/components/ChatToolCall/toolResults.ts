@@ -105,8 +105,9 @@ export type ClassDetails = {
 };
 
 export type AnnotatedElement = {
-    kind: "CLASS" | "METHOD" | "FIELD";
-    className: string;
+    kind: "CLASS" | "METHOD" | "FIELD" | "FUNCTION" | "VARIABLE";
+    /** Absent for a function or variable declared outside any class */
+    className?: string | null;
     member?: string | null;
     annotation: Annotation;
 };

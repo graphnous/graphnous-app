@@ -83,6 +83,8 @@ const KIND_TONES: Record<string, BadgeTone> = {
     ANNOTATION: "neutral",
     METHOD: "info",
     FIELD: "neutral",
+    FUNCTION: "info",
+    VARIABLE: "neutral",
 };
 
 function KindBadge({ kind }: { kind?: string | null }) {
@@ -406,9 +408,10 @@ export function AnnotatedView({ elements }: { elements: AnnotatedElement[] }) {
                 {
                     header: "Where",
                     cell: (element) => (
-                        <span className="font-mono" title={element.className}>
-                            {simpleType(element.className)}
-                            {element.member ? `.${element.member}` : ""}
+                        <span className="font-mono" title={element.className ?? element.member ?? undefined}>
+                            {element.className ? simpleType(element.className) : ""}
+                            {element.className && element.member ? "." : ""}
+                            {element.member ?? ""}
                             {element.annotation.parameter ? ` (${element.annotation.parameter})` : ""}
                         </span>
                     ),
