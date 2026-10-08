@@ -1,59 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
 import { Page, type Scan } from "@/types";
 import { emptyPage } from "@/types/page";
+import { useFetch } from "@/lib/hooks/useFetch";
+
+const NO_SCANS = emptyPage<Scan>();
 
 export function useListScans(projectId: string) {
-    const [scans, setScans] = useState<Scan[]>([]);
-    const [page, setPage] = useState<Page<Scan>>(emptyPage());
-
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<Error | null>(null);
-
-    const load = useCallback(async () => {
-        if (!projectId) {
-            setScans([]);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            setError(null);
-
-            const response = await fetch(
-                `/api/projects/${projectId}/scans`,
-            );
-
-            if (!response.ok) {
-                throw new Error("Failed to load scans");
-            }
-
-            const p = await response.json();
-
-            setPage(p);
-            setScans(p.content);
-        } catch (error) {
-            setError(
-                error instanceof Error
-                    ? error
-                    : new Error("Failed to load scans"),
-            );
-        } finally {
-            setLoading(false);
-        }
-    }, [projectId]);
-
-    useEffect(() => {
-        load();
-    }, [load]);
+    const { data, loading, error, refresh } = useFetch<Page<Scan>>(
+        projectId ? `/api/projects/${projectId}/scans` : null,
+        "Failed to load scans",
+    );
 
     return {
-        scans,
-        page,
+        scans: data?.content ?? NO_SCANS.content,
+        page: data ?? NO_SCANS,
         loading,
         error,
-        refresh: load,
+        refresh,
     };
 }

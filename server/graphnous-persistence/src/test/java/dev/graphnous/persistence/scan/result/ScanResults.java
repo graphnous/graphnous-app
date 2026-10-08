@@ -16,7 +16,21 @@ final class ScanResults {
      * implements Identified and the external Comparable.
      */
     static ScanResult orders() {
-        try (final var json = ScanResults.class.getResourceAsStream("/scan-result.json")) {
+        return read("/scan-result.json");
+    }
+
+    /**
+     * A Python target with functions and variables outside any class: the
+     * file app/orders.py in package app declares the class Order, the
+     * function total with a decorator, and the variable TAX_RATE; main.py,
+     * in no package, the function main.
+     */
+    static ScanResult shop() {
+        return read("/scan-result-python.json");
+    }
+
+    private static ScanResult read(final String resource) {
+        try (final var json = ScanResults.class.getResourceAsStream(resource)) {
             return new ObjectMapper().readValue(json, ScanResult.class);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

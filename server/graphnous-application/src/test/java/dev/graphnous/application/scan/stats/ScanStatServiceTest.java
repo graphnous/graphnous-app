@@ -130,6 +130,23 @@ class ScanStatServiceTest {
     }
 
     @Test
+    void countsFunctionsOutsideClassesAsMethods() {
+        when(scanStatRepository.findByScanId(scanId)).thenReturn(Optional.empty());
+
+        final var main = new Method();
+        main.setName("main");
+        main.setQualifiedName("src/main:main");
+
+        final var result = result("web", ScanTarget.Language.TYPESCRIPT);
+        result.getModules().getFirst().getFiles().getFirst().setFunctions(List.of(main));
+
+        final var stats = service().createOrUpdate(scanId, projectId, List.of(result));
+
+        assertThat(stats.numberOfClassesParsed()).isEqualTo(2);
+        assertThat(stats.numberOfMethodsParsed()).isEqualTo(4);
+    }
+
+    @Test
     void countsNothingWithoutResults() {
         when(scanStatRepository.findByScanId(scanId)).thenReturn(Optional.empty());
 

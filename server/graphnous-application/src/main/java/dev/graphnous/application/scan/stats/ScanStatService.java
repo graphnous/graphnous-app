@@ -82,6 +82,7 @@ public class ScanStatService {
         final var modules = new HashSet<String>();
         final var languages = new TreeMap<String, Set<String>>();
         final var classes = new HashSet<String>();
+        final var functions = new HashSet<String>();
 
         int methods = 0;
 
@@ -100,6 +101,9 @@ public class ScanStatService {
                         .computeIfAbsent(language, key -> new LinkedHashSet<>())
                         .add(path(target, module.getPath(), file.getPath()));
                     file.getClasses().forEach(type -> addWithNested(listed, type));
+                    file.getFunctions().forEach(function ->
+                        functions.add(moduleId + "|" + file.getPath() + "|" + function.getQualifiedName())
+                    );
                 }
 
                 for (final var type : listed) {
@@ -112,6 +116,9 @@ public class ScanStatService {
 
         final var files = new LinkedHashMap<String, List<String>>();
         languages.forEach((language, paths) -> files.put(language, List.copyOf(paths)));
+
+        // Functions declared outside any class count as methods
+        methods += functions.size();
 
         return new ScanStats(id, scanId, projectId, modules.size(), files, classes.size(), methods);
     }

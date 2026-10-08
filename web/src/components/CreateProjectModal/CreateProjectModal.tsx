@@ -40,9 +40,6 @@ export const CreateProjectModal = forwardRef<
         (state) => state.selectedSystem?.id ?? null,
     );
 
-    if (!selectedSystemId) {
-        throw new Error('No system selected');
-    }
     const {
         createProject,
         loading,

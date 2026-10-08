@@ -19,8 +19,8 @@ import java.util.function.Function;
 
 /**
  * Reads the graph that ScanResultRepositoryImpl stores below a scan. A
- * class belongs to its module through its file, its package or both, so
- * its module is found through either.
+ * class, function or variable belongs to its module through its file, its
+ * package or both, so its module is found through either.
  */
 @Repository
 public class ScanGraphRepositoryImpl implements ScanGraphRepository {
@@ -70,7 +70,10 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
                     },
                     methods: COUNT {
                         MATCH (module)-[:HAS_FILE|HAS_PACKAGE]->()-[:DECLARES|CONTAINS]->(:Class)-[:HAS_METHOD]->(method)
-                        RETURN DISTINCT method
+                        RETURN method
+                        UNION
+                        MATCH (module)-[:HAS_FILE|HAS_PACKAGE]->()-[:DECLARES|CONTAINS]->(method:Method)
+                        RETURN method
                     },
                     dependencies: COUNT { (module)-[:DEPENDS_ON]->() }
                 } END) AS modules
@@ -458,11 +461,18 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
                 OPTIONAL MATCH (class:Class)-[:HAS_METHOD|HAS_FIELD]->(owner)
                 RETURN CASE
                            WHEN owner:Class THEN 'CLASS'
+                           // Outside any class
+                           WHEN owner:Method AND class IS NULL THEN 'FUNCTION'
                            WHEN owner:Method THEN 'METHOD'
+                           WHEN class IS NULL THEN 'VARIABLE'
                            ELSE 'FIELD'
                        END AS kind,
-                       coalesce(class.qualifiedName, owner.qualifiedName) AS className,
-                       CASE WHEN owner:Class THEN null ELSE owner.name END AS member,
+                       CASE WHEN owner:Class THEN owner.qualifiedName ELSE class.qualifiedName END AS className,
+                       CASE
+                           WHEN owner:Class THEN null
+                           WHEN class IS NULL THEN coalesce(owner.qualifiedName, owner.name)
+                           ELSE owner.name
+                       END AS member,
                        annotation {.name, .qualifiedName, .arguments, parameter: annotated.parameter} AS annotation
                 ORDER BY className, member
                 LIMIT $limit

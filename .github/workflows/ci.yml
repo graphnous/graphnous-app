@@ -15,7 +15,7 @@ on:
 env:
   # The scan result schema the server reads, and the Java scanner writes;
   # move it forward with the server's code (and the scanners' pins)
-  SCHEMAS_REF: b8c8b252b1a399376b7770a447743a173b946974
+  SCHEMAS_REF: 67c131772d032667806ff8485c6b542745c6bbe1
 
 jobs:
   server:

@@ -11,7 +11,6 @@ spring:
     url: jdbc:h2:mem:graphnous;DB_CLOSE_DELAY=-1
     username: sa
     password:
-    driver-class-name: org.h2.Driver
 
   servlet:
     multipart:
@@ -52,6 +51,12 @@ graphnous:
       volume: graphnous-checkouts
       path: /checkouts
     git-image: alpine/git:2.54.0
+  ai:
+    openai:
+      # The key of the assistant at ag-ui.server.path; without one, every
+      # run of it ends in an error
+      api-key: ${OPENAI_API_KEY:}
+      model: ${GRAPHNOUS_AI_MODEL:gpt-5}
   # The scanner for each language: its image, the command running it (in
   # place of the image's entrypoint) and where it writes its result. The
   # command's {repository}, {target}, {languageVersion} and {output} are

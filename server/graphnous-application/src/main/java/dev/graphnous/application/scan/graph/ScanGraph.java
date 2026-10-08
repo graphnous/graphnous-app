@@ -30,6 +30,8 @@ public final class ScanGraph {
     /**
      * @param classes each class of the module once, whether it is listed by
      *                its file, its package or both
+     * @param methods the methods of its classes and the functions declared
+     *                outside any class
      */
     public record Module(
         String name,
@@ -111,12 +113,15 @@ public final class ScanGraph {
     }
 
     /**
-     * A class, method or field with an annotation.
+     * A class, method or field with an annotation, or a function or variable
+     * declared outside any class.
      *
-     * @param kind      CLASS, METHOD or FIELD
+     * @param kind      CLASS, METHOD, FIELD, FUNCTION or VARIABLE
      * @param className the qualified name of the class, or of the class the
-     *                  method or field belongs to
-     * @param member    the name of the method or field; null for a class
+     *                  method or field belongs to; null for a function or
+     *                  variable
+     * @param member    the name of the method or field, or the qualified
+     *                  name of the function or variable; null for a class
      */
     public record AnnotatedElement(
         String kind,

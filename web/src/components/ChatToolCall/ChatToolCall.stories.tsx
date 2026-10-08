@@ -118,10 +118,17 @@ export const Endpoints: Story = {
         member: "getOrder",
         annotation: { name: "GetMapping", arguments: "{\"value\":\"/{id}\"}" },
       },
+      {
+        kind: "FUNCTION",
+        className: null,
+        member: "app.orders.list_orders",
+        annotation: { name: "router.get", arguments: "{\"value\":\"/orders\"}" },
+      },
     ]),
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("@GetMapping(\"/{id}\")")).toBeVisible();
+    await expect(canvas.getByText("app.orders.list_orders")).toBeVisible();
   },
 };
 

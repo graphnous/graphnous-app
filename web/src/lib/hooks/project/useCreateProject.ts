@@ -9,12 +9,19 @@ export type CreateProjectRequest = {
     gitUrl: string;
 };
 
-export function useCreateProject({ systemId }: { systemId: string }) {
+/**
+ * Creates projects in the system; none can be created without one.
+ */
+export function useCreateProject({ systemId }: { systemId: string | null }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
     const createProject = useCallback(
         async (request: CreateProjectRequest): Promise<Project> => {
+            if (!systemId) {
+                throw new Error("No system selected");
+            }
+
             setLoading(true);
             setError(null);
 

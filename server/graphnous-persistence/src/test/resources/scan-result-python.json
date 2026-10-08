@@ -1,0 +1,87 @@
+{
+  "format": "graphnous-scan-result",
+  "version": "2",
+  "target": {
+    "path": "shop",
+    "language": "PYTHON",
+    "languageVersion": "3.13",
+    "buildSystem": "UV"
+  },
+  "modules": [
+    {
+      "name": "shop",
+      "path": ".",
+      "files": [
+        {
+          "path": "app/orders.py",
+          "language": "PYTHON",
+          "package": "app",
+          "classes": [
+            {
+              "name": "Order",
+              "qualifiedName": "app.orders.Order",
+              "kind": "CLASS",
+              "methods": [
+                {
+                  "name": "add",
+                  "qualifiedName": "app.orders.Order.add",
+                  "kind": "METHOD"
+                }
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "name": "total",
+              "qualifiedName": "app.orders.total",
+              "kind": "FUNCTION",
+              "returnType": {
+                "name": "float"
+              },
+              "parameters": [
+                {
+                  "name": "order",
+                  "type": {
+                    "name": "app.orders.Order"
+                  }
+                }
+              ],
+              "annotations": [
+                {
+                  "name": "cache",
+                  "qualifiedName": "functools.cache"
+                }
+              ]
+            }
+          ],
+          "variables": [
+            {
+              "name": "TAX_RATE",
+              "qualifiedName": "app.orders.TAX_RATE",
+              "type": {
+                "name": "float"
+              }
+            }
+          ]
+        },
+        {
+          "path": "main.py",
+          "language": "PYTHON",
+          "functions": [
+            {
+              "name": "main",
+              "qualifiedName": "main.main",
+              "kind": "FUNCTION"
+            }
+          ]
+        }
+      ],
+      "packages": [
+        {
+          "name": "app",
+          "qualifiedName": "app"
+        }
+      ]
+    }
+  ]
+}
