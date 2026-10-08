@@ -177,6 +177,78 @@ public final class ScanGraph {
     }
 
     /**
+     * A node of a scan, to compare with the same node of another scan: a
+     * target, module, package, file, class, method or field, or a module's
+     * dependency on a library.
+     *
+     * @param key        what identifies it in any scan of the same
+     *                   repository: its id without the scan's, such as
+     *                   {@code backend|orders|class:com.example.Order}
+     * @param type       its label, such as Class, or Dependency
+     * @param properties what the scan found about it, as stored
+     */
+    public record Snapshot(
+        String key,
+        String type,
+        String name,
+        Map<String, Object> properties
+    ) {
+    }
+
+    /**
+     * How one scan's graph differs from another's, from the base scan to the
+     * head scan: the nodes only the head has, those only the base has, and
+     * those whose properties differ. Each list is by type, from targets down
+     * to fields, then dependencies, and by key.
+     *
+     * @param summary   how many of each type were added, removed and
+     *                  changed, of all of them
+     * @param truncated whether a list holds fewer than the summary counts,
+     *                  as each is cut off at a limit
+     */
+    public record Comparison(
+        List<TypeChanges> summary,
+        List<Snapshot> added,
+        List<Snapshot> removed,
+        List<Change> changed,
+        boolean truncated
+    ) {
+    }
+
+    /**
+     * @param type a type of node with any change; types without are left out
+     */
+    public record TypeChanges(
+        String type,
+        int added,
+        int removed,
+        int changed
+    ) {
+    }
+
+    /**
+     * A node both scans have, with the properties that differ.
+     */
+    public record Change(
+        String key,
+        String type,
+        String name,
+        List<PropertyChange> properties
+    ) {
+    }
+
+    /**
+     * @param before the value in the base scan; null when it had none
+     * @param after  the value in the head scan; null when it has none
+     */
+    public record PropertyChange(
+        String name,
+        Object before,
+        Object after
+    ) {
+    }
+
+    /**
      * @param module the path of the module that depends on it
      */
     public record Dependency(

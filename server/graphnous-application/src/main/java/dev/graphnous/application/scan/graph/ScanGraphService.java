@@ -42,6 +42,11 @@ public class ScanGraphService {
      */
     static final int MAX_NODES = 500;
 
+    /**
+     * The most nodes a comparison lists as added, as removed and as changed.
+     */
+    static final int MAX_CHANGES = 500;
+
     private final ScanService scanService;
     private final ScanGraphRepository scanGraphRepository;
 
@@ -149,6 +154,34 @@ public class ScanGraphService {
         scanService.getScan(context, scanId);
 
         return scanGraphRepository.findDependencies(scanId);
+    }
+
+    /**
+     * How the head scan's graph differs from the base scan's. Nodes are
+     * matched by their ids without the scan's, so scans of the same
+     * repository compare node by node; a scan without results compares as
+     * empty.
+     */
+    public ScanGraph.Comparison compare(
+        final RequestContext context,
+        final Scan.ScanId base,
+        final Scan.ScanId head
+    ) {
+        scanService.getScan(context, base);
+        scanService.getScan(context, head);
+
+        log.debug(
+            "Comparing scan graphs organizationId={} baseScanId={} headScanId={}",
+            context.organization().id(),
+            base.id(),
+            head.id()
+        );
+
+        return ScanComparison.compare(
+            scanGraphRepository.findSnapshots(base),
+            scanGraphRepository.findSnapshots(head),
+            MAX_CHANGES
+        );
     }
 
     private static int limit(final int limit) {

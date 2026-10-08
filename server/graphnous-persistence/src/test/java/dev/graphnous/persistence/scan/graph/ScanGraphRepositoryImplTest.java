@@ -174,6 +174,48 @@ class ScanGraphRepositoryImplTest {
     }
 
     @Test
+    void keysTheNodesOfAScanWithoutTheScan() {
+        final var snapshots = repository.findSnapshots(scanId);
+
+        assertThat(snapshots)
+            .extracting(ScanGraph.Snapshot::type)
+            .containsOnly("ScanTarget", "Module", "Package", "File", "Class", "Method", "Field", "Dependency")
+            .hasSize(13);
+        assertThat(snapshots)
+            .filteredOn(snapshot -> snapshot.type().equals("Class"))
+            .extracting(ScanGraph.Snapshot::key, ScanGraph.Snapshot::name)
+            .contains(tuple("backend|orders|class:com.example.Order", "Order"));
+        assertThat(snapshots)
+            .filteredOn(snapshot -> snapshot.key().equals("backend|orders|class:com.example.Order"))
+            .singleElement()
+            .satisfies(order -> assertThat(order.properties())
+                .containsEntry("kind", "CLASS")
+                .doesNotContainKeys("id", "scanId", "targetId"));
+        assertThat(snapshots)
+            .filteredOn(snapshot -> snapshot.type().equals("Dependency"))
+            .extracting(ScanGraph.Snapshot::key, ScanGraph.Snapshot::properties)
+            .containsExactlyInAnyOrder(
+                tuple("backend|orders|dependency:org.slf4j:slf4j-api",
+                    Map.of("name", "org.slf4j:slf4j-api", "version", "2.0.18", "scope", "compile")),
+                tuple("backend|orders|dependency:org.junit.jupiter:junit-jupiter",
+                    Map.of("name", "org.junit.jupiter:junit-jupiter", "scope", "test"))
+            );
+    }
+
+    @Test
+    void keysTheSameNodesOfAnotherScanOfTheRepositoryAlike() throws IOException {
+        final var other = createScan();
+        new ScanResultRepositoryImpl(driver).save(other, List.of(orders()));
+
+        assertThat(repository.findSnapshots(other)).containsExactlyInAnyOrderElementsOf(repository.findSnapshots(scanId));
+    }
+
+    @Test
+    void hasNoSnapshotsForAScanWithoutResults() {
+        assertThat(repository.findSnapshots(createScan())).isEmpty();
+    }
+
+    @Test
     void showsTheTargetsAndModulesAroundTheScan() {
         final var scan = scanId.id().toString();
         final var target = scan + "|backend";

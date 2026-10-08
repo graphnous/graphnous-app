@@ -109,4 +109,52 @@ class ScanGraphControllerTest {
         mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("depth", "deep"))
             .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void returnsHowTheHeadScanDiffersFromTheBase() throws Exception {
+        final var head = Scan.ScanId.generate();
+
+        when(scanGraphService.compare(any(), eq(scanId), eq(head))).thenReturn(new ScanGraph.Comparison(
+            List.of(new ScanGraph.TypeChanges("Class", 1, 0, 1)),
+            List.of(new ScanGraph.Snapshot("backend|orders|class:com.example.Invoice", "Class", "Invoice", Map.of("kind", "CLASS"))),
+            List.of(),
+            List.of(new ScanGraph.Change(
+                "backend|orders|class:com.example.Order",
+                "Class",
+                "Order",
+                List.of(new ScanGraph.PropertyChange("superClass", "com.example.Entity", null))
+            )),
+            false
+        ));
+
+        mockMvc.perform(get("/api/v1/scans/{base}/compare/{head}", scanId.id(), head.id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.base").value(scanId.id().toString()))
+            .andExpect(jsonPath("$.head").value(head.id().toString()))
+            .andExpect(jsonPath("$.summary[0].type").value("Class"))
+            .andExpect(jsonPath("$.summary[0].added").value(1))
+            .andExpect(jsonPath("$.summary[0].changed").value(1))
+            .andExpect(jsonPath("$.added[0].key").value("backend|orders|class:com.example.Invoice"))
+            .andExpect(jsonPath("$.added[0].properties.kind").value("CLASS"))
+            .andExpect(jsonPath("$.removed").isEmpty())
+            .andExpect(jsonPath("$.changed[0].name").value("Order"))
+            .andExpect(jsonPath("$.changed[0].properties[0].name").value("superClass"))
+            .andExpect(jsonPath("$.changed[0].properties[0].before").value("com.example.Entity"))
+            .andExpect(jsonPath("$.changed[0].properties[0].after").doesNotExist())
+            .andExpect(jsonPath("$.truncated").value(false));
+    }
+
+    @Test
+    void answersNotFoundForAScanToCompareThatIsNotThere() throws Exception {
+        when(scanGraphService.compare(any(), any(), any())).thenThrow(new NotFoundException("Scan not found"));
+
+        mockMvc.perform(get("/api/v1/scans/{base}/compare/{head}", scanId.id(), Scan.ScanId.generate().id()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void answersBadRequestForAScanIdThatIsNotOne() throws Exception {
+        mockMvc.perform(get("/api/v1/scans/{base}/compare/{head}", scanId.id(), "latest"))
+            .andExpect(status().isBadRequest());
+    }
 }
