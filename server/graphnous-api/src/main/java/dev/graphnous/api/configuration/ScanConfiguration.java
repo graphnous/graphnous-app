@@ -13,8 +13,16 @@ import dev.graphnous.application.scan.ScanRepository;
 import dev.graphnous.application.scan.ScanRetention;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanStepRepository;
+import dev.graphnous.application.scan.classes.ScanClassRepository;
+import dev.graphnous.application.scan.classes.ScanClassService;
+import dev.graphnous.application.scan.dependencies.ScanDependencyRepository;
+import dev.graphnous.application.scan.dependencies.ScanDependencyService;
+import dev.graphnous.application.scan.files.ScanFileRepository;
+import dev.graphnous.application.scan.files.ScanFileService;
 import dev.graphnous.application.scan.graph.ScanGraphRepository;
 import dev.graphnous.application.scan.graph.ScanGraphService;
+import dev.graphnous.application.scan.methods.ScanMethodRepository;
+import dev.graphnous.application.scan.methods.ScanMethodService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.log.ScanLogService;
@@ -85,6 +93,38 @@ public class ScanConfiguration {
         final ScanGraphRepository scanGraphRepository
     ) {
         return new ScanGraphService(scanService, scanGraphRepository);
+    }
+
+    @Bean
+    ScanFileService scanFileService(
+        final ScanService scanService,
+        final ScanFileRepository scanFileRepository
+    ) {
+        return new ScanFileService(scanService, scanFileRepository);
+    }
+
+    @Bean
+    ScanClassService scanClassService(
+        final ScanService scanService,
+        final ScanClassRepository scanClassRepository
+    ) {
+        return new ScanClassService(scanService, scanClassRepository);
+    }
+
+    @Bean
+    ScanMethodService scanMethodService(
+        final ScanService scanService,
+        final ScanMethodRepository scanMethodRepository
+    ) {
+        return new ScanMethodService(scanService, scanMethodRepository);
+    }
+
+    @Bean
+    ScanDependencyService scanDependencyService(
+        final ScanService scanService,
+        final ScanDependencyRepository scanDependencyRepository
+    ) {
+        return new ScanDependencyService(scanService, scanDependencyRepository);
     }
 
     @Bean
