@@ -28,6 +28,7 @@ import { ScansTable } from "@/components/ScansTable/ScansTable";
 import { CreateScanModal, CreateScanModalRef } from "@/components/CreateScanModal/CreateScanModal";
 import { Scan } from "@/types";
 import { StatsCard } from "@/components/StatsCard/StatsCard";
+import { ProjectDependencies } from "@/components/ProjectDependencies/ProjectDependencies";
 import { ProjectGraph } from "@/components/ProjectGraph/ProjectGraph";
 import { LatestScanChanges, ProjectScanComparison } from "@/components/ScanComparison/ScanComparison";
 
@@ -164,41 +165,7 @@ export default function ProjectPage() {
                         <ProjectScanComparison scans={scansPage.content} />
                     </TabPanel>
                     <TabPanel value={"dependencies"}>
-                        <Text size="lg" as="div">
-                            Dependencies
-                        </Text>
-                        <Text size="sm" as="div">
-                            Explore internal and external dependencies in this project.
-                        </Text>
-                        <section className="flex gap-4 flex-row mb-8">
-                            <StatsCard className="flex-1" title="" stat={27}></StatsCard>
-                            <StatsCard className="flex-1" title="" stat={14}></StatsCard>
-                            <StatsCard className="flex-1" title="" stat={6}></StatsCard>
-                            <StatsCard className="flex-1" title="" stat={3}></StatsCard>
-                        </section>
-                        <section className="flex gap-4 flex-row mb-8">
-                            <div className="flex-2">
-                                <Card className="mb-2">
-                                    <CardHeader title="Internal Dependencies" />
-                                    <CardBody>
-                                        None
-                                    </CardBody>
-                                </Card>
-                                <Card className="mb-2">
-                                    <CardHeader title="External dependencies" />
-                                    <CardBody>
-                                        None
-                                    </CardBody>
-                                </Card>
-                                <Card className="mb-2">
-                                    <CardHeader title="Changes since Scan #41" />
-                                    <CardBody>
-                                        None
-                                    </CardBody>
-                                </Card>
-                            </div>
-                            <div className="flex-1"></div>
-                        </section>
+                        <ProjectDependencies scans={scansPage.content} />
                     </TabPanel>
                     <TabPanel value={"impact"}>
                         Impact
