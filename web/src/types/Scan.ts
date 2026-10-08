@@ -7,7 +7,17 @@ export interface Scan {
   id: string;
   projectId: string;
   branch: string;
-  revision: string;
+  /**
+   * The commit the scan is of, as its full hash once the scan has checked
+   * it out; null until then. For an uploaded scan, the revision it was
+   * uploaded with.
+   */
+  revision?: string | null;
+  /**
+   * The revision the scan was asked for, such as a tag or a short commit
+   * hash, as it was given; null when it was asked for the tip of its branch.
+   */
+  requestedRevision?: string | null;
   status: ScanStatus;
   /**
    * An ISO 8601 date and time.

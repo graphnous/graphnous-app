@@ -86,10 +86,35 @@ class DockerGitCheckoutTest {
     void checksOutTheDefaultBranch() throws Exception {
         commit("second");
 
-        final var path = checkout.checkout("scan-1", source(null, null), listener);
+        final var path = checkout.checkout("scan-1", source(null, null), listener).path();
 
         assertThat(path).isEqualTo(root.resolve("scan-1"));
         assertThat(path.resolve("file.txt")).hasContent("second");
+    }
+
+    @Test
+    void returnsTheCommitOfTheTipOfABranch() throws Exception {
+        commit("second");
+        final var tip = git(origin, "rev-parse", "HEAD");
+
+        final var checkedOut = checkout.checkout("scan-1", source("main", null), listener);
+
+        assertThat(checkedOut.revision()).isEqualTo(tip).hasSize(40);
+    }
+
+    @Test
+    void returnsTheFullCommitOfATagOrAShortHash() throws Exception {
+        final var first = git(origin, "rev-parse", "HEAD");
+        git(origin, "tag", "v1.0.0");
+        commit("second");
+        final var second = git(origin, "rev-parse", "HEAD");
+        git(origin, "-c", "user.name=test", "-c", "user.email=test@example.com", "tag", "-a", "v2.0.0", "-m", "Release");
+
+        assertThat(checkout.checkout("scan-1", source("main", "v1.0.0"), listener).revision()).isEqualTo(first);
+        // An annotated tag is of the commit it tags
+        assertThat(checkout.checkout("scan-2", source("main", "v2.0.0"), listener).revision()).isEqualTo(second);
+        // A server does not serve a commit by a short hash, so the branch is fetched
+        assertThat(checkout.checkout("scan-3", source("main", first.substring(0, 7)), listener).revision()).isEqualTo(first);
     }
 
     @Test
@@ -99,7 +124,7 @@ class DockerGitCheckoutTest {
         git(origin, "checkout", "-q", "main");
         commit("main");
 
-        final var path = checkout.checkout("scan-1", source("feature", null), listener);
+        final var path = checkout.checkout("scan-1", source("feature", null), listener).path();
 
         assertThat(path.resolve("file.txt")).hasContent("feature");
     }
@@ -109,9 +134,10 @@ class DockerGitCheckoutTest {
         final var first = git(origin, "rev-parse", "HEAD");
         commit("second");
 
-        final var path = checkout.checkout("scan-1", source("main", first), listener);
+        final var checkedOut = checkout.checkout("scan-1", source("main", first), listener);
 
-        assertThat(path.resolve("file.txt")).hasContent("first");
+        assertThat(checkedOut.path().resolve("file.txt")).hasContent("first");
+        assertThat(checkedOut.revision()).isEqualTo(first);
         assertThat(output).contains("Checked out " + first);
     }
 
@@ -122,7 +148,7 @@ class DockerGitCheckoutTest {
         Files.createDirectories(root.resolve("scan-1"));
         Files.writeString(root.resolve("scan-1").resolve("leftover"), "x");
 
-        final var path = checkout.checkout("scan-1", source(null, null), listener);
+        final var path = checkout.checkout("scan-1", source(null, null), listener).path();
 
         assertThat(path.resolve("leftover")).doesNotExist();
         assertThat(path.resolve("file.txt")).hasContent("first");
@@ -139,7 +165,7 @@ class DockerGitCheckoutTest {
 
         final var source = new GitSource("file://" + origin, null, null, "not a real key", null);
 
-        final var path = checkout.checkout("scan-1", source, listener);
+        final var path = checkout.checkout("scan-1", source, listener).path();
 
         assertThat(path.resolve("file.txt")).hasContent("second");
     }
@@ -174,7 +200,7 @@ class DockerGitCheckoutTest {
 
     @Test
     void removesACheckout() {
-        final var path = checkout.checkout("scan-1", source(null, null), listener);
+        final var path = checkout.checkout("scan-1", source(null, null), listener).path();
 
         checkout.remove("scan-1", listener);
 

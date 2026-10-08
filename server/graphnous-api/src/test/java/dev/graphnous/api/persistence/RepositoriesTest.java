@@ -316,6 +316,38 @@ class RepositoriesTest {
     }
 
     @Test
+    void recordsTheCommitAScanCheckedOutAndWhatItWasAskedFor() {
+        final var backend = project(system("Shop"), "backend");
+        final var commit = "4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890";
+        final var at = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        final var scan = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.PENDING,
+            Scan.SourceRevision.requested("v1.2.0", "main"), at, at, null
+        ));
+
+        scanRepository.startScan(projectRepository.getOrCreateSnapshot(backend.id()), scan.id());
+
+        // Failed by recovery meanwhile, which recording the revision must not undo
+        scanRepository.save(withStatus(scan, Scan.ScanStatus.FAILED));
+        scanRepository.updateRevision(scan.id(), commit);
+
+        final var found = scanRepository.findById(scan.id());
+
+        assertThat(found.revision()).isEqualTo(new Scan.SourceRevision(commit, "main", "v1.2.0"));
+        assertThat(found.status()).isEqualTo(Scan.ScanStatus.FAILED);
+        assertThat(count(
+            "MATCH (s:Scan {id: $id, revision: '" + commit + "', requestedRevision: 'v1.2.0'}) RETURN count(s)",
+            scan.id().id()
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void failsToRecordTheRevisionOfAScanThatIsNotThere() {
+        assertThatThrownBy(() -> scanRepository.updateRevision(Scan.ScanId.generate(), "abc"))
+            .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
     void storesWhenAScanStarted() {
         final var backend = project(system("Shop"), "backend");
         final var scan = scan(backend, Scan.ScanStatus.QUEUED);

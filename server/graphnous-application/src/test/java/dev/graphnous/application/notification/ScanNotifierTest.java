@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -75,6 +76,27 @@ class ScanNotifierTest {
         assertThat(notification.content()).isEqualTo("The scan of backend (branch main, revision abc123) started.");
         assertThat(notification.read()).isFalse();
         assertThat(notification.createdAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void namesTheRevisionAScanWasAskedForUntilItIsCheckedOut() {
+        final var tagged = new Scan(
+            scan.id(), project.id(), Scan.ScanStatus.RUNNING,
+            new Scan.SourceRevision(null, "main", "v1.2.0"), NOW, NOW, null
+        );
+
+        notifier().scanStarted(tagged);
+        notifier().scanCompleted(tagged.withRevision("4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890"));
+
+        final var notifications = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository, times(2)).save(notifications.capture());
+
+        assertThat(notifications.getAllValues())
+            .extracting(Notification::content)
+            .containsExactly(
+                "The scan of backend (branch main, revision v1.2.0) started.",
+                "The scan of backend (branch main, revision 4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890) completed."
+            );
     }
 
     @Test

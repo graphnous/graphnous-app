@@ -12,10 +12,10 @@ function scan(id: string, status: Scan["status"], branch: string, revision: stri
 }
 
 const scans: Scan[] = [
-  scan("s1", "COMPLETED", "main", "4f2a9c1e88d0", "2026-10-01T09:00:00Z"),
-  scan("s2", "FAILED", "main", "77b01d3a5c2e", "2026-10-02T09:00:00Z"),
-  scan("s3", "COMPLETED", "feature/graph", "a19c3e7f0b42", "2026-10-03T09:00:00Z"),
-  scan("s4", "RUNNING", "main", "c0ffee123456", "2026-10-04T09:00:00Z"),
+  scan("s1", "COMPLETED", "main", "4f2a9c1e88d0aaaaaaaaaaaaaaaaaaaaaaaaaaaa", "2026-10-01T09:00:00Z"),
+  scan("s2", "FAILED", "main", "77b01d3a5c2eaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "2026-10-02T09:00:00Z"),
+  scan("s3", "COMPLETED", "feature/graph", "a19c3e7f0b42aaaaaaaaaaaaaaaaaaaaaaaaaaaa", "2026-10-03T09:00:00Z"),
+  scan("s4", "RUNNING", "main", "c0ffee123456aaaaaaaaaaaaaaaaaaaaaaaaaaaa", "2026-10-04T09:00:00Z"),
 ];
 
 function WithState(args: ScanSelectorProps) {

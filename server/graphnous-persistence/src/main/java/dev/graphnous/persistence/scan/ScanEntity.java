@@ -27,6 +27,9 @@ public class ScanEntity {
     @Column(name = "git_branch")
     private String branch;
 
+    @Column(name = "git_requested_revision")
+    private String requestedRevision;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -74,6 +77,14 @@ public class ScanEntity {
 
     public String getRevision() {
         return this.revision;
+    }
+
+    public void setRequestedRevision(final String requestedRevision) {
+        this.requestedRevision = requestedRevision;
+    }
+
+    public String getRequestedRevision() {
+        return this.requestedRevision;
     }
 
     public void setBranch(final String branch) {

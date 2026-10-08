@@ -22,6 +22,7 @@ export type ScanSummary = {
     status: "PENDING" | "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
     branch?: string | null;
     revision?: string | null;
+    requestedRevision?: string | null;
     createdAt?: string | number | null;
     startedAt?: string | number | null;
 };

@@ -17,6 +17,7 @@ public class ScanMapper {
 
         entity.setBranch(domain.revision().branch());
         entity.setRevision(domain.revision().revision());
+        entity.setRequestedRevision(domain.revision().requestedRevision());
 
         entity.setCreatedAt(domain.createdAt());
         entity.setUpdatedAt(domain.updatedAt());
@@ -32,7 +33,8 @@ public class ScanMapper {
             entity.getStatus(),
             new Scan.SourceRevision(
                 entity.getRevision(),
-                entity.getBranch()
+                entity.getBranch(),
+                entity.getRequestedRevision()
             ),
             entity.getCreatedAt(),
             entity.getUpdatedAt(),

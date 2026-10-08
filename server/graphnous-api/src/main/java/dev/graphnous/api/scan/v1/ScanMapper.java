@@ -36,6 +36,10 @@ public class ScanMapper {
             domain.revision().revision()
         );
 
+        scan.setRequestedRevision(
+            domain.revision().requestedRevision()
+        );
+
         scan.setCreatedAt(domain.createdAt().atZone(ZoneId.systemDefault()).toOffsetDateTime());
         scan.setUpdatedAt(domain.updatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime());
 

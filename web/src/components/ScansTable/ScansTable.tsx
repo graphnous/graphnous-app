@@ -12,6 +12,7 @@ import {
 } from "@graphnous/theme";
 import { DotsThreeIcon, TrashIcon } from "@phosphor-icons/react";
 
+import { ScanRevision } from "@/components/ScanRevision/ScanRevision";
 import { useDeleteScan } from "@/lib/hooks/scan/useDeleteScan";
 import type { Page, Scan, ScanStatus } from "@/types";
 import { useState } from "react";
@@ -86,9 +87,7 @@ export function ScansTable({
         {
             key: 'revision',
             header: 'Revision',
-            cell: (scan) => <span className="font-medium">
-                {scan.revision}
-            </span>
+            cell: (scan) => <ScanRevision revision={scan.revision} requestedRevision={scan.requestedRevision} />
         },
         {
             key: 'action',
@@ -119,7 +118,8 @@ export function ScansTable({
 
     const rows = page.content.sort((a, b) => {
         const field = sort.field as 'branch' | 'revision';
-        const order = a[field] < b[field] ? -1 : a[field] > b[field] ? 1 : 0;
+        // A scan without a revision yet sorts first
+        const order = (a[field] ?? '').localeCompare(b[field] ?? '');
         return sort.direction === 'asc' ? order : -order;
     });
 

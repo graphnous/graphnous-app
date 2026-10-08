@@ -11,13 +11,14 @@ import java.nio.file.Path;
 public interface SourceCheckout {
 
     /**
-     * Checks out the repository at the scan's revision and returns the path
-     * of the checkout.
+     * Checks out the repository at the revision the scan was asked for.
      *
-     * @param revision the revision to check out, or {@code null} for the tip
-     *                 of the default branch
+     * @param revision the source to check out: its requested revision, or
+     *                 the tip of its branch when it has none, or of the
+     *                 default branch when it has neither; {@code null} for
+     *                 the tip of the default branch
      */
-    Path checkout(
+    CheckedOut checkout(
         Scan.ScanId scanId,
         String gitUrl,
         Scan.SourceRevision revision,
@@ -25,5 +26,12 @@ public interface SourceCheckout {
     );
 
     void remove(Scan.ScanId scanId, ScanLogger logger);
+
+    /**
+     * @param path     where the checkout is
+     * @param revision the commit checked out, as its full hash
+     */
+    record CheckedOut(Path path, String revision) {
+    }
 
 }

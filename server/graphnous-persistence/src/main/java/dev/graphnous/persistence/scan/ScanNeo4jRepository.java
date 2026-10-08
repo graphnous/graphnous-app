@@ -16,6 +16,7 @@ public interface ScanNeo4jRepository extends Neo4jRepository<dev.graphnous.persi
     SET
         scan.branch = $branch,
         scan.revision = $revision,
+        scan.requestedRevision = $requestedRevision,
         scan.status = $status,
         scan.createdAt = $createdAt
     MERGE (snapshot)-[:HAS_SCAN]->(scan)
@@ -25,6 +26,7 @@ public interface ScanNeo4jRepository extends Neo4jRepository<dev.graphnous.persi
         @Param("scanId") UUID scanId,
         @Param("branch") String branch,
         @Param("revision") String revision,
+        @Param("requestedRevision") String requestedRevision,
         @Param("status") Scan.ScanStatus status,
         @Param("createdAt") Instant createdAt
     );
@@ -35,6 +37,15 @@ public interface ScanNeo4jRepository extends Neo4jRepository<dev.graphnous.persi
     """)
     void deleteScan(
         @Param("scanId") UUID scanId
+    );
+
+    @Query("""
+    MATCH (scan:Scan {id: $scanId})
+    SET scan.revision = $revision
+    """)
+    void updateRevision(
+        @Param("scanId") UUID scanId,
+        @Param("revision") String revision
     );
 
     @Query("""
