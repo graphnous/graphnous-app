@@ -20,6 +20,8 @@ import java.util.UUID;
  * and the relationships between them, to draw and to explore from by
  * focusing on another node.
  * <p>
+ * Also how two scans' graphs differ.
+ * <p>
  * Not in the published OpenAPI spec yet, so its models are its own.
  */
 @RestController
@@ -84,6 +86,76 @@ public class ScanGraphController {
     }
 
     /**
+     * @param base      the scan compared from
+     * @param head      the scan compared to
+     * @param summary   how many nodes of each type were added, removed and
+     *                  changed, of all of them
+     * @param truncated whether added, removed or changed holds fewer nodes
+     *                  than the summary counts
+     */
+    public record ScanComparisonResponse(
+        UUID base,
+        UUID head,
+        List<ScanComparisonSummary> summary,
+        List<ComparedNode> added,
+        List<ComparedNode> removed,
+        List<ChangedNode> changed,
+        boolean truncated
+    ) {
+    }
+
+    /**
+     * @param type Scan target, module, package, file, class, method or field
+     *             as in ScanGraphNode, or Dependency for a module's
+     *             dependency on a library
+     */
+    public record ScanComparisonSummary(
+        String type,
+        int added,
+        int removed,
+        int changed
+    ) {
+    }
+
+    /**
+     * @param key        what identifies the node in both scans: its id
+     *                   without the scan's. The id in a scan's graph is the
+     *                   scan's id, a {@code |}, then the key; except for a
+     *                   Dependency, which is its module's key, then
+     *                   {@code |dependency:} and its name
+     * @param properties what the scan found about it
+     */
+    public record ComparedNode(
+        String key,
+        String type,
+        String name,
+        Map<String, Object> properties
+    ) {
+    }
+
+    /**
+     * @param properties the properties that differ
+     */
+    public record ChangedNode(
+        String key,
+        String type,
+        String name,
+        List<ChangedProperty> properties
+    ) {
+    }
+
+    /**
+     * @param before its value in the base scan; null when it had none
+     * @param after  its value in the head scan; null when it has none
+     */
+    public record ChangedProperty(
+        String name,
+        Object before,
+        Object after
+    ) {
+    }
+
+    /**
      * Without a focus the graph is around the scan itself, two hops deep by
      * default: its targets and their modules. With one, it is that node and
      * its neighbours, one hop deep by default. A depth goes up to 5.
@@ -102,6 +174,49 @@ public class ScanGraphController {
         );
 
         return ResponseEntity.ok(fromDomain(id, neighbourhood));
+    }
+
+    /**
+     * How the head scan's graph differs from the base scan's: the nodes only
+     * the head has, those only the base has, and those whose properties
+     * differ, at most 500 of each. Typically an earlier and a later scan of
+     * the same project; nodes are matched by their key.
+     */
+    @GetMapping("/{base}/compare/{head}")
+    public ResponseEntity<ScanComparisonResponse> compare(
+        @PathVariable("base") final UUID base,
+        @PathVariable("head") final UUID head
+    ) {
+        final var comparison = scanGraphService.compare(
+            contextProvider.get(),
+            new Scan.ScanId(base),
+            new Scan.ScanId(head)
+        );
+
+        return ResponseEntity.ok(new ScanComparisonResponse(
+            base,
+            head,
+            comparison.summary().stream()
+                .map(type -> new ScanComparisonSummary(type.type(), type.added(), type.removed(), type.changed()))
+                .toList(),
+            comparison.added().stream().map(ScanGraphController::fromDomain).toList(),
+            comparison.removed().stream().map(ScanGraphController::fromDomain).toList(),
+            comparison.changed().stream()
+                .map(change -> new ChangedNode(
+                    change.key(),
+                    change.type(),
+                    change.name(),
+                    change.properties().stream()
+                        .map(property -> new ChangedProperty(property.name(), property.before(), property.after()))
+                        .toList()
+                ))
+                .toList(),
+            comparison.truncated()
+        ));
+    }
+
+    private static ComparedNode fromDomain(final ScanGraph.Snapshot node) {
+        return new ComparedNode(node.key(), node.type(), node.name(), node.properties());
     }
 
     private static ScanGraphResponse fromDomain(final UUID scanId, final ScanGraph.Neighbourhood neighbourhood) {

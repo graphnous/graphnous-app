@@ -45,4 +45,11 @@ public interface ScanGraphRepository {
      */
     List<ScanGraph.Dependency> findDependencies(Scan.ScanId scanId);
 
+    /**
+     * Every target, module, package, file, class, method and field of the
+     * scan, and every dependency of its modules, to compare with another
+     * scan's; empty for a scan without results.
+     */
+    List<ScanGraph.Snapshot> findSnapshots(Scan.ScanId scanId);
+
 }

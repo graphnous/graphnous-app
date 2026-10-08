@@ -9,10 +9,12 @@ import org.neo4j.driver.TransactionContext;
 import org.neo4j.driver.Value;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -31,6 +33,15 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
      */
     private static final List<String> SCAN_LABELS = List.of(
         "ScanTarget", "Module", "File", "Package", "Class", "Method", "Field", "Annotation"
+    );
+
+    /**
+     * The labels of the nodes two scans are compared by: what the scanners
+     * found, without the annotations, which their owners list, and without
+     * what enhancers added.
+     */
+    private static final List<String> COMPARED_LABELS = List.of(
+        "ScanTarget", "Module", "Package", "File", "Class", "Method", "Field"
     );
 
     /**
@@ -505,6 +516,71 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
                 string(record.get("scope"))
             )
         );
+    }
+
+    /**
+     * Each label of the nodes a scan is compared by is read through its own
+     * scanId index; the type is the label read, as an enhanced node has
+     * more than one. A dependency is keyed by its module and name, so a new
+     * version of it is a change rather than a removal and an addition.
+     */
+    @Override
+    public List<ScanGraph.Snapshot> findSnapshots(final Scan.ScanId scanId) {
+        final var id = id(scanId);
+        final var prefix = id + "|";
+
+        final var query = String.join("\nUNION ALL\n", COMPARED_LABELS.stream()
+            .map(label -> "MATCH (n:" + label + " {scanId: $scanId}) RETURN '" + label + "' AS type, properties(n) AS properties")
+            .toList());
+
+        final var snapshots = new ArrayList<ScanGraph.Snapshot>(read(
+            query,
+            Map.of("scanId", id),
+            record -> {
+                final var type = record.get("type").asString();
+                final var properties = record.get("properties").asMap();
+
+                return new ScanGraph.Snapshot(
+                    key(prefix, (String) properties.get("id")),
+                    type,
+                    nodeName(type, properties),
+                    visible(properties)
+                );
+            }
+        ));
+
+        snapshots.addAll(read("""
+                MATCH (module:Module {scanId: $scanId})-[dependsOn:DEPENDS_ON]->(dependency:Dependency)
+                RETURN module.id AS module,
+                       dependency.name AS name,
+                       dependency.version AS version,
+                       dependsOn.scope AS scope
+                """,
+            Map.of("scanId", id),
+            record -> {
+                final var properties = new LinkedHashMap<String, Object>();
+                properties.put("name", string(record.get("name")));
+                properties.put("scope", string(record.get("scope")));
+                properties.put("version", string(record.get("version")));
+                properties.values().removeIf(Objects::isNull);
+
+                return new ScanGraph.Snapshot(
+                    key(prefix, record.get("module").asString()) + "|dependency:" + string(record.get("name")),
+                    "Dependency",
+                    string(record.get("name")),
+                    properties
+                );
+            }
+        ));
+
+        return snapshots;
+    }
+
+    /**
+     * The id without the scan's, which every id below a scan starts with.
+     */
+    private static String key(final String prefix, final String id) {
+        return id.startsWith(prefix) ? id.substring(prefix.length()) : id;
     }
 
     private <T> List<T> read(

@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -137,6 +139,34 @@ class ScanGraphServiceTest {
         assertThatThrownBy(() -> service().getNeighbourhood(context, scanId, "missing", 1))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining("missing");
+    }
+
+    @Test
+    void comparesTwoScansTheUserMayRead() {
+        final var head = Scan.ScanId.generate();
+
+        when(scanGraphRepository.findSnapshots(scanId)).thenReturn(List.of(
+            new ScanGraph.Snapshot("backend|orders", "Module", "orders", Map.of())
+        ));
+        when(scanGraphRepository.findSnapshots(head)).thenReturn(List.of());
+
+        final var comparison = service().compare(context, scanId, head);
+
+        assertThat(comparison.removed()).extracting(ScanGraph.Snapshot::key).containsExactly("backend|orders");
+        verify(scanService).getScan(context, scanId);
+        verify(scanService).getScan(context, head);
+    }
+
+    @Test
+    void doesNotCompareWithAScanTheUserMayNotRead() {
+        final var head = Scan.ScanId.generate();
+
+        lenient().when(scanService.getScan(context, head)).thenThrow(new AuthorizationException("Not allowed"));
+
+        assertThatThrownBy(() -> service().compare(context, scanId, head))
+            .isInstanceOf(AuthorizationException.class);
+
+        verifyNoInteractions(scanGraphRepository);
     }
 
     private ScanGraphService service() {
