@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import type { ScanExecution, ScanStep } from "@/types";
+import { useFetch } from "@/lib/hooks/useFetch";
+
+const NO_STEPS: ScanStep[] = [];
 
 /**
  * The steps of a scan, in the order they run; with repoll, loaded again
@@ -12,58 +15,25 @@ export function useGetScanSteps(
     scanId: string,
     repoll = false,
 ) {
-    const [steps, setSteps] = useState<ScanStep[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<Error | null>(null);
-
-    const load = useCallback(async () => {
-        if (!scanId) {
-            setSteps([]);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            setError(null);
-
-            const response = await fetch(
-                `/api/scans/${scanId}/steps`,
-            );
-
-            if (!response.ok) {
-                throw new Error("Failed to load scan steps");
-            }
-
-            const res: ScanExecution = await response.json();
-
-            setSteps(res.steps);
-        } catch (error) {
-            setError(
-                error instanceof Error
-                    ? error
-                    : new Error("Failed to load scan steps"),
-            );
-        } finally {
-            setLoading(false);
-        }
-    }, [scanId]);
+    const { data, loading, error, refresh } = useFetch<ScanExecution>(
+        scanId ? `/api/scans/${scanId}/steps` : null,
+        "Failed to load scan steps",
+    );
 
     useEffect(() => {
-        load();
-
         if (!repoll) {
             return;
         }
 
-        const interval = setInterval(load, 2000);
+        const interval = setInterval(refresh, 2000);
 
         return () => clearInterval(interval);
-    }, [load, repoll]);
+    }, [refresh, repoll]);
 
     return {
-        steps,
+        steps: data?.steps ?? NO_STEPS,
         loading,
         error,
-        refresh: load,
+        refresh,
     };
 }

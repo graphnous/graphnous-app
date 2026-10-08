@@ -43,11 +43,6 @@ export function useEventStream<T>(
 
   useEffect(() => {
     if (!url || !enabled) {
-      setStatus((current) =>
-        current?.url === url
-          ? { url, status: "closed" }
-          : current,
-      );
       return;
     }
 
@@ -83,6 +78,7 @@ export function useEventStream<T>(
       source.removeEventListener("error", update);
       source.removeEventListener(event, listener);
       source.close();
+      setStatus({ url, status: "closed" });
     };
   }, [url, event, enabled, withCredentials]);
 

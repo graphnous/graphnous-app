@@ -1,52 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Capabilities } from "@/types/capabilities";
+import { useFetch } from "@/lib/hooks/useFetch";
+
+// Until they are loaded, nothing is enabled
+const NONE: Capabilities = {
+    capabilities: [],
+    authorization: {
+        enabled: false
+    }
+};
 
 export function useGetCapabilities() {
-    const [capabilities, setCapabilities] = useState<Capabilities>({
-        capabilities: [],
-        authorization: {
-            enabled: false
-        }
-    });
-
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
-
-    const load = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            const response = await fetch("/api/capabilities");
-
-            if (!response.ok) {
-                throw new Error("Failed to load capabilities");
-            }
-
-            const res = await response.json();
-
-            setCapabilities(res);
-        } catch (error) {
-            setError(
-                error instanceof Error
-                    ? error
-                    : new Error("Failed to load capabilities"),
-            );
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        load();
-    }, [load]);
+    const { data, loading, error, refresh } = useFetch<Capabilities>("/api/capabilities", "Failed to load capabilities");
 
     return {
-        capabilities,
+        capabilities: data ?? NONE,
         loading,
         error,
-        refresh: load,
+        refresh,
     };
 }

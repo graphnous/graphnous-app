@@ -1,46 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { System } from "@/types";
+import type { Page, System } from "@/types";
+import { useFetch } from "@/lib/hooks/useFetch";
+
+// Until they are loaded
+const NO_SYSTEMS: System[] = [];
 
 export function useListSystems() {
-    const [systems, setSystems] = useState<System[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
-
-    const load = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            const response = await fetch("/api/systems");
-
-            if (!response.ok) {
-                throw new Error("Failed to load systems");
-            }
-
-            const page = await response.json();
-
-            setSystems(page.content);
-        } catch (error) {
-            setError(
-                error instanceof Error
-                    ? error
-                    : new Error("Failed to load systems"),
-            );
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        load();
-    }, [load]);
+    const { data, loading, error, refresh } = useFetch<Page<System>>("/api/systems", "Failed to load systems");
 
     return {
-        systems,
+        systems: data?.content ?? NO_SYSTEMS,
         loading,
         error,
-        refresh: load,
+        refresh,
     };
 }
