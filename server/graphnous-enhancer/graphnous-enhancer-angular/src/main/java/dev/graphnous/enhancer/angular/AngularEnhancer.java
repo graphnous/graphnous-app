@@ -26,25 +26,34 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Finds the components, directives and services of Angular applications,
- * and the HTTP calls they make with Angular's {@code HttpClient}:
+ * Finds the components, directives, services and modules of Angular
+ * applications, and the HTTP calls they make with Angular's
+ * {@code HttpClient}:
  * <pre>
  * (Class)-[:ENHANCE]->(Component {selector, templateUrl, standalone})
  * (Class)-[:ENHANCE]->(Directive {selector, standalone})
  * (Class)-[:ENHANCE]->(Service {providedIn})
+ * (Class)-[:ENHANCE]->(NgModule)
  * (Method)-[:ENHANCE]->(HttpCall {httpMethod, client, line})
  * (Component|Directive|Service)-[:HAS_HTTP_CALL]->(HttpCall)
  * (Component|Directive|Service)-[:INJECTS]->(Component|Directive|Service|Class)
- * (Component|Directive)-[:IMPORTS]->(Component|Directive)
+ * (Component|Directive)-[:IMPORTS]->(Component|Directive|NgModule)
+ * (NgModule)-[:DECLARES]->(Component|Directive)
+ * (NgModule)-[:IMPORTS|EXPORTS]->(Component|Directive|NgModule)
+ * (NgModule)-[:PROVIDES]->(Service)
+ * (NgModule)-[:BOOTSTRAPS]->(Component)
  * </pre>
  * The {@code ENHANCE} relationships come with the nodes' sources. Spring
  * applications have components and services too; the enhancer that added a
  * node tells them apart, as in
- * {@code (:Enhancement {name: 'angular'})-[:ADDED]->(:Component)}.
+ * {@code (:Enhancement {name: 'angular'})-[:ADDED]->(:Component)}. An
+ * Angular module is an {@code NgModule}, as {@code Module} is the label of
+ * the modules of the scan.
  * <p>
  * A component is a class decorated with {@code @Component}, a directive one
- * decorated with {@code @Directive}, and a service one decorated with
- * {@code @Injectable}, in a file that imports {@code @angular/core}; a
+ * decorated with {@code @Directive}, a service one decorated with
+ * {@code @Injectable}, and a module one decorated with {@code @NgModule},
+ * in a file that imports {@code @angular/core}; a
  * decorator of the same name declared in the project is not Angular's. The
  * decorator's settings give the node's properties.
  * <p>
@@ -61,7 +70,14 @@ import java.util.regex.Pattern;
  * when it has one, else the class. A field's type does not say it was
  * injected, as it may hold any state. What a
  * standalone component or directive lists in its {@code imports}, it
- * imports, when one Angular class of the scan has that name.
+ * imports, and what a module lists in its {@code declarations},
+ * {@code imports}, {@code exports}, {@code providers} and
+ * {@code bootstrap}, it declares, imports, exports, provides and
+ * bootstraps, when one Angular class of the scan has that name. Of a
+ * provider such as {@code {provide: A, useClass: B}}, that is the class it
+ * uses, else its token; of {@code RouterModule.forRoot(routes)}, the
+ * module. Angular's own modules, such as {@code BrowserModule}, are not
+ * classes of the scan, so are left out.
  * <p>
  * What is injected with {@code inject(...)} is left out, as scan results
  * keep neither the calls in field initializers nor the types of fields that
@@ -111,8 +127,31 @@ public class AngularEnhancer implements Enhancer {
     private static final List<Kind> KINDS = List.of(
         new Kind("Component", "Component", "component", List.of("selector", "templateUrl", "standalone")),
         new Kind("Directive", "Directive", "directive", List.of("selector", "standalone")),
-        new Kind("Service", "Injectable", "service", List.of("providedIn"))
+        new Kind("Service", "Injectable", "service", List.of("providedIn")),
+        new Kind("NgModule", "NgModule", "ngModule", List.of())
     );
+
+    /**
+     * The relationship each setting of a decorator makes, by the decorator:
+     * from its class to each Angular class the setting lists.
+     */
+    private static final Map<String, Map<String, String>> LISTS = Map.of(
+        "Component", Map.of("imports", "IMPORTS"),
+        "Directive", Map.of("imports", "IMPORTS"),
+        "NgModule", Map.of(
+            "declarations", "DECLARES",
+            "imports", "IMPORTS",
+            "exports", "EXPORTS",
+            "providers", "PROVIDES",
+            "bootstrap", "BOOTSTRAPS"
+        )
+    );
+
+    /**
+     * The name an entry of a list starts with, e.g. {@code RouterModule} for
+     * {@code RouterModule.forRoot(routes)}.
+     */
+    private static final Pattern LEADING_NAME = Pattern.compile("^[A-Za-z_$][\\w$]*");
 
     @Override
     public String name() {
@@ -185,7 +224,7 @@ public class AngularEnhancer implements Enhancer {
 
         final var relationships = new ArrayList<Relationship>();
         relationships.addAll(injections(classes, angularNodes));
-        relationships.addAll(imports(classes, angularNodes));
+        relationships.addAll(listed(classes, angularNodes));
 
         if (!relationships.isEmpty()) {
             enhancements.add(new Enhancement(List.of(), relationships));
@@ -440,11 +479,13 @@ public class AngularEnhancer implements Enhancer {
     }
 
     /**
-     * What the standalone components and directives import, of the Angular
-     * classes of the scan: those listed in their {@code imports} by a name
-     * one of them alone has.
+     * What the Angular classes list in their decorators' settings, of the
+     * Angular classes of the scan: what standalone components and
+     * directives import, and what modules declare, import, export, provide
+     * and bootstrap. An entry is matched by a name one Angular class of the
+     * scan alone has.
      */
-    private static List<Relationship> imports(
+    private static List<Relationship> listed(
         final List<Declared> classes,
         final Map<String, String> angularNodes
     ) {
@@ -465,24 +506,48 @@ public class AngularEnhancer implements Enhancer {
                 continue;
             }
 
-            for (final var kind : KINDS.subList(0, 2)) {
-                decorator(declared.type(), kind.decorator())
-                    .map(decorator -> settings(decorator).get("imports"))
-                    .filter(List.class::isInstance)
-                    .map(List.class::cast)
-                    .ifPresent(imported -> {
-                        for (final var name : imported) {
-                            final var targets = byName.getOrDefault(String.valueOf(name), List.of());
+            LISTS.forEach((name, types) -> decorator(declared.type(), name).ifPresent(decorator -> {
+                final var settings = settings(decorator);
 
-                            if (targets.size() == 1 && !targets.getFirst().equals(nodeId)) {
-                                relationships.add(new Relationship(nodeId, targets.getFirst(), "IMPORTS"));
-                            }
-                        }
-                    });
-            }
+                types.forEach((setting, type) -> {
+                    if (!(settings.get(setting) instanceof List<?> entries)) {
+                        return;
+                    }
+
+                    for (final var entry : entries) {
+                        entryName(entry)
+                            .map(entryName -> byName.getOrDefault(entryName, List.of()))
+                            .filter(targets -> targets.size() == 1 && !targets.getFirst().equals(nodeId))
+                            .ifPresent(targets -> relationships.add(new Relationship(nodeId, targets.getFirst(), type)));
+                    }
+                });
+            }));
         }
 
         return List.copyOf(relationships);
+    }
+
+    /**
+     * The name of the class an entry of a list names: the name it starts
+     * with, e.g. {@code RouterModule} for {@code RouterModule.forRoot([])},
+     * or for a provider such as {@code {provide: A, useClass: B}}, the class
+     * it uses, else its token.
+     */
+    static Optional<String> entryName(final Object entry) {
+        if (entry instanceof Map<?, ?> provider) {
+            return Optional.ofNullable(provider.get("useClass"))
+                .or(() -> Optional.ofNullable(provider.get("useExisting")))
+                .or(() -> Optional.ofNullable(provider.get("provide")))
+                .flatMap(AngularEnhancer::entryName);
+        }
+
+        if (!(entry instanceof String text)) {
+            return Optional.empty();
+        }
+
+        final var matcher = LEADING_NAME.matcher(text.trim());
+
+        return matcher.find() ? Optional.of(matcher.group()) : Optional.empty();
     }
 
     /**

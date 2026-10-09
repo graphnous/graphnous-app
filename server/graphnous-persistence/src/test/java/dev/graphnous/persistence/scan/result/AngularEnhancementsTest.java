@@ -68,7 +68,7 @@ class AngularEnhancementsTest {
     }
 
     @Test
-    void linksTheComponentsServicesAndDirectivesToTheirClasses() {
+    void linksTheComponentsServicesDirectivesAndModulesToTheirClasses() {
         try (final var session = driver.session()) {
             final var nodes = session.run("""
                     MATCH (:Scan {id: $scanId})-[:HAS_ENHANCEMENT]->(angular:Enhancement {name: 'angular', version: '1.0.0'})
@@ -80,10 +80,13 @@ class AngularEnhancementsTest {
             ).list(record -> tuple(record.get("class").asString(), record.get("labels").asList(value -> value.asString())));
 
             assertThat(nodes).containsExactly(
+                tuple("AppComponent", List.of("Component")),
+                tuple("AppModule", List.of("NgModule")),
                 tuple("HighlightDirective", List.of("Directive")),
                 tuple("InvoiceService", List.of("Service")),
                 tuple("OrderListComponent", List.of("Component")),
-                tuple("OrderService", List.of("Service"))
+                tuple("OrderService", List.of("Service")),
+                tuple("SharedModule", List.of("NgModule"))
             );
         }
     }
@@ -124,6 +127,29 @@ class AngularEnhancementsTest {
             assertThat(links).containsExactly(
                 tuple("IMPORTS", "HighlightDirective"),
                 tuple("INJECTS", "OrderService")
+            );
+        }
+    }
+
+    @Test
+    void linksWhatTheModuleDeclaresImportsProvidesAndBootstraps() {
+        try (final var session = driver.session()) {
+            final var links = session.run("""
+                    MATCH (:Class {scanId: $scanId, name: 'AppModule'})-[:ENHANCE]->(module:NgModule)
+                    MATCH (module)-[link]->(node)<-[:ENHANCE]-(class:Class)
+                    RETURN type(link) AS link, class.name AS class
+                    ORDER BY link, class
+                    """,
+                Map.of("scanId", scanId.id().toString())
+            ).list(record -> tuple(record.get("link").asString(), record.get("class").asString()));
+
+            assertThat(links).containsExactly(
+                tuple("BOOTSTRAPS", "AppComponent"),
+                tuple("DECLARES", "AppComponent"),
+                tuple("IMPORTS", "OrderListComponent"),
+                tuple("IMPORTS", "SharedModule"),
+                tuple("PROVIDES", "InvoiceService"),
+                tuple("PROVIDES", "OrderService")
             );
         }
     }

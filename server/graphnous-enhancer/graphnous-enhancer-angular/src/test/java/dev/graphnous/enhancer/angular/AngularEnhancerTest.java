@@ -40,6 +40,9 @@ class AngularEnhancerTest {
     private static final String INVOICE_SERVICE = ORDERS + "invoice.service:InvoiceService";
     private static final String ORDER_LIST = ORDERS + "order-list.component:OrderListComponent";
     private static final String HIGHLIGHT = MODULE + "|class:src/app/shared/highlight.directive:HighlightDirective";
+    private static final String APP = MODULE + "|class:src/app/app.component:AppComponent";
+    private static final String APP_MODULE = MODULE + "|class:src/app/app.module:AppModule";
+    private static final String SHARED_MODULE = MODULE + "|class:src/app/shared/shared.module:SharedModule";
 
     private final AngularEnhancer enhancer = new AngularEnhancer();
 
@@ -126,10 +129,47 @@ class AngularEnhancerTest {
     }
 
     @Test
-    void findsWhatStandaloneComponentsImport() {
+    void addsTheModules() {
+        assertThat(node(APP_MODULE + "|ngModule")).isEqualTo(new Node(APP_MODULE + "|ngModule", APP_MODULE, List.of("NgModule"), Map.of()));
+        assertThat(node(SHARED_MODULE + "|ngModule").labels()).containsExactly("NgModule");
+    }
+
+    @Test
+    void findsWhatStandaloneComponentsAndModulesImport() {
         assertThat(relationships())
             .filteredOn(relationship -> relationship.type().equals("IMPORTS"))
-            .containsExactly(new Relationship(ORDER_LIST + "|component", HIGHLIGHT + "|directive", "IMPORTS"));
+            .containsExactlyInAnyOrder(
+                new Relationship(ORDER_LIST + "|component", HIGHLIGHT + "|directive", "IMPORTS"),
+                // BrowserModule, HttpClientModule and RouterModule.forRoot([]) are Angular's
+                new Relationship(APP_MODULE + "|ngModule", SHARED_MODULE + "|ngModule", "IMPORTS"),
+                new Relationship(APP_MODULE + "|ngModule", ORDER_LIST + "|component", "IMPORTS"),
+                new Relationship(SHARED_MODULE + "|ngModule", HIGHLIGHT + "|directive", "IMPORTS")
+            );
+    }
+
+    @Test
+    void findsWhatModulesDeclareExportProvideAndBootstrap() {
+        assertThat(relationships())
+            .filteredOn(relationship -> List.of("DECLARES", "EXPORTS", "PROVIDES", "BOOTSTRAPS").contains(relationship.type()))
+            .containsExactlyInAnyOrder(
+                new Relationship(APP_MODULE + "|ngModule", APP + "|component", "DECLARES"),
+                new Relationship(APP_MODULE + "|ngModule", APP + "|component", "BOOTSTRAPS"),
+                new Relationship(APP_MODULE + "|ngModule", ORDER_SERVICE + "|service", "PROVIDES"),
+                // {provide: InvoiceService, useClass: InvoiceService}
+                new Relationship(APP_MODULE + "|ngModule", INVOICE_SERVICE + "|service", "PROVIDES"),
+                new Relationship(SHARED_MODULE + "|ngModule", HIGHLIGHT + "|directive", "EXPORTS")
+            );
+    }
+
+    @Test
+    void namesTheClassAnEntryOfAListNames() {
+        assertThat(AngularEnhancer.entryName("SharedModule")).contains("SharedModule");
+        assertThat(AngularEnhancer.entryName("RouterModule.forRoot(routes)")).contains("RouterModule");
+        assertThat(AngularEnhancer.entryName(Map.of("provide", "Store", "useClass", "MemoryStore"))).contains("MemoryStore");
+        assertThat(AngularEnhancer.entryName(Map.of("provide", "Store", "useExisting", "OtherStore"))).contains("OtherStore");
+        assertThat(AngularEnhancer.entryName(Map.of("provide", "API_URL", "useValue", "/api"))).contains("API_URL");
+        assertThat(AngularEnhancer.entryName("...routes")).isEmpty();
+        assertThat(AngularEnhancer.entryName(42)).isEmpty();
     }
 
     @Test

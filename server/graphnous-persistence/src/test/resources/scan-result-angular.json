@@ -13,6 +13,172 @@
       "path": ".",
       "files": [
         {
+          "path": "src/app/app.component.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 151,
+          "checksum": "a1e79ec5dcb39df08a30f1fe0e6aec4fc68fa847b9d41cf2b67afbed10d7b88f",
+          "lineCount": 7,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 42
+            }
+          ],
+          "classes": [
+            {
+              "name": "AppComponent",
+              "qualifiedName": "src/app/app.component:AppComponent",
+              "startLine": 3,
+              "endLine": 7,
+              "startColumn": 1,
+              "endColumn": 28,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "Component",
+                  "startLine": 3,
+                  "endLine": 6,
+                  "startColumn": 1,
+                  "endColumn": 2,
+                  "arguments": {
+                    "value": {
+                      "selector": "app-root",
+                      "templateUrl": "./app.component.html"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/app.module.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 783,
+          "checksum": "3cc861e4556e639239e68879c133efe819d1f1e07c31b597bbcd754187eb7f24",
+          "lineCount": 17,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 41
+            },
+            {
+              "name": "@angular/platform-browser",
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 1,
+              "endColumn": 58
+            },
+            {
+              "name": "@angular/common/http",
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 1,
+              "endColumn": 56
+            },
+            {
+              "name": "@angular/router",
+              "startLine": 4,
+              "endLine": 4,
+              "startColumn": 1,
+              "endColumn": 47
+            },
+            {
+              "name": "./app.component",
+              "startLine": 5,
+              "endLine": 5,
+              "startColumn": 1,
+              "endColumn": 47
+            },
+            {
+              "name": "./shared/shared.module",
+              "startLine": 6,
+              "endLine": 6,
+              "startColumn": 1,
+              "endColumn": 54
+            },
+            {
+              "name": "./orders/order-list.component",
+              "startLine": 7,
+              "endLine": 7,
+              "startColumn": 1,
+              "endColumn": 67
+            },
+            {
+              "name": "./orders/order.service",
+              "startLine": 8,
+              "endLine": 8,
+              "startColumn": 1,
+              "endColumn": 54
+            },
+            {
+              "name": "./orders/invoice.service",
+              "startLine": 9,
+              "endLine": 9,
+              "startColumn": 1,
+              "endColumn": 58
+            }
+          ],
+          "classes": [
+            {
+              "name": "AppModule",
+              "qualifiedName": "src/app/app.module:AppModule",
+              "startLine": 11,
+              "endLine": 17,
+              "startColumn": 1,
+              "endColumn": 25,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "NgModule",
+                  "startLine": 11,
+                  "endLine": 16,
+                  "startColumn": 1,
+                  "endColumn": 2,
+                  "arguments": {
+                    "value": {
+                      "declarations": [
+                        "AppComponent"
+                      ],
+                      "imports": [
+                        "BrowserModule",
+                        "HttpClientModule",
+                        "RouterModule.forRoot([])",
+                        "SharedModule",
+                        "OrderListComponent"
+                      ],
+                      "providers": [
+                        "OrderService",
+                        {
+                          "provide": "InvoiceService",
+                          "useClass": "InvoiceService"
+                        }
+                      ],
+                      "bootstrap": [
+                        "AppComponent"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
           "path": "src/app/orders/invoice.service.ts",
           "language": "TYPESCRIPT",
           "sourceSet": "MAIN",
@@ -1048,6 +1214,71 @@
                   "modifiers": [
                     "PRIVATE"
                   ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/shared/shared.module.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 274,
+          "checksum": "03e07d0d1dc1be38ddf9cc19f7c582cdb149e9a45fc793b781c35985354b07c4",
+          "lineCount": 9,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 41
+            },
+            {
+              "name": "@angular/common",
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 1,
+              "endColumn": 47
+            },
+            {
+              "name": "./highlight.directive",
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 1,
+              "endColumn": 59
+            }
+          ],
+          "classes": [
+            {
+              "name": "SharedModule",
+              "qualifiedName": "src/app/shared/shared.module:SharedModule",
+              "startLine": 5,
+              "endLine": 9,
+              "startColumn": 1,
+              "endColumn": 28,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "NgModule",
+                  "startLine": 5,
+                  "endLine": 8,
+                  "startColumn": 1,
+                  "endColumn": 2,
+                  "arguments": {
+                    "value": {
+                      "imports": [
+                        "CommonModule",
+                        "HighlightDirective"
+                      ],
+                      "exports": [
+                        "HighlightDirective"
+                      ]
+                    }
+                  }
                 }
               ]
             }
