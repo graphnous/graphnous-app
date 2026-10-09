@@ -43,7 +43,10 @@ import java.util.stream.Collectors;
 public class EnhancementRepositoryImpl implements EnhancementRepository {
 
     static final String ENHANCEMENT = "Enhancement";
-    static final String ENHANCED = "ENHANCED";
+    /**
+     * The label every node an enhancer adds has, besides its own.
+     */
+    public static final String ENHANCED = "ENHANCED";
 
     private static final int BATCH_SIZE = 2_000;
 

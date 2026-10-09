@@ -15,7 +15,7 @@ persistence. Its web app is in [`../web`](../web). See the
 | `graphnous-api` | The Spring Boot application: REST controllers, configuration and the executable jar. Generates its API models from the [published OpenAPI spec](https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml). |
 | `graphnous-security` | Who may call the API (see Security below), authorization, entitlements and capabilities. Authorization and entitlements currently allow everything, and the local deployment has every capability and reports authorization as disabled. |
 | `graphnous-scanner` | The scanner framework: target detection, scan planning, the scanner definitions, the Docker sandbox that runs the scanner images, and `graphnous-scanner-cli`, which scans a repository from the command line. |
-| `graphnous-enhancer` | The enhancers, which add to what a scan found before it is stored. `graphnous-enhancer-core` holds the `Enhancer` interface, what enhancers return, and the provider that runs them; `graphnous-enhancer-spring` adds the controllers and endpoints of Spring web applications. |
+| `graphnous-enhancer` | The enhancers, which add to what a scan found before it is stored. `graphnous-enhancer-core` holds the `Enhancer` interface, what enhancers return, and the provider that runs them; `graphnous-enhancer-spring` adds the controllers and endpoints of Spring web applications; `graphnous-enhancer-angular` the components, directives, services and modules (`NgModule`) of Angular applications and the HTTP calls they make with `HttpClient`. |
 
 The relational database is PostgreSQL. Flyway creates and migrates its
 schema on startup from `graphnous-api/src/main/resources/db/migration`, and

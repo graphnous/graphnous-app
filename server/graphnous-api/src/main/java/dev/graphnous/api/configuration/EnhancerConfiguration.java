@@ -3,6 +3,7 @@ package dev.graphnous.api.configuration;
 import dev.graphnous.enhancer.Enhancer;
 import dev.graphnous.enhancer.EnhancerProvider;
 import dev.graphnous.enhancer.EnhancerRegistry;
+import dev.graphnous.enhancer.angular.AngularEnhancer;
 import dev.graphnous.enhancer.spring.SpringEnhancer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +16,11 @@ public class EnhancerConfiguration {
     @Bean
     public SpringEnhancer springEnhancer() {
         return new SpringEnhancer();
+    }
+
+    @Bean
+    public AngularEnhancer angularEnhancer() {
+        return new AngularEnhancer();
     }
 
     /**

@@ -20,6 +20,7 @@
     <modules>
         <module>graphnous-enhancer-core</module>
         <module>graphnous-enhancer-spring</module>
+        <module>graphnous-enhancer-angular</module>
     </modules>
 
     <properties>
@@ -48,6 +49,11 @@
             <dependency>
                 <groupId>dev.graphnous</groupId>
                 <artifactId>graphnous-enhancer-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.graphnous</groupId>
+                <artifactId>graphnous-enhancer-angular</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

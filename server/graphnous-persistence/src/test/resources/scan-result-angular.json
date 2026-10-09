@@ -1,0 +1,1307 @@
+{
+  "format": "graphnous-scan-result",
+  "version": "2",
+  "target": {
+    "path": ".",
+    "language": "TYPESCRIPT",
+    "languageVersion": "24",
+    "buildSystem": "NPM"
+  },
+  "modules": [
+    {
+      "name": "shop",
+      "path": ".",
+      "files": [
+        {
+          "path": "src/app/app.component.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 151,
+          "checksum": "a1e79ec5dcb39df08a30f1fe0e6aec4fc68fa847b9d41cf2b67afbed10d7b88f",
+          "lineCount": 7,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 42
+            }
+          ],
+          "classes": [
+            {
+              "name": "AppComponent",
+              "qualifiedName": "src/app/app.component:AppComponent",
+              "startLine": 3,
+              "endLine": 7,
+              "startColumn": 1,
+              "endColumn": 28,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "Component",
+                  "startLine": 3,
+                  "endLine": 6,
+                  "startColumn": 1,
+                  "endColumn": 2,
+                  "arguments": {
+                    "value": {
+                      "selector": "app-root",
+                      "templateUrl": "./app.component.html"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/app.module.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 783,
+          "checksum": "3cc861e4556e639239e68879c133efe819d1f1e07c31b597bbcd754187eb7f24",
+          "lineCount": 17,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 41
+            },
+            {
+              "name": "@angular/platform-browser",
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 1,
+              "endColumn": 58
+            },
+            {
+              "name": "@angular/common/http",
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 1,
+              "endColumn": 56
+            },
+            {
+              "name": "@angular/router",
+              "startLine": 4,
+              "endLine": 4,
+              "startColumn": 1,
+              "endColumn": 47
+            },
+            {
+              "name": "./app.component",
+              "startLine": 5,
+              "endLine": 5,
+              "startColumn": 1,
+              "endColumn": 47
+            },
+            {
+              "name": "./shared/shared.module",
+              "startLine": 6,
+              "endLine": 6,
+              "startColumn": 1,
+              "endColumn": 54
+            },
+            {
+              "name": "./orders/order-list.component",
+              "startLine": 7,
+              "endLine": 7,
+              "startColumn": 1,
+              "endColumn": 67
+            },
+            {
+              "name": "./orders/order.service",
+              "startLine": 8,
+              "endLine": 8,
+              "startColumn": 1,
+              "endColumn": 54
+            },
+            {
+              "name": "./orders/invoice.service",
+              "startLine": 9,
+              "endLine": 9,
+              "startColumn": 1,
+              "endColumn": 58
+            }
+          ],
+          "classes": [
+            {
+              "name": "AppModule",
+              "qualifiedName": "src/app/app.module:AppModule",
+              "startLine": 11,
+              "endLine": 17,
+              "startColumn": 1,
+              "endColumn": 25,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "NgModule",
+                  "startLine": 11,
+                  "endLine": 16,
+                  "startColumn": 1,
+                  "endColumn": 2,
+                  "arguments": {
+                    "value": {
+                      "declarations": [
+                        "AppComponent"
+                      ],
+                      "imports": [
+                        "BrowserModule",
+                        "HttpClientModule",
+                        "RouterModule.forRoot([])",
+                        "SharedModule",
+                        "OrderListComponent"
+                      ],
+                      "providers": [
+                        "OrderService",
+                        {
+                          "provide": "InvoiceService",
+                          "useClass": "InvoiceService"
+                        }
+                      ],
+                      "bootstrap": [
+                        "AppComponent"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/orders/invoice.service.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 404,
+          "checksum": "4aaac7e14d3437ebaa712f4b13b31e0060fd0a92432a46b76d228bc04f13add7",
+          "lineCount": 16,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 51
+            },
+            {
+              "name": "@angular/common/http",
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 1,
+              "endColumn": 50
+            }
+          ],
+          "classes": [
+            {
+              "name": "InvoiceService",
+              "qualifiedName": "src/app/orders/invoice.service:InvoiceService",
+              "startLine": 4,
+              "endLine": 16,
+              "startColumn": 1,
+              "endColumn": 1,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "Injectable",
+                  "startLine": 4,
+                  "endLine": 4,
+                  "startColumn": 1,
+                  "endColumn": 13
+                }
+              ],
+              "methods": [
+                {
+                  "name": "download",
+                  "qualifiedName": "src/app/orders/invoice.service:InvoiceService.download",
+                  "startLine": 9,
+                  "endLine": 11,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type": {
+                        "name": "string"
+                      },
+                      "qualifiedName": "src/app/orders/invoice.service:InvoiceService.download.id",
+                      "startLine": 9,
+                      "endLine": 9,
+                      "startColumn": 12,
+                      "endColumn": 21
+                    }
+                  ],
+                  "calls": [
+                    {
+                      "target": "this.client.request",
+                      "kind": "METHOD",
+                      "startLine": 10,
+                      "endLine": 10,
+                      "startColumn": 12,
+                      "endColumn": 60,
+                      "resolved": false
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/invoice.service:InvoiceService.client",
+                      "access": "READ",
+                      "startLine": 10,
+                      "endLine": 10,
+                      "startColumn": 12,
+                      "endColumn": 22,
+                      "resolved": true
+                    }
+                  ]
+                },
+                {
+                  "name": "refresh",
+                  "qualifiedName": "src/app/orders/invoice.service:InvoiceService.refresh",
+                  "startLine": 13,
+                  "endLine": 15,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "calls": [
+                    {
+                      "target": "this.http.put",
+                      "kind": "METHOD",
+                      "startLine": 14,
+                      "endLine": 14,
+                      "startColumn": 12,
+                      "endColumn": 53,
+                      "resolved": false
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/invoice.service:InvoiceService.http",
+                      "access": "READ",
+                      "startLine": 14,
+                      "endLine": 14,
+                      "startColumn": 12,
+                      "endColumn": 20,
+                      "resolved": true
+                    }
+                  ]
+                }
+              ],
+              "fields": [
+                {
+                  "name": "http",
+                  "qualifiedName": "src/app/orders/invoice.service:InvoiceService.http",
+                  "startLine": 6,
+                  "endLine": 6,
+                  "startColumn": 3,
+                  "endColumn": 36,
+                  "modifiers": [
+                    "PRIVATE"
+                  ]
+                },
+                {
+                  "name": "client",
+                  "type": {
+                    "name": "HttpClient",
+                    "references": [
+                      "HttpClient"
+                    ]
+                  },
+                  "qualifiedName": "src/app/orders/invoice.service:InvoiceService.client",
+                  "startLine": 7,
+                  "endLine": 7,
+                  "startColumn": 3,
+                  "endColumn": 50,
+                  "modifiers": [
+                    "PRIVATE"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/orders/order-list.component.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 745,
+          "checksum": "65263b256c6b1fa2fe12518106f31c146f5981317a3a005ee94e12078b9f22cf",
+          "lineCount": 23,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 58
+            },
+            {
+              "name": "./order.service",
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 1,
+              "endColumn": 47
+            },
+            {
+              "name": "./invoice.service",
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 1,
+              "endColumn": 51
+            },
+            {
+              "name": "../shared/highlight.directive",
+              "startLine": 4,
+              "endLine": 4,
+              "startColumn": 1,
+              "endColumn": 67
+            },
+            {
+              "name": "./order",
+              "startLine": 5,
+              "endLine": 5,
+              "startColumn": 1,
+              "endColumn": 32
+            }
+          ],
+          "classes": [
+            {
+              "name": "OrderListComponent",
+              "qualifiedName": "src/app/orders/order-list.component:OrderListComponent",
+              "startLine": 7,
+              "endLine": 23,
+              "startColumn": 1,
+              "endColumn": 1,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "interfaces": [
+                {
+                  "name": "OnInit",
+                  "references": [
+                    "OnInit"
+                  ]
+                }
+              ],
+              "annotations": [
+                {
+                  "name": "Component",
+                  "startLine": 7,
+                  "endLine": 13,
+                  "startColumn": 1,
+                  "endColumn": 2,
+                  "arguments": {
+                    "value": {
+                      "selector": "app-order-list",
+                      "standalone": true,
+                      "imports": [
+                        "HighlightDirective"
+                      ],
+                      "templateUrl": "./order-list.component.html",
+                      "styleUrls": [
+                        "./order-list.component.css"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "methods": [
+                {
+                  "name": "constructor",
+                  "qualifiedName": "src/app/orders/order-list.component:OrderListComponent.constructor",
+                  "startLine": 18,
+                  "endLine": 18,
+                  "startColumn": 3,
+                  "endColumn": 61,
+                  "kind": "CONSTRUCTOR",
+                  "parameters": [
+                    {
+                      "name": "orderService",
+                      "type": {
+                        "name": "OrderService",
+                        "references": [
+                          "src/app/orders/order.service:OrderService"
+                        ]
+                      },
+                      "qualifiedName": "src/app/orders/order-list.component:OrderListComponent.constructor.orderService",
+                      "startLine": 18,
+                      "endLine": 18,
+                      "startColumn": 15,
+                      "endColumn": 57
+                    }
+                  ]
+                },
+                {
+                  "name": "ngOnInit",
+                  "qualifiedName": "src/app/orders/order-list.component:OrderListComponent.ngOnInit",
+                  "startLine": 20,
+                  "endLine": 22,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "returnType": {
+                    "name": "void"
+                  },
+                  "calls": [
+                    {
+                      "target": "this.orderService.list().subscribe",
+                      "kind": "METHOD",
+                      "startLine": 21,
+                      "endLine": 21,
+                      "startColumn": 5,
+                      "endColumn": 72,
+                      "resolved": false
+                    },
+                    {
+                      "target": "src/app/orders/order.service:OrderService.list",
+                      "kind": "METHOD",
+                      "startLine": 21,
+                      "endLine": 21,
+                      "startColumn": 5,
+                      "endColumn": 28,
+                      "resolved": true
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/order-list.component:OrderListComponent.orderService",
+                      "access": "READ",
+                      "startLine": 21,
+                      "endLine": 21,
+                      "startColumn": 5,
+                      "endColumn": 21,
+                      "resolved": true
+                    },
+                    {
+                      "target": "src/app/orders/order-list.component:OrderListComponent.orders",
+                      "access": "WRITE",
+                      "startLine": 21,
+                      "endLine": 21,
+                      "startColumn": 51,
+                      "endColumn": 61,
+                      "resolved": true
+                    }
+                  ]
+                }
+              ],
+              "fields": [
+                {
+                  "name": "orders",
+                  "type": {
+                    "name": "Order[]",
+                    "references": [
+                      "src/app/orders/order:Order"
+                    ]
+                  },
+                  "qualifiedName": "src/app/orders/order-list.component:OrderListComponent.orders",
+                  "startLine": 15,
+                  "endLine": 15,
+                  "startColumn": 3,
+                  "endColumn": 23
+                },
+                {
+                  "name": "invoices",
+                  "qualifiedName": "src/app/orders/order-list.component:OrderListComponent.invoices",
+                  "startLine": 16,
+                  "endLine": 16,
+                  "startColumn": 3,
+                  "endColumn": 53,
+                  "modifiers": [
+                    "PRIVATE",
+                    "READONLY"
+                  ]
+                },
+                {
+                  "name": "orderService",
+                  "type": {
+                    "name": "OrderService",
+                    "references": [
+                      "src/app/orders/order.service:OrderService"
+                    ]
+                  },
+                  "qualifiedName": "src/app/orders/order-list.component:OrderListComponent.orderService",
+                  "startLine": 18,
+                  "endLine": 18,
+                  "startColumn": 15,
+                  "endColumn": 57,
+                  "modifiers": [
+                    "PRIVATE",
+                    "READONLY"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/orders/order.service.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 843,
+          "checksum": "75b766bf194059c34faa78bedb87d39494ff26186bc0ada73caba936d3d6b82c",
+          "lineCount": 28,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 43
+            },
+            {
+              "name": "@angular/common/http",
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 1,
+              "endColumn": 62
+            },
+            {
+              "name": "rxjs",
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 1,
+              "endColumn": 39
+            },
+            {
+              "name": "./order",
+              "startLine": 4,
+              "endLine": 4,
+              "startColumn": 1,
+              "endColumn": 32
+            }
+          ],
+          "classes": [
+            {
+              "name": "OrderService",
+              "qualifiedName": "src/app/orders/order.service:OrderService",
+              "startLine": 6,
+              "endLine": 28,
+              "startColumn": 1,
+              "endColumn": 1,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "Injectable",
+                  "startLine": 6,
+                  "endLine": 6,
+                  "startColumn": 1,
+                  "endColumn": 35,
+                  "arguments": {
+                    "value": {
+                      "providedIn": "root"
+                    }
+                  }
+                }
+              ],
+              "methods": [
+                {
+                  "name": "constructor",
+                  "qualifiedName": "src/app/orders/order.service:OrderService.constructor",
+                  "startLine": 10,
+                  "endLine": 10,
+                  "startColumn": 3,
+                  "endColumn": 51,
+                  "kind": "CONSTRUCTOR",
+                  "parameters": [
+                    {
+                      "name": "http",
+                      "type": {
+                        "name": "HttpClient",
+                        "references": [
+                          "HttpClient"
+                        ]
+                      },
+                      "qualifiedName": "src/app/orders/order.service:OrderService.constructor.http",
+                      "startLine": 10,
+                      "endLine": 10,
+                      "startColumn": 15,
+                      "endColumn": 47
+                    }
+                  ]
+                },
+                {
+                  "name": "list",
+                  "qualifiedName": "src/app/orders/order.service:OrderService.list",
+                  "startLine": 12,
+                  "endLine": 14,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "returnType": {
+                    "name": "Observable<Order[]>",
+                    "references": [
+                      "Observable",
+                      "src/app/orders/order:Order"
+                    ]
+                  },
+                  "calls": [
+                    {
+                      "target": "this.http.get().pipe",
+                      "kind": "METHOD",
+                      "startLine": 13,
+                      "endLine": 13,
+                      "startColumn": 12,
+                      "endColumn": 76,
+                      "resolved": false
+                    },
+                    {
+                      "target": "this.http.get",
+                      "kind": "METHOD",
+                      "startLine": 13,
+                      "endLine": 13,
+                      "startColumn": 12,
+                      "endColumn": 48,
+                      "resolved": false
+                    },
+                    {
+                      "target": "map",
+                      "kind": "METHOD",
+                      "startLine": 13,
+                      "endLine": 13,
+                      "startColumn": 55,
+                      "endColumn": 75,
+                      "resolved": false
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/order.service:OrderService.http",
+                      "access": "READ",
+                      "startLine": 13,
+                      "endLine": 13,
+                      "startColumn": 12,
+                      "endColumn": 20,
+                      "resolved": true
+                    }
+                  ],
+                  "typeUses": [
+                    {
+                      "target": "src/app/orders/order:Order",
+                      "kind": "TYPE_ARGUMENT",
+                      "startLine": 13,
+                      "endLine": 13,
+                      "startColumn": 26,
+                      "endColumn": 30,
+                      "resolved": true
+                    }
+                  ]
+                },
+                {
+                  "name": "find",
+                  "qualifiedName": "src/app/orders/order.service:OrderService.find",
+                  "startLine": 16,
+                  "endLine": 19,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "returnType": {
+                    "name": "Observable<Order>",
+                    "references": [
+                      "Observable",
+                      "src/app/orders/order:Order"
+                    ]
+                  },
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type": {
+                        "name": "string"
+                      },
+                      "qualifiedName": "src/app/orders/order.service:OrderService.find.id",
+                      "startLine": 16,
+                      "endLine": 16,
+                      "startColumn": 8,
+                      "endColumn": 17
+                    }
+                  ],
+                  "calls": [
+                    {
+                      "target": "this.cache.get",
+                      "kind": "METHOD",
+                      "startLine": 17,
+                      "endLine": 17,
+                      "startColumn": 20,
+                      "endColumn": 37,
+                      "resolved": false
+                    },
+                    {
+                      "target": "this.http.get",
+                      "kind": "METHOD",
+                      "startLine": 18,
+                      "endLine": 18,
+                      "startColumn": 12,
+                      "endColumn": 82,
+                      "resolved": false
+                    },
+                    {
+                      "target": "HttpParams",
+                      "kind": "CONSTRUCTOR",
+                      "startLine": 18,
+                      "endLine": 18,
+                      "startColumn": 64,
+                      "endColumn": 79,
+                      "resolved": false
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/order.service:OrderService.cache",
+                      "access": "READ",
+                      "startLine": 17,
+                      "endLine": 17,
+                      "startColumn": 20,
+                      "endColumn": 29,
+                      "resolved": true
+                    },
+                    {
+                      "target": "src/app/orders/order.service:OrderService.http",
+                      "access": "READ",
+                      "startLine": 18,
+                      "endLine": 18,
+                      "startColumn": 12,
+                      "endColumn": 20,
+                      "resolved": true
+                    }
+                  ],
+                  "typeUses": [
+                    {
+                      "target": "src/app/orders/order:Order",
+                      "kind": "TYPE_ARGUMENT",
+                      "startLine": 18,
+                      "endLine": 18,
+                      "startColumn": 26,
+                      "endColumn": 30,
+                      "resolved": true
+                    }
+                  ]
+                },
+                {
+                  "name": "create",
+                  "qualifiedName": "src/app/orders/order.service:OrderService.create",
+                  "startLine": 21,
+                  "endLine": 23,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "returnType": {
+                    "name": "Observable<Order>",
+                    "references": [
+                      "Observable",
+                      "src/app/orders/order:Order"
+                    ]
+                  },
+                  "parameters": [
+                    {
+                      "name": "order",
+                      "type": {
+                        "name": "Order",
+                        "references": [
+                          "src/app/orders/order:Order"
+                        ]
+                      },
+                      "qualifiedName": "src/app/orders/order.service:OrderService.create.order",
+                      "startLine": 21,
+                      "endLine": 21,
+                      "startColumn": 10,
+                      "endColumn": 21
+                    }
+                  ],
+                  "calls": [
+                    {
+                      "target": "this.http.post",
+                      "kind": "METHOD",
+                      "startLine": 22,
+                      "endLine": 22,
+                      "startColumn": 12,
+                      "endColumn": 54,
+                      "resolved": false
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/order.service:OrderService.http",
+                      "access": "READ",
+                      "startLine": 22,
+                      "endLine": 22,
+                      "startColumn": 12,
+                      "endColumn": 20,
+                      "resolved": true
+                    }
+                  ],
+                  "typeUses": [
+                    {
+                      "target": "src/app/orders/order:Order",
+                      "kind": "TYPE_ARGUMENT",
+                      "startLine": 22,
+                      "endLine": 22,
+                      "startColumn": 27,
+                      "endColumn": 31,
+                      "resolved": true
+                    }
+                  ]
+                },
+                {
+                  "name": "remove",
+                  "qualifiedName": "src/app/orders/order.service:OrderService.remove",
+                  "startLine": 25,
+                  "endLine": 27,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "returnType": {
+                    "name": "Observable<void>",
+                    "references": [
+                      "Observable"
+                    ]
+                  },
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type": {
+                        "name": "string"
+                      },
+                      "qualifiedName": "src/app/orders/order.service:OrderService.remove.id",
+                      "startLine": 25,
+                      "endLine": 25,
+                      "startColumn": 10,
+                      "endColumn": 19
+                    }
+                  ],
+                  "calls": [
+                    {
+                      "target": "this.http.delete",
+                      "kind": "METHOD",
+                      "startLine": 26,
+                      "endLine": 26,
+                      "startColumn": 12,
+                      "endColumn": 54,
+                      "resolved": false
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/order.service:OrderService.http",
+                      "access": "READ",
+                      "startLine": 26,
+                      "endLine": 26,
+                      "startColumn": 12,
+                      "endColumn": 20,
+                      "resolved": true
+                    }
+                  ]
+                }
+              ],
+              "fields": [
+                {
+                  "name": "cache",
+                  "qualifiedName": "src/app/orders/order.service:OrderService.cache",
+                  "startLine": 8,
+                  "endLine": 8,
+                  "startColumn": 3,
+                  "endColumn": 52,
+                  "modifiers": [
+                    "PRIVATE",
+                    "READONLY"
+                  ]
+                },
+                {
+                  "name": "http",
+                  "type": {
+                    "name": "HttpClient",
+                    "references": [
+                      "HttpClient"
+                    ]
+                  },
+                  "qualifiedName": "src/app/orders/order.service:OrderService.http",
+                  "startLine": 10,
+                  "endLine": 10,
+                  "startColumn": 15,
+                  "endColumn": 47,
+                  "modifiers": [
+                    "PRIVATE",
+                    "READONLY"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/orders/order.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 54,
+          "checksum": "35d2037d82fe6ecd55a08ad2c11cab396008bc7dfa03adf99b8e19900c15ef9f",
+          "lineCount": 1,
+          "classes": [
+            {
+              "name": "Order",
+              "qualifiedName": "src/app/orders/order:Order",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 53,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "INTERFACE",
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "name": "string"
+                  },
+                  "qualifiedName": "src/app/orders/order:Order.id",
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 26,
+                  "endColumn": 36
+                },
+                {
+                  "name": "total",
+                  "type": {
+                    "name": "number"
+                  },
+                  "qualifiedName": "src/app/orders/order:Order.total",
+                  "startLine": 1,
+                  "endLine": 1,
+                  "startColumn": 38,
+                  "endColumn": 51
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/orders/totals.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 131,
+          "checksum": "687f41bdd7349befd18a2964787548d13d7ff5f95be311861268708bbc6f4b84",
+          "lineCount": 4,
+          "classes": [
+            {
+              "name": "Totals",
+              "qualifiedName": "src/app/orders/totals:Totals",
+              "startLine": 1,
+              "endLine": 4,
+              "startColumn": 1,
+              "endColumn": 1,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "methods": [
+                {
+                  "name": "get",
+                  "qualifiedName": "src/app/orders/totals:Totals.get",
+                  "startLine": 3,
+                  "endLine": 3,
+                  "startColumn": 3,
+                  "endColumn": 51,
+                  "kind": "METHOD",
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type": {
+                        "name": "string"
+                      },
+                      "qualifiedName": "src/app/orders/totals:Totals.get.key",
+                      "startLine": 3,
+                      "endLine": 3,
+                      "startColumn": 7,
+                      "endColumn": 17
+                    }
+                  ],
+                  "calls": [
+                    {
+                      "target": "this.values.get",
+                      "kind": "METHOD",
+                      "startLine": 3,
+                      "endLine": 3,
+                      "startColumn": 29,
+                      "endColumn": 48,
+                      "resolved": false
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/orders/totals:Totals.values",
+                      "access": "READ",
+                      "startLine": 3,
+                      "endLine": 3,
+                      "startColumn": 29,
+                      "endColumn": 39,
+                      "resolved": true
+                    }
+                  ]
+                }
+              ],
+              "fields": [
+                {
+                  "name": "values",
+                  "qualifiedName": "src/app/orders/totals:Totals.values",
+                  "startLine": 2,
+                  "endLine": 2,
+                  "startColumn": 3,
+                  "endColumn": 54,
+                  "modifiers": [
+                    "PRIVATE",
+                    "READONLY"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/shared/highlight.directive.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 350,
+          "checksum": "11eeb79b497075f06825bc4472bc48bcc31c12736af3adc15d1f8098d9576fc9",
+          "lineCount": 12,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 75
+            }
+          ],
+          "classes": [
+            {
+              "name": "HighlightDirective",
+              "qualifiedName": "src/app/shared/highlight.directive:HighlightDirective",
+              "startLine": 3,
+              "endLine": 12,
+              "startColumn": 1,
+              "endColumn": 1,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "Directive",
+                  "startLine": 3,
+                  "endLine": 3,
+                  "startColumn": 1,
+                  "endColumn": 42,
+                  "arguments": {
+                    "value": {
+                      "selector": "[appHighlight]"
+                    }
+                  }
+                }
+              ],
+              "methods": [
+                {
+                  "name": "constructor",
+                  "qualifiedName": "src/app/shared/highlight.directive:HighlightDirective.constructor",
+                  "startLine": 7,
+                  "endLine": 7,
+                  "startColumn": 3,
+                  "endColumn": 40,
+                  "kind": "CONSTRUCTOR",
+                  "parameters": [
+                    {
+                      "name": "el",
+                      "type": {
+                        "name": "ElementRef",
+                        "references": [
+                          "ElementRef"
+                        ]
+                      },
+                      "qualifiedName": "src/app/shared/highlight.directive:HighlightDirective.constructor.el",
+                      "startLine": 7,
+                      "endLine": 7,
+                      "startColumn": 15,
+                      "endColumn": 36
+                    }
+                  ]
+                },
+                {
+                  "name": "onEnter",
+                  "qualifiedName": "src/app/shared/highlight.directive:HighlightDirective.onEnter",
+                  "startLine": 9,
+                  "endLine": 11,
+                  "startColumn": 3,
+                  "endColumn": 3,
+                  "kind": "METHOD",
+                  "annotations": [
+                    {
+                      "name": "HostListener",
+                      "startLine": 9,
+                      "endLine": 9,
+                      "startColumn": 3,
+                      "endColumn": 29,
+                      "arguments": {
+                        "value": "mouseenter"
+                      }
+                    }
+                  ],
+                  "fieldAccesses": [
+                    {
+                      "target": "src/app/shared/highlight.directive:HighlightDirective.el",
+                      "access": "READ",
+                      "startLine": 10,
+                      "endLine": 10,
+                      "startColumn": 5,
+                      "endColumn": 11,
+                      "resolved": true
+                    },
+                    {
+                      "target": "src/app/shared/highlight.directive:HighlightDirective.appHighlight",
+                      "access": "READ",
+                      "startLine": 10,
+                      "endLine": 10,
+                      "startColumn": 51,
+                      "endColumn": 67,
+                      "resolved": true
+                    }
+                  ]
+                }
+              ],
+              "fields": [
+                {
+                  "name": "appHighlight",
+                  "qualifiedName": "src/app/shared/highlight.directive:HighlightDirective.appHighlight",
+                  "startLine": 5,
+                  "endLine": 5,
+                  "startColumn": 3,
+                  "endColumn": 35,
+                  "annotations": [
+                    {
+                      "name": "Input",
+                      "startLine": 5,
+                      "endLine": 5,
+                      "startColumn": 3,
+                      "endColumn": 10
+                    }
+                  ]
+                },
+                {
+                  "name": "el",
+                  "type": {
+                    "name": "ElementRef",
+                    "references": [
+                      "ElementRef"
+                    ]
+                  },
+                  "qualifiedName": "src/app/shared/highlight.directive:HighlightDirective.el",
+                  "startLine": 7,
+                  "endLine": 7,
+                  "startColumn": 15,
+                  "endColumn": 36,
+                  "modifiers": [
+                    "PRIVATE"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "src/app/shared/shared.module.ts",
+          "language": "TYPESCRIPT",
+          "sourceSet": "MAIN",
+          "size": 274,
+          "checksum": "03e07d0d1dc1be38ddf9cc19f7c582cdb149e9a45fc793b781c35985354b07c4",
+          "lineCount": 9,
+          "imports": [
+            {
+              "name": "@angular/core",
+              "startLine": 1,
+              "endLine": 1,
+              "startColumn": 1,
+              "endColumn": 41
+            },
+            {
+              "name": "@angular/common",
+              "startLine": 2,
+              "endLine": 2,
+              "startColumn": 1,
+              "endColumn": 47
+            },
+            {
+              "name": "./highlight.directive",
+              "startLine": 3,
+              "endLine": 3,
+              "startColumn": 1,
+              "endColumn": 59
+            }
+          ],
+          "classes": [
+            {
+              "name": "SharedModule",
+              "qualifiedName": "src/app/shared/shared.module:SharedModule",
+              "startLine": 5,
+              "endLine": 9,
+              "startColumn": 1,
+              "endColumn": 28,
+              "modifiers": [
+                "EXPORT"
+              ],
+              "kind": "CLASS",
+              "annotations": [
+                {
+                  "name": "NgModule",
+                  "startLine": 5,
+                  "endLine": 8,
+                  "startColumn": 1,
+                  "endColumn": 2,
+                  "arguments": {
+                    "value": {
+                      "imports": [
+                        "CommonModule",
+                        "HighlightDirective"
+                      ],
+                      "exports": [
+                        "HighlightDirective"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "@angular/core",
+          "scope": "prod",
+          "version": "^20.0.0"
+        },
+        {
+          "name": "@angular/common",
+          "scope": "prod",
+          "version": "^20.0.0"
+        },
+        {
+          "name": "rxjs",
+          "scope": "prod",
+          "version": "^7.8.0"
+        }
+      ]
+    }
+  ]
+}
