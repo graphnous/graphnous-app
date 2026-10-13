@@ -1,8 +1,8 @@
 # Impact analysis
 
 What it takes for Graphnous to answer "if I change this, what else do I have
-to change?". Written on 2026-10-12. Step 1 of the plan is built; steps 2 and 3
-are not.
+to change?". Written on 2026-10-12, updated on 2026-10-14. Steps 1 and 2 of
+the plan are built; step 3 is not.
 
 ## The goal
 
@@ -25,16 +25,16 @@ dependencies, plus what enhancers add.
 |---|---|---|---|
 | React component: where it is used | every `<OrderList />` site, with file and line | Yes, by the TypeScript scanner (JSX is recorded as a call) | No |
 | React component: which props each use passes | the attributes at each JSX site | No | No |
-| Java entity: where it is instantiated | every `new Order(...)` site | Not found, see below | No |
-| Java method: who calls it | every call site | Not found, see below | No |
+| Java entity: where it is instantiated | every `new Order(...)` site | Yes, by the Java scanner from 0.3.0 | Yes |
+| Java method: who calls it | every call site | Yes, by the Java scanner from 0.3.0 | Yes |
 
 - **TypeScript.** Each function and method in a scan result lists its calls,
   constructor calls, field reads and writes, and type uses. Each has the
   target's qualified name, a line number, and whether the scanner resolved it.
   The server drops all of this when it builds the graph.
-- **Java.** The Java scanner checkout (`graphnous-java-scanner`) has no code
-  that records calls or `new` expressions. Whether the published `0.2.0` image
-  the server runs matches that checkout has not been confirmed.
+- **Java.** The Java scanner records calls, constructor calls, field accesses
+  and type uses from `0.3.0`, the image the server runs. `0.2.0` and earlier
+  did not.
 - **Arguments and props.** No scanner records them and the scan-result schema
   has no place for them. This is the same gap that blocks the HTTP links
   between projects.
@@ -65,11 +65,28 @@ Then build the Impact Analysis page, which is empty today:
 Result: for a TypeScript or React project, "where is this component used" and
 "who calls this function", down to the file and line to edit.
 
-### Step 2: make the Java scanner record calls
+### Step 2: make the Java scanner record calls (built)
 
-In the Java scanner repository. Once it emits method calls and constructor
-calls, the Java entity and Java method cases work with no further server
-change, because step 1 already stores them.
+The Java scanner does so from `0.3.0`. Step 1 stored most of what it records
+as it was; three shapes that only Java has needed a change here, in
+`ScanResultGraph`, found by scanning this server with `0.3.0` on 2026-10-14:
+
+- **Record accessors.** A record has `id()` for its component `id` without
+  declaring it, so a call of it had no method to point at. The components of
+  a record are now fields of it (`kind` `RECORD_COMPONENT`), and such a call
+  is a `READS` of the component. An accessor the record declares itself is a
+  method, and is called.
+- **Constructors a class does not declare.** `new Order(id)` on a record
+  names `com.example.Order.Order(java.util.UUID)`; the class was looked up
+  after the last dot, which is in the parameters. They are now left off first.
+- **Enum constants.** They were not in the graph, so reading `Status.OPEN`
+  was dropped. They are now fields of their enum (`kind` `ENUM_CONSTANT`).
+
+On this server's own code that took the usages stored from 5,255 calls, 762
+instantiations and 4,481 reads to 5,255 calls, 1,296 instantiations and 7,974
+reads. What is still dropped, besides calls into libraries: uses of code the
+build generates, which the scanner resolves but does not scan, and `values()`
+of an enum, which no source declares.
 
 ### Step 3: record arguments and props
 
@@ -111,8 +128,13 @@ Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 - **Page.** Impact Analysis: choose a project and scan, search a class, method
   or function, and see its usages grouped by file.
 
-Not built from the outline: re-storing existing scans from their kept
-results.
+- **Storing existing scans again.** Enhancing a scan again can store the
+  results it kept again first (`{"restore": true}` on
+  `POST /api/v1/scans/{id}/enhancements`, "Store the results again first" in
+  the Enhance again dialog), as the server stores them now: with usages, for
+  a scan stored before they were. It runs as the scan's store step, replaces
+  the graph of the scan at once, and removes what every enhancer added, so
+  the enhancers chosen run on the new graph.
 
 ## What each step delivers
 
@@ -124,8 +146,10 @@ results.
 
 ## Caveats
 
-- **Existing scans need a rescan** to get usages. Only scans stored since
-  2026-10-12 kept their raw results, and those could be re-stored instead.
+- **Existing scans need storing again** to get usages: enhance them again
+  with "Store the results again first". Only scans stored since 2026-10-12
+  kept their results; older ones need a rescan. Java scans made with a
+  scanner before `0.3.0` kept results without usages, and need a rescan too.
 - **Graphs get bigger.** Calls are the most numerous relationship in a
   codebase. They should stay out of the default graph view and show only in
   impact analysis, or as a layer that is ticked on.

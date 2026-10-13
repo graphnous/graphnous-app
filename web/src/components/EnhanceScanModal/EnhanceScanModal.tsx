@@ -39,7 +39,10 @@ export type EnhanceScanModalProps = {
 /**
  * Choosing which enhancers to run again on a completed scan: those chosen
  * when it was created are ticked at first, or else those that ran on it. What a chosen enhancer added
- * before is replaced; what the others added stays.
+ * before is replaced; what the others added stays. The results the scan
+ * kept can be stored again first, for a scan stored before the server
+ * stored what it does now, such as usages; that removes what every
+ * enhancer added, so only the chosen ones add to the scan again.
  */
 export function EnhanceScanModal({ scanId, open, onClose, chosen: chosenBefore, previous, onStarted }: EnhanceScanModalProps) {
     const { enhancers, loading: enhancersLoading, error: enhancersError } = useListEnhancers(open);
@@ -47,6 +50,7 @@ export function EnhanceScanModal({ scanId, open, onClose, chosen: chosenBefore, 
     // The names ticked, once the choice was changed; the ones chosen for
     // the scan, or that ran on it, until then
     const [changed, setChanged] = useState<string[] | null>(null);
+    const [restore, setRestore] = useState(false);
 
     const { enhanceScan, loading, error, reset } = useEnhanceScan();
 
@@ -60,6 +64,7 @@ export function EnhanceScanModal({ scanId, open, onClose, chosen: chosenBefore, 
 
     const close = () => {
         setChanged(null);
+        setRestore(false);
         reset();
         onClose();
     };
@@ -70,7 +75,7 @@ export function EnhanceScanModal({ scanId, open, onClose, chosen: chosenBefore, 
     const start = async () => {
         try {
             // In the order they are installed, as they run
-            const scan = await enhanceScan(scanId, installed.filter((name) => chosen.includes(name)));
+            const scan = await enhanceScan(scanId, installed.filter((name) => chosen.includes(name)), restore);
 
             onStarted?.(scan);
             close();
@@ -90,7 +95,7 @@ export function EnhanceScanModal({ scanId, open, onClose, chosen: chosenBefore, 
                         Cancel
                     </Button>
 
-                    <Button variant="primary" onClick={start} disabled={loading || chosen.length === 0}>
+                    <Button variant="primary" onClick={start} disabled={loading || (chosen.length === 0 && !restore)}>
                         {loading ? "Starting..." : "Enhance"}
                     </Button>
                 </>
@@ -98,7 +103,11 @@ export function EnhanceScanModal({ scanId, open, onClose, chosen: chosenBefore, 
         >
             <Field
                 label="Enhancers"
-                description="What a chosen enhancer added to the scan before is replaced; what the others added stays."
+                description={
+                    restore
+                        ? "Only the chosen enhancers add to the scan again; what the others added before is removed."
+                        : "What a chosen enhancer added to the scan before is replaced; what the others added stays."
+                }
             >
                 <div className="flex flex-col gap-2">
                     {enhancers.map((enhancer) => (
@@ -121,6 +130,18 @@ export function EnhanceScanModal({ scanId, open, onClose, chosen: chosenBefore, 
                         </Text>
                     )}
                 </div>
+            </Field>
+
+            <Field
+                label="Results"
+                description="For a scan stored before the server stored what it does now, such as usages for impact analysis. Takes longer, and removes what every enhancer added before."
+            >
+                <Checkbox
+                    label="Store the results again first"
+                    checked={restore}
+                    disabled={loading}
+                    onChange={() => setRestore(!restore)}
+                />
             </Field>
 
             {enhancersError && (

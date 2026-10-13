@@ -10,6 +10,7 @@ import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultArchive;
+import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep.ScanStepType;
 import dev.graphnous.domain.scan.log.ScanLog.ScanLogLevel;
@@ -29,8 +30,13 @@ import java.util.stream.Collectors;
  * installed or updated since: runs the enhancers on the results the scan
  * kept, and replaces what they added to its graph before.
  * <p>
- * It runs in the background, as the step that enhances the results, which
- * runs anew; the scan itself stays completed.
+ * It can store the kept results again first, as the server stores them now:
+ * a scan stored by an earlier version then gets what the server has stored
+ * since, such as who uses what, without scanning the project again.
+ * <p>
+ * It runs in the background, as the step that enhances the results, after
+ * the step that stores them when they are stored again; the steps run
+ * anew, and the scan itself stays completed.
  */
 public class ScanEnhancementService {
 
@@ -40,6 +46,7 @@ public class ScanEnhancementService {
     private final AuthorizationService authorizationService;
 
     private final ScanResultArchive scanResultArchive;
+    private final ScanResultRepository scanResultRepository;
 
     private final EnhancerRegistry enhancerRegistry;
     private final EnhancerProvider enhancerProvider;
@@ -59,6 +66,7 @@ public class ScanEnhancementService {
         final ScanService scanService,
         final AuthorizationService authorizationService,
         final ScanResultArchive scanResultArchive,
+        final ScanResultRepository scanResultRepository,
         final EnhancerRegistry enhancerRegistry,
         final EnhancerProvider enhancerProvider,
         final EnhancementRepository enhancementRepository,
@@ -70,6 +78,7 @@ public class ScanEnhancementService {
         this.authorizationService = authorizationService;
 
         this.scanResultArchive = scanResultArchive;
+        this.scanResultRepository = scanResultRepository;
 
         this.enhancerRegistry = enhancerRegistry;
         this.enhancerProvider = enhancerProvider;
@@ -86,6 +95,9 @@ public class ScanEnhancementService {
      * @param enhancers the names of the enhancers to run; every installed
      *                  enhancer when null, none when empty, as when a scan
      *                  is created
+     * @param restore   whether to store the kept results again first, which
+     *                  removes what every enhancer added before, so only
+     *                  the enhancers that run now have added to the scan
      * @throws ValidationException when an enhancer of a name is not installed
      * @throws ConflictException   when the scan is not completed, kept no
      *                             results to enhance, or is being enhanced
@@ -93,7 +105,8 @@ public class ScanEnhancementService {
     public Scan enhance(
         final RequestContext context,
         final Scan.ScanId scanId,
-        final Set<String> enhancers
+        final Set<String> enhancers,
+        final boolean restore
     ) {
         // Enhancing writes to the scan, as creating it does
         authorizationService.authorize(context, Permission.SCAN_CREATE);
@@ -127,20 +140,25 @@ public class ScanEnhancementService {
         }
 
         log.info(
-            "Enhancing scan again organizationId={} scanId={} enhancers={}",
+            "Enhancing scan again organizationId={} scanId={} enhancers={} restore={}",
             context.organization().id(),
             scanId.id(),
-            enhancers == null ? "all" : enhancers
+            enhancers == null ? "all" : enhancers,
+            restore
         );
 
+        // Enhancing waits for the results to be stored again, so its step
+        // runs anew once they are
+        final var first = restore ? ScanStepType.STORE : ScanStepType.ENHANCE_RESULTS;
+
         try {
-            scanSteps.restart(scanId, ScanStepType.ENHANCE_RESULTS);
+            scanSteps.restart(scanId, first);
             final var chosen = enhancers == null ? null : Set.copyOf(enhancers);
 
-            scanExecutor.execute(() -> run(scanId, chosen));
+            scanExecutor.execute(() -> run(scanId, chosen, restore));
         } catch (final RuntimeException e) {
             // Not started, so nothing else ends it
-            failQuietly(scanId, message(e));
+            failQuietly(scanId, first, message(e));
             enhancing.remove(scanId);
 
             throw e;
@@ -152,13 +170,29 @@ public class ScanEnhancementService {
     /**
      * @param enhancers the names of the enhancers to run; null for every
      *                  installed one
+     * @param restore   whether to store the results again first
      */
     private void run(
         final Scan.ScanId scanId,
-        final Set<String> enhancers
+        final Set<String> enhancers,
+        final boolean restore
     ) {
+        var step = restore ? ScanStepType.STORE : ScanStepType.ENHANCE_RESULTS;
+
         try {
             final var results = scanResultArchive.load(scanId);
+
+            if (restore) {
+                // Replaces the graph of the scan at once, so a failure
+                // leaves it, and what the enhancers added to it, as it was
+                scanResultRepository.save(scanId, results);
+                logQuietly(scanId, ScanLogLevel.INFO, "Stored the results again");
+
+                scanSteps.complete(scanId, ScanStepType.STORE);
+
+                step = ScanStepType.ENHANCE_RESULTS;
+                scanSteps.restart(scanId, step);
+            }
 
             final var enhancements = results.stream()
                 .flatMap(result -> enhancerProvider
@@ -178,10 +212,14 @@ public class ScanEnhancementService {
 
             scanSteps.complete(scanId, ScanStepType.ENHANCE_RESULTS);
         } catch (final RuntimeException e) {
-            log.warn("Enhancing scan again failed scanId={}", scanId.id(), e);
+            log.warn("Enhancing scan again failed scanId={} step={}", scanId.id(), step, e);
 
-            logQuietly(scanId, ScanLogLevel.WARN, "Enhancing again failed: " + message(e));
-            failQuietly(scanId, message(e));
+            logQuietly(
+                scanId,
+                ScanLogLevel.WARN,
+                (step == ScanStepType.STORE ? "Storing the results again failed: " : "Enhancing again failed: ") + message(e)
+            );
+            failQuietly(scanId, step, message(e));
         } finally {
             enhancing.remove(scanId);
         }
@@ -189,10 +227,11 @@ public class ScanEnhancementService {
 
     private void failQuietly(
         final Scan.ScanId scanId,
+        final ScanStepType step,
         final String error
     ) {
         try {
-            scanSteps.fail(scanId, ScanStepType.ENHANCE_RESULTS, error);
+            scanSteps.fail(scanId, step, error);
         } catch (final RuntimeException ignored) {
             // The failure is logged either way
         }

@@ -93,17 +93,23 @@ public class ScanController {
      * @param enhancers the names of the enhancers to run, as
      *                  GET /enhancers lists them; all of them when
      *                  missing, none when empty, as when creating a scan
+     * @param restore   whether to store the results the scan kept again
+     *                  first, as this server stores them now; not when
+     *                  missing
      */
     public record EnhanceScanRequest(
-        List<String> enhancers
+        List<String> enhancers,
+        Boolean restore
     ) {
     }
 
     /**
      * Enhances a completed scan again, such as with an enhancer installed
-     * or updated since: what the enhancers added before is replaced.
+     * or updated since: what the enhancers added before is replaced. With
+     * restore, the results the scan kept are stored again first, as this
+     * server stores them now, which removes what every enhancer added.
      * Enhancing continues in the background; the location is where to
-     * follow its step. 409 for a scan that is not completed, is already
+     * follow its steps. 409 for a scan that is not completed, is already
      * being enhanced, or kept no results to enhance.
      */
     /**
@@ -155,7 +161,8 @@ public class ScanController {
         final var scan = this.scanEnhancementService.enhance(
             this.contextProvider.get(),
             new Scan.ScanId(id),
-            enhancers
+            enhancers,
+            request != null && Boolean.TRUE.equals(request.restore())
         );
 
         final var location = fromCurrentContextPath()

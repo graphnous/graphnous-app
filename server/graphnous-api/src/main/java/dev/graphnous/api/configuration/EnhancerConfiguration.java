@@ -8,6 +8,7 @@ import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultArchive;
+import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.enhancer.Enhancer;
 import dev.graphnous.enhancer.EnhancerProvider;
 import dev.graphnous.enhancer.EnhancerRegistry;
@@ -61,6 +62,7 @@ public class EnhancerConfiguration {
         final ScanService scanService,
         final AuthorizationService authorizationService,
         final ScanResultArchive scanResultArchive,
+        final ScanResultRepository scanResultRepository,
         final EnhancerRegistry enhancerRegistry,
         final EnhancerProvider enhancerProvider,
         final EnhancementRepository enhancementRepository,
@@ -72,6 +74,7 @@ public class EnhancerConfiguration {
             scanService,
             authorizationService,
             scanResultArchive,
+            scanResultRepository,
             enhancerRegistry,
             enhancerProvider,
             enhancementRepository,
