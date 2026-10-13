@@ -112,11 +112,16 @@ language:
 graphnous:
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.1.0
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.0
       command: [java, -jar, /opt/graphnous/java-scanner.jar,
                 --path, "{repository}", --target, "{target}",
-                --java-version, "{languageVersion}", --output, "{output}"]
+                --java-version, "{languageVersion}", --output, "{output}",
+                --download-dependencies]
       output: /output/scan-result.json
+      mounts:
+        - type: volume
+          source: graphnous-maven
+          target: /maven-repository
 ```
 
 For each target the server starts a container of the image with the
@@ -128,6 +133,62 @@ and `{output}` the output, which the server reads the result from once
 the container has stopped. A target of a language without a scanner fails
 to scan. To try another version, change the image's tag; to try a local
 build, the image only has to exist on the Docker daemon.
+
+A scanner may also have `mounts`, `environment` and `files`, which only its
+own containers get:
+
+| Key | |
+|---|---|
+| `mounts[].type` | `volume`: the named Docker volume `source`, created on first use. `bind`: the directory or file `source` on the Docker host. |
+| `mounts[].source` | The volume name, or the absolute path on the Docker host. |
+| `mounts[].target` | Where the container sees it. |
+| `mounts[].read-only` | Whether the scanner may only read it; default `false`. |
+| `environment` | The environment variables of the container, by name. |
+| `files[].source` | A file this server reads for each scan, e.g. one mounted into its container. |
+| `files[].target` | Where the container gets a copy of it, readable by any user; an absolute path in a directory. |
+
+Unlike a mount, a file is copied into each container, so it does not have
+to exist on the Docker host and is gone with the container. The server
+gets the files through the `ScannerFiles` interface, which reads them as
+configured here; a server that keeps them elsewhere, such as in a secret
+vault per organization, provides its own implementation.
+
+### Libraries of Java projects
+
+The Java scanner resolves calls into the libraries of a project from their
+jars. With `--download-dependencies`, it downloads them from Maven Central
+into the Maven repository at `/maven-repository`, which the
+`graphnous-maven` volume keeps for the next scans. Scanner containers
+therefore need outbound HTTPS to `repo.maven.apache.org`.
+
+For private repositories, such as a company Nexus or Artifactory, give the
+Java scanner a Maven `settings.xml` at `/maven-settings/settings.xml`: it
+downloads from its mirrors and the repositories of its active profiles,
+with the credentials of its servers. Keep the file next to the server, e.g.
+mounted into its container, and let the server copy it into the scanner
+containers:
+
+```yaml
+graphnous:
+  scanners:
+    JAVA:
+      # ...
+      files:
+        - source: /etc/graphnous/maven-settings.xml
+          target: /maven-settings/settings.xml
+```
+
+The settings can hold the credentials, or refer to them as `${env.NAME}`,
+passed as `environment` of the Java scanner.
+
+The libraries the scanner downloads with the settings are kept in the
+`graphnous-maven` volume, which every scan uses: a server scanning for
+several organizations with different private repositories should give each
+its own volume, so no scan resolves against the private libraries of
+another.
+
+See the [Java scanner's README](https://github.com/graphnous/Graphnous-java-scanner#libraries)
+for what it reads from the settings.
 
 ## Security
 

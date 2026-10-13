@@ -1,5 +1,6 @@
 package dev.graphnous.application.project.scanner;
 
+import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.scanner.ScanReport;
 import dev.graphnous.scanner.plan.ScanPlan;
@@ -19,7 +20,10 @@ public interface RepositoryScanner {
     /**
      * Scans every target of the plan; see {@link ScanReport} for the
      * results and the targets that failed.
+     *
+     * @param organization the organization the scan is for, which decides
+     *                     the files its scanners get, see {@link ScannerFiles}
      */
-    ScanReport scan(Scan.ScanId scanId, Path path, ScanPlan plan, ScanLogger logger);
+    ScanReport scan(Scan.ScanId scanId, OrganizationId organization, Path path, ScanPlan plan, ScanLogger logger);
 
 }

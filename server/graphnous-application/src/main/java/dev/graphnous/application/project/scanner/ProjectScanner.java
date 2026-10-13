@@ -154,7 +154,7 @@ public class ProjectScanner {
             this.scanSteps.complete(scanId, step);
 
             step = start(scanId, ScanStepType.SCAN);
-            final var report = this.repositoryScanner.scan(scanId, path, plan, logger);
+            final var report = this.repositoryScanner.scan(scanId, context.organization().id(), path, plan, logger);
 
             final var total = report.results().size() + report.failures().size();
 

@@ -99,9 +99,11 @@ class ProjectScannerTest {
 
     private final InMemoryScanStepRepository steps = new InMemoryScanStepRepository();
 
+    private static final OrganizationId ORGANIZATION = new OrganizationId(UUID.randomUUID());
+
     private final RequestContext context = new RequestContext(
         new UserContext(UUID.randomUUID()),
-        new OrganizationContext(new OrganizationId(UUID.randomUUID()))
+        new OrganizationContext(ORGANIZATION)
     );
 
     private final Project project = new Project(
@@ -134,7 +136,7 @@ class ProjectScannerTest {
     @Test
     void completesEveryStepOfASuccessfulScan() {
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), eq(Path.of("/checkouts/scan")), eq(plan), any()))
+        when(repositoryScanner.scan(eq(scan.id()), eq(ORGANIZATION), eq(Path.of("/checkouts/scan")), eq(plan), any()))
             .thenReturn(new ScanReport(List.of(), List.of()));
 
         start();
@@ -172,7 +174,7 @@ class ProjectScannerTest {
         final var result = scanResult();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any()))
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any()))
             .thenReturn(new ScanReport(List.of(result), List.of()));
 
         start();
@@ -220,7 +222,7 @@ class ProjectScannerTest {
         final var result = scanResult();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(
             List.of(),
             List.of(new ScanFailure(result.getTarget(), new IllegalStateException("Scanner failed with exit code 1")))
         ));
@@ -240,7 +242,7 @@ class ProjectScannerTest {
         final var result = scanResult();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(
             List.of(result),
             List.of(new ScanFailure(new ScanTarget(), new IllegalStateException("Scanner failed")))
         ));
@@ -256,7 +258,7 @@ class ProjectScannerTest {
     @Test
     void failsTheStoreStepWhenStoringFails() {
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(), List.of()));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(), List.of()));
         doThrow(new IllegalStateException("Neo4j unavailable")).when(scanResultRepository).save(any(), any());
 
         start();
@@ -271,7 +273,7 @@ class ProjectScannerTest {
     @Test
     void discardsTheResultsOfAScanThatWasFailedWhileItRan() {
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.FAILED));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(), List.of()));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(), List.of()));
 
         start();
 
@@ -287,7 +289,7 @@ class ProjectScannerTest {
         when(scanService.getScan(context, scan.id()))
             .thenReturn(scan)
             .thenThrow(new NotFoundException(scan.id().id().toString()));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(), List.of()));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(), List.of()));
 
         start();
 
@@ -301,7 +303,7 @@ class ProjectScannerTest {
     @Test
     void failsAScanThatBreaksWhileStillActive() {
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenThrow(new IllegalStateException("Scanner crashed"));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenThrow(new IllegalStateException("Scanner crashed"));
 
         start();
 
@@ -313,7 +315,7 @@ class ProjectScannerTest {
     @Test
     void leavesTheStatusOfAScanThatBreaksAfterItWasFailed() {
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.FAILED));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenThrow(new IllegalStateException("Container stopped"));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenThrow(new IllegalStateException("Container stopped"));
 
         start();
 
@@ -329,7 +331,7 @@ class ProjectScannerTest {
         final var enhancement = enhancement();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
         when(enhancerProvider.enhanceScan(result)).thenReturn(List.of(enhancement));
 
         start();
@@ -351,7 +353,7 @@ class ProjectScannerTest {
         final var result = scanResult();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
         when(enhancerProvider.enhanceScan(result)).thenThrow(new IllegalStateException("Enhancer broke"));
 
         start();
@@ -370,7 +372,7 @@ class ProjectScannerTest {
         final var result = scanResult();
 
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
         when(enhancerProvider.enhanceScan(result)).thenReturn(List.of(enhancement()));
         doThrow(new IllegalArgumentException("Invalid label Spring Endpoint")).when(enhancementRepository).save(any(), any());
 

@@ -9,15 +9,19 @@ import com.github.dockerjava.api.model.MountType;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.definition.ScannerDefinition;
+import dev.graphnous.scanner.definition.ScannerFile;
+import dev.graphnous.scanner.definition.ScannerMount;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -113,6 +117,56 @@ class DockerSandboxTest {
 
         assertThat(stdout).containsExactly("class Service { }", "read-only");
         assertThat(repository.resolve("created")).doesNotExist();
+    }
+
+    @Test
+    void givesTheScannerItsMountsAndEnvironment() throws IOException {
+        final var volume = "graphnous-sandbox-test-" + UUID.randomUUID();
+        final var script = """
+            echo "$CACHE_TOKEN"
+            cat /cache/previous 2>/dev/null || echo empty
+            echo kept > /cache/previous
+            printf '%s' '%s' > "$6"
+            """.formatted("%s", RESULT);
+
+        final var scanner = new ImageScannerDefinition(
+            ScanTarget.Language.JAVA,
+            IMAGE,
+            List.of(
+                "sh", "-c", script, "scanner",
+                "--path", ImageScannerDefinition.REPOSITORY,
+                "--target", ImageScannerDefinition.TARGET,
+                "--output", ImageScannerDefinition.OUTPUT
+            ),
+            "/output/scan-result.json",
+            List.of(new ScannerMount(ScannerMount.Type.VOLUME, volume, "/cache", false)),
+            Map.of("CACHE_TOKEN", "secret")
+        );
+
+        try {
+            sandbox.execute(scanner, repository, target());
+            sandbox.execute(scanner, repository, target());
+
+            // The volume keeps what the first scan wrote for the second
+            assertThat(stdout).containsExactly("secret", "empty", "secret", "kept");
+        } finally {
+            docker.removeVolumeCmd(volume).exec();
+        }
+    }
+
+    @Test
+    void givesTheScannerItsFilesReadableByItsUser() throws IOException {
+        // As alpine's "nobody", as the scanner images run as a user of their own
+        final var scanner = scanner("""
+            printf '%s' '%s' > "$6"
+            exec su -s /bin/sh nobody -c 'id -u; cat /maven-settings/settings.xml; echo; (echo changed > /maven-settings/settings.xml) 2>/dev/null || echo read-only'
+            """.formatted("%s", RESULT));
+
+        sandbox.execute(scanner, repository, target(), List.of(
+            new ScannerFile("/maven-settings/settings.xml", "<settings/>".getBytes(StandardCharsets.UTF_8))
+        ));
+
+        assertThat(stdout).containsExactly("65534", "<settings/>", "read-only");
     }
 
     @Test

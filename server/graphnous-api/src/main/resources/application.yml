@@ -60,10 +60,12 @@ graphnous:
   # The scanner for each language: its image, the command running it (in
   # place of the image's entrypoint) and where it writes its result. The
   # command's {repository}, {target}, {languageVersion} and {output} are
-  # replaced for each target; an unknown language version is empty.
+  # replaced for each target; an unknown language version is empty. A
+  # scanner may also mount volumes or host paths, get environment variables,
+  # and get files this server reads, all of which no other scanner gets.
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.1.0
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.0
       command:
         - java
         - -jar
@@ -76,7 +78,22 @@ graphnous:
         - "{languageVersion}"
         - --output
         - "{output}"
+        # Downloads the libraries of the project into the Maven repository,
+        # to resolve calls into them; needs access to Maven Central, or to
+        # the repositories of the Maven settings below
+        - --download-dependencies
       output: /output/scan-result.json
+      mounts:
+        # Keeps the downloaded libraries for the next scans
+        - type: volume
+          source: graphnous-maven
+          target: /maven-repository
+      # For private repositories, a Maven settings.xml with their mirrors,
+      # repositories and credentials, which this server reads and copies into
+      # each scanner container; the scanner reads /maven-settings/settings.xml
+      # files:
+      #   - source: /etc/graphnous/maven-settings.xml
+      #     target: /maven-settings/settings.xml
     TYPESCRIPT:
       image: ghcr.io/graphnous/graphnous-typescript-scanner:0.1.0
       command:
