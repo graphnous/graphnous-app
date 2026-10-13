@@ -1,7 +1,5 @@
 package dev.graphnous.api.scan.v1;
 
-import dev.graphnous.api.v1.generated.project.Project;
-import dev.graphnous.api.v1.generated.project.ProjectPage;
 import dev.graphnous.api.v1.generated.scan.Scan;
 import dev.graphnous.api.v1.generated.scan.ScanExecution;
 import dev.graphnous.api.v1.generated.scan.ScanPage;

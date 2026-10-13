@@ -15,7 +15,7 @@ import java.util.function.UnaryOperator;
  * <p>
  * A failed step skips the steps after it. Steps only move forward (see
  * {@link ScanStep}), so a scan thread that reports after recovery already
- * failed its step changes nothing.
+ * failed its step changes nothing; only {@link #restart} runs one again.
  */
 public class ScanSteps {
 
@@ -50,6 +50,17 @@ public class ScanSteps {
         final ScanStepType type
     ) {
         update(scanId, type, step -> step.start(clock.instant()));
+    }
+
+    /**
+     * Runs a step again for a scan that already finished, such as enhancing
+     * its results again; the steps after it stay as they are.
+     */
+    public void restart(
+        final Scan.ScanId scanId,
+        final ScanStepType type
+    ) {
+        update(scanId, type, step -> step.restart(clock.instant()));
     }
 
     public void complete(

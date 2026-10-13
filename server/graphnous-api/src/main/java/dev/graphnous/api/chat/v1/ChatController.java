@@ -1,5 +1,6 @@
 package dev.graphnous.api.chat.v1;
 
+import dev.graphnous.domain.project.Project;
 import com.fasterxml.jackson.annotation.JsonRawValue;
 import dev.graphnous.application.chat.ChatService;
 import dev.graphnous.application.context.RequestContextProvider;
@@ -51,10 +52,14 @@ public class ChatController {
 
     /**
      * A thread as listed: without its messages.
+     *
+     * @param projectId the project it is about; null when it is about the
+     *                  system as a whole
      */
     public record ChatThreadSummary(
         UUID id,
         UUID systemId,
+        UUID projectId,
         String title,
         Instant createdAt,
         Instant updatedAt
@@ -67,6 +72,7 @@ public class ChatController {
     public record ChatThreadDetails(
         UUID id,
         UUID systemId,
+        UUID projectId,
         String title,
         @JsonRawValue String messages,
         Instant createdAt,
@@ -84,7 +90,46 @@ public class ChatController {
     }
 
     /**
-     * The caller's threads about the system, the last one talked in first.
+     * The caller's threads about the project, the last one talked in first.
+     */
+    @GetMapping("/projects/{id}/chat/threads")
+    public ResponseEntity<ChatThreadPage> getProjectThreads(
+        @PathVariable("id") final UUID projectId,
+        @RequestParam(name = "page", defaultValue = "0") @Min(0) final int pageNumber,
+        @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) final int size
+    ) {
+        final Page<ChatThread> page = this.chatService.getProjectThreads(
+            this.contextProvider.get(),
+            new PageQuery(pageNumber, size, new Sort("updatedAt", Sort.Direction.DESC)),
+            new Project.ProjectId(projectId)
+        );
+
+        return ResponseEntity.ok(new ChatThreadPage(
+            page.content().stream().map(ChatController::summary).toList(),
+            page.page(),
+            page.size(),
+            page.totalElements(),
+            page.totalPages()
+        ));
+    }
+
+    /**
+     * Starts a thread about the project.
+     */
+    @PostMapping("/projects/{id}/chat/threads")
+    public ResponseEntity<ChatThreadDetails> createProjectThread(
+        @PathVariable("id") final UUID projectId
+    ) {
+        final var thread = this.chatService.createForProject(this.contextProvider.get(), new Project.ProjectId(projectId));
+
+        return ResponseEntity
+            .created(URI.create("/api/v1/chat/threads/" + thread.id().id()))
+            .body(details(thread));
+    }
+
+    /**
+     * The caller's threads about the system as a whole, the last one talked
+     * in first; those about one of its projects are that project's.
      */
     @GetMapping("/systems/{id}/chat/threads")
     public ResponseEntity<ChatThreadPage> getThreads(
@@ -140,6 +185,7 @@ public class ChatController {
         return new ChatThreadSummary(
             thread.id().id(),
             thread.systemId().id(),
+            thread.projectId() == null ? null : thread.projectId().id(),
             thread.title(),
             thread.createdAt(),
             thread.updatedAt()
@@ -150,6 +196,7 @@ public class ChatController {
         return new ChatThreadDetails(
             thread.id().id(),
             thread.systemId().id(),
+            thread.projectId() == null ? null : thread.projectId().id(),
             thread.title(),
             thread.messages(),
             thread.createdAt(),

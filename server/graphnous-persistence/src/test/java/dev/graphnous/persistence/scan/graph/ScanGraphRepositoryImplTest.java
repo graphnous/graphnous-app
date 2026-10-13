@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.graphnous.application.scan.graph.ScanGraph;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.enhancer.Enhancement;
+import dev.graphnous.enhancer.Enhancements;
+import dev.graphnous.enhancer.Node;
+import dev.graphnous.persistence.scan.result.EnhancementRepositoryImpl;
 import dev.graphnous.persistence.scan.result.ScanResultRepositoryImpl;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -211,6 +215,39 @@ class ScanGraphRepositoryImplTest {
     }
 
     @Test
+    void keysALibraryDeclaredTwiceByAModuleOnce() throws IOException {
+        final var result = orders();
+
+        // As a package.json does for development and as a peer
+        final var again = new dev.graphnous.core.model.Dependency();
+        again.setName("org.slf4j:slf4j-api");
+        again.setVersion("^2.0");
+        again.setScope("peer");
+        result.getModules().getFirst().getDependencies().add(again);
+
+        final var first = createScan();
+        final var second = createScan();
+        new ScanResultRepositoryImpl(driver).save(first, List.of(result));
+        new ScanResultRepositoryImpl(driver).save(second, List.of(result));
+
+        final var slf4j = repository.findSnapshots(first).stream()
+            .filter(snapshot -> snapshot.key().endsWith("|dependency:org.slf4j:slf4j-api"))
+            .toList();
+
+        assertThat(slf4j).hasSize(1);
+        assertThat(slf4j.getFirst().properties())
+            .containsEntry("scope", "compile, peer")
+            .containsEntry("version", "2.0.18, ^2.0");
+
+        // The same in another scan of the same source, so nothing changed
+        assertThat(repository.findSnapshots(second).stream().filter(snapshot -> snapshot.type().equals("Dependency")))
+            .usingRecursiveFieldByFieldElementComparatorOnFields("key", "properties")
+            .containsExactlyInAnyOrderElementsOf(
+                repository.findSnapshots(first).stream().filter(snapshot -> snapshot.type().equals("Dependency")).toList()
+            );
+    }
+
+    @Test
     void hasNoSnapshotsForAScanWithoutResults() {
         assertThat(repository.findSnapshots(createScan())).isEmpty();
     }
@@ -273,6 +310,91 @@ class ScanGraphRepositoryImplTest {
                 tuple(order, module + "|class:com.example.Entity", "EXTENDS"),
                 tuple(order, module + "|class:com.example.Identified", "IMPLEMENTS")
             );
+    }
+
+    @Test
+    void showsTheNeighboursOfAnEnhancerAndOfWhatItAdded() {
+        final var order = "backend|orders|class:com.example.Order";
+
+        new EnhancementRepositoryImpl(driver).save(scanId, List.of(new Enhancements("spring", "1.0.0", List.of(
+            new Enhancement(
+                List.of(new Node(order + "|controller", order, List.of("Controller"), Map.of("name", "Order"))),
+                List.of()
+            )
+        ))));
+
+        final var enhancer = scanId.id() + "|enhancement:spring@1.0.0";
+        final var controller = scanId.id() + "|" + order + "|controller";
+
+        final var aroundEnhancer = repository.findNeighbourhood(scanId, enhancer, 1, 500).orElseThrow();
+
+        assertThat(aroundEnhancer.focus()).isEqualTo(enhancer);
+        assertThat(aroundEnhancer.nodes())
+            .extracting(ScanGraph.Node::type, ScanGraph.Node::id)
+            .containsExactlyInAnyOrder(
+                tuple("Enhancement", enhancer),
+                tuple("Scan", scanId.id().toString()),
+                tuple("Controller", controller)
+            );
+
+        final var aroundController = repository.findNeighbourhood(scanId, controller, 1, 500).orElseThrow();
+
+        assertThat(aroundController.focus()).isEqualTo(controller);
+        assertThat(aroundController.edges())
+            .extracting(ScanGraph.Edge::source, ScanGraph.Edge::target, ScanGraph.Edge::type)
+            .containsExactlyInAnyOrder(
+                tuple(enhancer, controller, "ADDED"),
+                tuple(scanId.id() + "|" + order, controller, "ENHANCE")
+            );
+    }
+
+    @Test
+    void showsOnlyTheLayersAskedFor() {
+        final var order = "backend|orders|class:com.example.Order";
+
+        new EnhancementRepositoryImpl(driver).save(scanId, List.of(
+            new Enhancements("spring", "1.0.0", List.of(new Enhancement(
+                List.of(new Node(order + "|controller", order, List.of("Controller"), Map.of("name", "Order"))),
+                List.of()
+            ))),
+            new Enhancements("jpa", "2.1.0", List.of(new Enhancement(
+                List.of(new Node(order + "|entity", order, List.of("JpaEntity"), Map.of("name", "Order"))),
+                List.of()
+            )))
+        ));
+
+        final var scan = scanId.id().toString();
+        final var everything = repository.findNeighbourhood(scanId, null, 2, 500).orElseThrow();
+
+        assertThat(everything.layers()).containsExactly(
+            new ScanGraph.Layer("result", "Scan result"),
+            new ScanGraph.Layer("jpa@2.1.0", "jpa 2.1.0"),
+            new ScanGraph.Layer("spring@1.0.0", "spring 1.0.0")
+        );
+        assertThat(everything.nodes()).extracting(ScanGraph.Node::type)
+            .contains("ScanTarget", "Enhancement", "Controller", "JpaEntity");
+
+        // Only what the scan found
+        final var result = repository.findNeighbourhood(scanId, null, 2, 500, java.util.Set.of("result")).orElseThrow();
+
+        assertThat(result.nodes()).extracting(ScanGraph.Node::type)
+            .contains("ScanTarget", "Module")
+            .doesNotContain("Enhancement", "Controller", "JpaEntity");
+        // Hidden layers are still listed, to show them again
+        assertThat(result.layers()).hasSize(3);
+
+        // Only what one enhancer added, around the scan it is of
+        final var spring = repository.findNeighbourhood(scanId, null, 2, 500, java.util.Set.of("spring@1.0.0")).orElseThrow();
+
+        assertThat(spring.nodes()).extracting(ScanGraph.Node::type, ScanGraph.Node::id).containsExactly(
+            tuple("Scan", scan),
+            tuple("Enhancement", scan + "|enhancement:spring@1.0.0"),
+            tuple("Controller", scan + "|" + order + "|controller")
+        );
+
+        // No layer: the focus alone
+        assertThat(repository.findNeighbourhood(scanId, null, 2, 500, java.util.Set.of()).orElseThrow().nodes())
+            .extracting(ScanGraph.Node::type).containsExactly("Scan");
     }
 
     @Test

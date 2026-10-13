@@ -22,6 +22,7 @@ import { CreateProjectModal, CreateProjectModalRef } from "@/components/CreatePr
 import { useRef } from "react";
 import { ScansTable } from "@/components/ScansTable/ScansTable";
 import { useListScans } from "@/lib/hooks/scan/useListScans";
+import { breadcrumbs } from "@/lib/breadcrumbs";
 
 export default function ProjectsPage() {
     const selectedSystem = useSystemStore(
@@ -38,10 +39,7 @@ export default function ProjectsPage() {
             <Stack gap={8}>
                 <PageHeader
                     title="Projects"
-                    breadcrumbs={[
-                        { label: selectedSystem?.name || '', href: "/" },
-                        { label: "Projects" },
-                    ]}
+                    breadcrumbs={breadcrumbs(selectedSystem, { label: "Projects" })}
                     description={`Projects that make up the ${selectedSystem?.name} system.`}
                     actions={
                         <Button

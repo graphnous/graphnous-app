@@ -4,6 +4,7 @@ import dev.graphnous.application.scan.graph.ScanGraph;
 import dev.graphnous.application.scan.graph.ScanGraphRepository;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.persistence.scan.result.EnhancementRepositoryImpl;
+import dev.graphnous.persistence.scan.result.ScanResultRepositoryImpl;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.TransactionContext;
@@ -19,6 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
  * Reads the graph that ScanResultRepositoryImpl stores below a scan. A
@@ -35,6 +37,15 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
     private static final List<String> SCAN_LABELS = List.of(
         "ScanTarget", "Module", "File", "Package", "Class", "Method", "Field", "Annotation"
     );
+
+    /**
+     * The labels a focus is looked up by: those of the nodes below a scan,
+     * the enhancers that ran on it, and what they added.
+     */
+    private static final List<String> FOCUS_LABELS = Stream.concat(
+        SCAN_LABELS.stream(),
+        Stream.of(EnhancementRepositoryImpl.ENHANCEMENT, EnhancementRepositoryImpl.ENHANCED)
+    ).toList();
 
     /**
      * The labels of the nodes two scans are compared by: what the scanners
@@ -127,9 +138,22 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
         final Scan.ScanId scanId,
         final String focus,
         final int depth,
-        final int limit
+        final int limit,
+        final Set<String> layers
     ) {
         final var id = id(scanId);
+
+        // What bodies use shows only when asked for; it is no layer of nodes
+        final var usages = layers != null && layers.contains(ScanGraph.Layer.USAGES);
+        final var nodeLayers = layers == null
+            ? null
+            : layers.stream().filter(layer -> !layer.equals(ScanGraph.Layer.USAGES)).toList();
+
+        // Asked for alone, it is drawn on every layer
+        final var shown = nodeLayers == null || (usages && nodeLayers.isEmpty()) ? null : nodeLayers;
+
+        // The relationships left out of the graph
+        final List<String> hidden = usages ? List.of() : ScanResultRepositoryImpl.USAGE_TYPES;
 
         try (final var session = driver.session()) {
             return session.executeRead(tx -> {
@@ -138,7 +162,7 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
                 if (start.isEmpty()) {
                     // A scan without results has nothing to show, rather than nothing to find
                     return focus == null
-                        ? Optional.of(new ScanGraph.Neighbourhood(id, depth, List.of(), List.of(), false))
+                        ? Optional.of(new ScanGraph.Neighbourhood(id, depth, List.of(), List.of(), false, layers(tx, id)))
                         : Optional.empty();
                 }
 
@@ -153,7 +177,7 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
                     final var room = limit - reached.size();
 
                     // One more than fits, to know whether there were more
-                    final var next = neighbours(tx, id, frontier, List.copyOf(reached.keySet()), room + 1);
+                    final var next = neighbours(tx, id, frontier, List.copyOf(reached.keySet()), shown, hidden, room + 1);
 
                     truncated = next.size() > room;
                     frontier = next.subList(0, Math.min(next.size(), room));
@@ -173,8 +197,9 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
                     ids.get(start.get()),
                     depth,
                     List.copyOf(nodes.values()),
-                    edges(tx, elementIds, ids),
-                    truncated
+                    edges(tx, elementIds, ids, hidden),
+                    truncated,
+                    layers(tx, id)
                 ));
             });
         }
@@ -189,7 +214,8 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
 
     /**
      * The node of the scan with this id: the scan itself, one of its
-     * dependencies, or a node below it. Each label is looked up through its
+     * dependencies, a node below it, an enhancer that ran on it or a node
+     * an enhancer added. Each label is looked up through its
      * own index, as an id does not say which label it is of.
      */
     private static Optional<String> findNode(
@@ -211,7 +237,7 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
             ).list(record -> record.get("id").asString()));
         }
 
-        final var query = String.join("\nUNION\n", SCAN_LABELS.stream()
+        final var query = String.join("\nUNION\n", FOCUS_LABELS.stream()
             .map(label -> "MATCH (n:" + label + " {id: $focus}) WHERE n.scanId = $scanId RETURN elementId(n) AS id")
             .toList());
 
@@ -224,26 +250,97 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
      * scan, the scan itself and the dependencies of its modules, but not the
      * modules of other scans that share those. At most limit, by id, so the
      * same request gets the same nodes.
+     * <p>
+     * Only nodes of the layers shown, when some are hidden: an enhancer and
+     * what it added are of its layer, everything else is of the scan
+     * result's.
+     *
+     * @param layers the ids of the layers shown; every layer when null
+     * @param hidden the types of the relationships not followed
      */
     private static List<String> neighbours(
         final TransactionContext tx,
         final String scanId,
         final List<String> frontier,
         final List<String> reached,
+        final List<String> layers,
+        final List<String> hidden,
         final int limit
     ) {
+        final var parameters = new HashMap<String, Object>();
+        parameters.put("scanId", scanId);
+        parameters.put("frontier", frontier);
+        parameters.put("reached", reached);
+        parameters.put("layers", layers);
+        parameters.put("result", ScanGraph.Layer.RESULT);
+        parameters.put("limit", limit);
+        parameters.put("usages", hidden);
+
+        // Not along what bodies use, unless asked for: a method would bring
+        // in everything it calls
         return tx.run("""
                 MATCH (n) WHERE elementId(n) IN $frontier
-                MATCH (n)--(m)
-                WHERE (m.scanId = $scanId OR (m:Scan AND m.id = $scanId) OR m:Dependency)
+                MATCH (n)-[r]-(m)
+                WHERE NOT type(r) IN $usages
+                  AND (m.scanId = $scanId OR (m:Scan AND m.id = $scanId) OR m:Dependency)
                   AND NOT elementId(m) IN $reached
+                  AND ($layers IS NULL OR CASE
+                    WHEN m:%1$s THEN (m.name + '@' + m.version) IN $layers
+                    WHEN m:%2$s THEN EXISTS {
+                      MATCH (enhancement:%1$s)-[:ADDED]->(m)
+                      WHERE (enhancement.name + '@' + enhancement.version) IN $layers
+                    }
+                    ELSE $result IN $layers
+                  END)
                 WITH DISTINCT m
                 ORDER BY coalesce(m.id, m.coordinates)
                 LIMIT $limit
                 RETURN elementId(m) AS id
-                """,
-            Map.of("scanId", scanId, "frontier", frontier, "reached", reached, "limit", limit)
+                """.formatted(EnhancementRepositoryImpl.ENHANCEMENT, EnhancementRepositoryImpl.ENHANCED),
+            parameters
         ).list(record -> record.get("id").asString());
+    }
+
+    /**
+     * Every layer of the scan's graph: what the scan found, then what each
+     * enhancer that ran on it added, by name, then what its bodies use, if
+     * it kept that.
+     */
+    private static List<ScanGraph.Layer> layers(
+        final TransactionContext tx,
+        final String scanId
+    ) {
+        final var layers = new ArrayList<ScanGraph.Layer>();
+        layers.add(new ScanGraph.Layer(ScanGraph.Layer.RESULT, "Scan result"));
+
+        tx.run("""
+                MATCH (:Scan {id: $scanId})-[:HAS_ENHANCEMENT]->(enhancement:%s)
+                RETURN enhancement.name AS name, enhancement.version AS version
+                ORDER BY name, version
+                """.formatted(EnhancementRepositoryImpl.ENHANCEMENT),
+            Map.of("scanId", scanId)
+        ).list().forEach(record -> {
+            final var name = record.get("name").asString();
+            final var version = record.get("version").asString();
+
+            layers.add(new ScanGraph.Layer(name + "@" + version, name + " " + version));
+        });
+
+        // Only for a scan that kept what its bodies use
+        final var usages = tx.run("""
+                RETURN EXISTS {
+                    MATCH (:Method {scanId: $scanId})-[usage]->()
+                    WHERE type(usage) IN $types
+                } AS usages
+                """,
+            Map.of("scanId", scanId, "types", ScanResultRepositoryImpl.USAGE_TYPES)
+        ).single().get("usages").asBoolean();
+
+        if (usages) {
+            layers.add(new ScanGraph.Layer(ScanGraph.Layer.USAGES, "Usages"));
+        }
+
+        return List.copyOf(layers);
     }
 
     /**
@@ -291,20 +388,36 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
     private static List<ScanGraph.Edge> edges(
         final TransactionContext tx,
         final List<String> elementIds,
-        final Map<String, String> ids
+        final Map<String, String> ids,
+        final List<String> hidden
     ) {
+        // Each kind of relationship between two nodes once: a method that
+        // calls another in three places is one line, which says how many
         return tx.run("""
                 MATCH (a)-[r]->(b)
-                WHERE elementId(a) IN $ids AND elementId(b) IN $ids
-                RETURN elementId(a) AS source, elementId(b) AS target, type(r) AS type, properties(r) AS properties
+                WHERE elementId(a) IN $ids AND elementId(b) IN $ids AND NOT type(r) IN $hidden
+                WITH a, b, type(r) AS type, collect(r) AS relationships
+                RETURN elementId(a) AS source, elementId(b) AS target, type,
+                       properties(head(relationships)) AS properties, size(relationships) AS places
                 """,
-            Map.of("ids", elementIds)
-        ).list(record -> new ScanGraph.Edge(
-            ids.get(record.get("source").asString()),
-            ids.get(record.get("target").asString()),
-            record.get("type").asString(),
-            record.get("properties").asMap()
-        ));
+            Map.of("ids", elementIds, "hidden", hidden)
+        ).list(record -> {
+            final var type = record.get("type").asString();
+            final var properties = new HashMap<>(record.get("properties").asMap());
+
+            if (ScanResultRepositoryImpl.USAGE_TYPES.contains(type)) {
+                // The line is that of one place only
+                properties.remove("line");
+                properties.put("places", record.get("places").asInt());
+            }
+
+            return new ScanGraph.Edge(
+                ids.get(record.get("source").asString()),
+                ids.get(record.get("target").asString()),
+                type,
+                properties
+            );
+        });
     }
 
     /**
@@ -526,7 +639,9 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
      * Each label of the nodes a scan is compared by is read through its own
      * scanId index; the type is the label read, as an enhanced node has
      * more than one. A dependency is keyed by its module and name, so a new
-     * version of it is a change rather than a removal and an addition.
+     * version of it is a change rather than a removal and an addition; a
+     * library a module declares more than once is one dependency, with
+     * every scope and version it is declared with.
      */
     @Override
     public List<ScanGraph.Snapshot> findSnapshots(final Scan.ScanId scanId) {
@@ -553,19 +668,24 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
             }
         ));
 
+        // A module may declare a library more than once, such as for
+        // development and as a peer, each with a version of its own. It is
+        // one dependency with all of them, in one order: two with the same
+        // key would have either compared, whichever was read first, and so
+        // show as changed between scans of the same source
         snapshots.addAll(read("""
                 MATCH (module:Module {scanId: $scanId})-[dependsOn:DEPENDS_ON]->(dependency:Dependency)
-                RETURN module.id AS module,
-                       dependency.name AS name,
-                       dependency.version AS version,
-                       dependsOn.scope AS scope
+                WITH module, dependency.name AS name, dependsOn.scope AS scope, dependency.version AS version
+                ORDER BY module.id, name, scope, version
+                WITH module, name, collect(scope) AS scopes, collect(version) AS versions
+                RETURN module.id AS module, name, scopes, versions
                 """,
             Map.of("scanId", id),
             record -> {
                 final var properties = new LinkedHashMap<String, Object>();
                 properties.put("name", string(record.get("name")));
-                properties.put("scope", string(record.get("scope")));
-                properties.put("version", string(record.get("version")));
+                properties.put("scope", joined(record.get("scopes")));
+                properties.put("version", joined(record.get("versions")));
                 properties.values().removeIf(Objects::isNull);
 
                 return new ScanGraph.Snapshot(
@@ -578,6 +698,16 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
         ));
 
         return snapshots;
+    }
+
+    /**
+     * The texts as one, each once, in their order: {@code dev, peer}; null
+     * for none.
+     */
+    private static String joined(final Value values) {
+        final var distinct = values.asList(Value::asString).stream().distinct().toList();
+
+        return distinct.isEmpty() ? null : String.join(", ", distinct);
     }
 
     /**

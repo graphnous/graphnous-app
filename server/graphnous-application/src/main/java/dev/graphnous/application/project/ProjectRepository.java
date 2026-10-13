@@ -36,6 +36,19 @@ public interface ProjectRepository {
         final System.SystemId systemId
     );
 
+    /**
+     * The patterns of the files the project leaves out of its scans, in
+     * their order; none when it keeps every file.
+     */
+    List<String> findScanExcludes(
+        final Project.ProjectId id
+    );
+
+    void saveScanExcludes(
+        final Project.ProjectId id,
+        final List<String> excludes
+    );
+
     UUID getOrCreateSnapshot(
         final Project.ProjectId id
     );

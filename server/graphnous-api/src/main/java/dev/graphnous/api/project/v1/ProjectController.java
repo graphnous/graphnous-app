@@ -6,7 +6,6 @@ import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.api.scan.v1.ScanMapper;
 import dev.graphnous.api.v1.generated.project.Project;
 import dev.graphnous.api.v1.generated.project.UpdateProjectRequest;
-import dev.graphnous.api.v1.generated.scan.CreateScanRequest;
 import dev.graphnous.api.v1.generated.scan.ScanPage;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.pagination.Sort;
@@ -17,6 +16,7 @@ import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.scan.CreateScanCommand;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.UploadScanCommand;
+import dev.graphnous.application.scan.stats.ScanStatService;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project.ProjectId;
 import dev.graphnous.domain.system.System;
@@ -34,6 +34,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath;
@@ -56,16 +58,20 @@ public class ProjectController {
 
     private final ScanMapper scanMapper;
 
+    private final ScanStatService scanStatService;
+
     public ProjectController(
         final ProjectService projectService,
         final RequestContextProvider contextProvider,
-        final ScanService scanService
+        final ScanService scanService,
+        final ScanStatService scanStatService
     ) {
         this.projectService = projectService;
 
         this.contextProvider = contextProvider;
 
         this.scanService = scanService;
+        this.scanStatService = scanStatService;
 
         this.projectMapper = new ProjectMapper();
         this.scanMapper = new ScanMapper();
@@ -148,17 +154,131 @@ public class ProjectController {
         );
     }
 
+    /**
+     * Not in the published OpenAPI spec yet, so its model is its own.
+     *
+     * @param scanId                 the scan the stats were counted from;
+     *                               null when no scan of the project has
+     *                               stats yet, and everything else is zero
+     * @param numberOfModulesScanned the modules of every target
+     * @param languages              the files by the language of their
+     *                               target, such as JAVA; each a path from
+     *                               the repository's root
+     * @param numberOfClassesParsed  the classes, each counted once per module
+     * @param numberOfMethodsParsed  the methods of those classes, and the
+     *                               functions declared outside any class
+     */
+    public record ScanStatsResponse(
+        UUID scanId,
+        int numberOfModulesScanned,
+        Map<String, List<String>> languages,
+        int numberOfClassesParsed,
+        int numberOfMethodsParsed
+    ) {
+    }
+
+    /**
+     * The stats of the project's latest scan that has any; all zero, as
+     * for a system, when none has, such as before its first scan
+     * completed.
+     */
+    @GetMapping("/{id}/stats")
+    public ResponseEntity<ScanStatsResponse> getLatestScanStats(
+        @PathVariable("id") final UUID projectId
+    ) {
+        final var stats = this.scanStatService.getLatestStats(
+            this.contextProvider.get(),
+            new ProjectId(projectId)
+        );
+
+        return ResponseEntity.ok(
+            stats
+                .map(found -> new ScanStatsResponse(
+                    found.scanId().id(),
+                    found.numberOfModulesScanned(),
+                    found.languages(),
+                    found.numberOfClassesParsed(),
+                    found.numberOfMethodsParsed()
+                ))
+                .orElseGet(() -> new ScanStatsResponse(null, 0, Map.of(), 0, 0))
+        );
+    }
+
+    /**
+     * The published request to create a scan, and which enhancers to run
+     * on it, which is not in the published OpenAPI spec yet.
+     *
+     * @param enhancers the names of the enhancers to run on the scan's
+     *                  results, as GET /enhancers lists them; all of them
+     *                  when missing, none when empty
+     * @param excludes  the patterns of the files to leave out of the scan,
+     *                  such as *.spec.ts, written as in a .gitignore; the
+     *                  project's own when missing, none when empty
+     */
+    public record StartScanRequest(
+        String branch,
+        String revision,
+        List<String> enhancers,
+        List<String> excludes
+    ) {
+    }
+
+    /**
+     * Not in the published OpenAPI spec yet, so its model is its own.
+     *
+     * @param excludes the patterns of the files the project leaves out of
+     *                 its scans, such as *.spec.ts, written as in a
+     *                 .gitignore; a scan can be created with other ones
+     */
+    public record ScanSettings(
+        List<String> excludes
+    ) {
+    }
+
+    @GetMapping("/{id}/scan-settings")
+    public ResponseEntity<ScanSettings> getScanSettings(
+        @PathVariable("id") final UUID id
+    ) {
+        return ResponseEntity.ok(new ScanSettings(
+            this.projectService.getScanExcludes(this.contextProvider.get(), new ProjectId(id))
+        ));
+    }
+
+    /**
+     * Sets what the project's scans leave out from now on; the scans it
+     * has stay as they are. 400 for a pattern that is not well formed.
+     */
+    @PutMapping("/{id}/scan-settings")
+    public ResponseEntity<ScanSettings> updateScanSettings(
+        @PathVariable("id") final UUID id,
+        @RequestBody final ScanSettings settings
+    ) {
+        return ResponseEntity.ok(new ScanSettings(
+            this.projectService.updateScanExcludes(
+                this.contextProvider.get(),
+                new ProjectId(id),
+                settings.excludes()
+            )
+        ));
+    }
+
+    /**
+     * 400 when an enhancer it names is not installed, or a pattern of
+     * files to leave out is not well formed.
+     */
     @PostMapping("/{id}/scans")
     public ResponseEntity<dev.graphnous.api.v1.generated.scan.Scan> createScan(
         @PathVariable("id") final UUID projectId,
-        @RequestBody final CreateScanRequest createScanRequest
+        @RequestBody final StartScanRequest createScanRequest
     ) {
         final var scan = this.scanService.create(
             this.contextProvider.get(),
             new CreateScanCommand(
                 new ProjectId(projectId),
-                createScanRequest.getRevision(),
-                createScanRequest.getBranch()
+                createScanRequest.revision(),
+                createScanRequest.branch(),
+                createScanRequest.enhancers() == null ? null : Set.copyOf(createScanRequest.enhancers()),
+                createScanRequest.excludes()
             )
         );
         // Scans run in the background; their steps show how they go

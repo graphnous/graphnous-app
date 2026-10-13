@@ -4,6 +4,7 @@ import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.domain.system.System;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,6 +19,22 @@ public interface ScanRepository {
     Page<Scan> findAll(
         final Project.ProjectId projectId,
         final PageQuery pageQuery
+    );
+
+    /**
+     * The scans of every project of the system.
+     */
+    Page<Scan> findAllInSystem(
+        final System.SystemId systemId,
+        final PageQuery pageQuery
+    );
+
+    /**
+     * The most recently created completed scan of each project of the
+     * system; nothing for the projects without one.
+     */
+    List<Scan> findLatestCompletedInSystem(
+        final System.SystemId systemId
     );
 
     Scan findById(

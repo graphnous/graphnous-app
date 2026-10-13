@@ -14,10 +14,14 @@ import dev.graphnous.application.exception.GraphnousException;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.organization.OrganizationId;
+import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.application.system.SystemService;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget;
+import dev.graphnous.enhancer.Enhancer;
+import dev.graphnous.enhancer.EnhancerRegistry;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep;
@@ -32,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,6 +71,9 @@ class ScanServiceTest {
 
     @Mock
     private ProjectService projectService;
+
+    @Mock
+    private SystemService systemService;
 
     @Mock
     private AuthorizationService authorizationService;
@@ -184,6 +194,85 @@ class ScanServiceTest {
         final var event = ArgumentCaptor.forClass(StartScanEvent.class);
         verify(eventPublisher).publish(event.capture());
         assertThat(event.getValue().getScanId()).isEqualTo(scan.id());
+        // Every installed enhancer, as none were chosen
+        assertThat(event.getValue().getEnhancers()).isNull();
+        assertThat(scan.enhancers()).isNull();
+    }
+
+    @Test
+    void startsAScanWithTheEnhancersChosen() {
+        final var projectId = Project.ProjectId.generate();
+
+        when(scanRepository.count(projectId)).thenReturn(3);
+        when(scanRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        final var scan = service().create(context, new CreateScanCommand(projectId, null, "main", Set.of("react")));
+
+        // Kept with the scan, to know later what was chosen
+        assertThat(scan.enhancers()).containsExactly("react");
+
+        final var event = ArgumentCaptor.forClass(StartScanEvent.class);
+        verify(eventPublisher).publish(event.capture());
+        assertThat(event.getValue().getEnhancers()).containsExactly("react");
+    }
+
+    @Test
+    void leavesOutTheFilesItsProjectSaysByDefault() {
+        final var projectId = Project.ProjectId.generate();
+
+        when(scanRepository.count(projectId)).thenReturn(3);
+        when(scanRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(projectService.getScanExcludes(context, projectId)).thenReturn(List.of("*.spec.ts", "generated/"));
+
+        final var scan = service().create(context, new CreateScanCommand(projectId, null, "main"));
+
+        assertThat(scan.excludes()).containsExactly("*.spec.ts", "generated/");
+    }
+
+    @Test
+    void leavesOutTheFilesTheScanWasAskedTo() {
+        final var projectId = Project.ProjectId.generate();
+
+        when(scanRepository.count(projectId)).thenReturn(3);
+        when(scanRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        final var other = service().create(
+            context,
+            new CreateScanCommand(projectId, null, "main", null, List.of(" *.stories.tsx ", "", "*.stories.tsx"))
+        );
+        // None at all, whatever the project says
+        final var none = service().create(context, new CreateScanCommand(projectId, null, "main", null, List.of()));
+
+        assertThat(other.excludes()).containsExactly("*.stories.tsx");
+        assertThat(none.excludes()).isEmpty();
+        verify(projectService, never()).getScanExcludes(any(), any());
+    }
+
+    @Test
+    void doesNotCreateAScanWithAPatternThatIsNotWellFormed() {
+        final var projectId = Project.ProjectId.generate();
+
+        final var error = assertThrows(
+            ValidationException.class,
+            () -> service().create(context, new CreateScanCommand(projectId, null, "main", null, List.of("src/{a,b")))
+        );
+
+        assertThat(error).hasMessageContaining("src/{a,b");
+        verify(scanRepository, never()).save(any());
+    }
+
+    @Test
+    void doesNotCreateAScanWithAnEnhancerThatIsNotInstalled() {
+        final var projectId = Project.ProjectId.generate();
+
+        final var error = assertThrows(
+            ValidationException.class,
+            () -> service().create(context, new CreateScanCommand(projectId, null, "main", Set.of("react", "angular")))
+        );
+
+        assertThat(error).hasMessageContaining("angular");
+        verify(scanRepository, never()).save(any());
+        verify(eventPublisher, never()).publish(any());
     }
 
     @Test
@@ -222,6 +311,43 @@ class ScanServiceTest {
         assertThrows(NotFoundException.class, () -> service().getScans(context, PageQuery.of(0, 20), projectId));
 
         verify(scanRepository, never()).findAll(any(), any());
+    }
+
+    @Test
+    void listsTheScansOfASystem() {
+        final var systemId = System.SystemId.generate();
+        final var page = new Page<Scan>(List.of(scan(Scan.ScanStatus.COMPLETED)), 0, 20, 1, 1);
+
+        when(scanRepository.findAllInSystem(systemId, PageQuery.of(0, 20))).thenReturn(page);
+
+        assertThat(service().getSystemScans(context, PageQuery.of(0, 20), systemId)).isEqualTo(page);
+
+        verify(authorizationService).authorize(context, Permission.SCAN_READ);
+        verify(systemService).getSystem(context, systemId);
+    }
+
+    @Test
+    void listsTheScansOfASystemOfTheCaller() {
+        final var systemId = System.SystemId.generate();
+
+        when(systemService.getSystem(context, systemId)).thenThrow(new NotFoundException("Not found"));
+
+        assertThrows(NotFoundException.class, () -> service().getSystemScans(context, PageQuery.of(0, 20), systemId));
+
+        verify(scanRepository, never()).findAllInSystem(any(), any());
+    }
+
+    @Test
+    void getsTheLatestCompletedScansOfASystemOfTheCaller() {
+        final var systemId = System.SystemId.generate();
+        final var scans = List.of(scan(Scan.ScanStatus.COMPLETED));
+
+        when(scanRepository.findLatestCompletedInSystem(systemId)).thenReturn(scans);
+
+        assertThat(service().getLatestCompletedScans(context, systemId)).isEqualTo(scans);
+
+        verify(authorizationService).authorize(context, Permission.SCAN_READ);
+        verify(systemService).getSystem(context, systemId);
     }
 
     @Test
@@ -411,8 +537,19 @@ class ScanServiceTest {
             scanSteps,
             scanRetention,
             projectService,
+            systemService,
             authorizationService,
-            entitlementService
+            entitlementService,
+            new EnhancerRegistry(List.of(enhancer("spring"), enhancer("react")))
         );
+    }
+
+    private static Enhancer enhancer(final String name) {
+        final var enhancer = mock(Enhancer.class);
+
+        lenient().when(enhancer.name()).thenReturn(name);
+        lenient().when(enhancer.forLanguage()).thenReturn(ScanTarget.Language.JAVA);
+
+        return enhancer;
     }
 }

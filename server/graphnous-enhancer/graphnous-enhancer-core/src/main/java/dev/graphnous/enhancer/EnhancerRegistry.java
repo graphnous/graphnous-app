@@ -11,11 +11,21 @@ import java.util.stream.Collectors;
  */
 public class EnhancerRegistry {
 
+    private final List<Enhancer> all;
+
     private final Map<Language, List<Enhancer>> enhancers;
 
     public EnhancerRegistry(final List<Enhancer> enhancers) {
+        this.all = List.copyOf(enhancers);
         this.enhancers = enhancers.stream()
             .collect(Collectors.groupingBy(Enhancer::forLanguage, Collectors.toUnmodifiableList()));
+    }
+
+    /**
+     * Every enhancer, in the order they were registered.
+     */
+    public List<Enhancer> enhancers() {
+        return all;
     }
 
     /**

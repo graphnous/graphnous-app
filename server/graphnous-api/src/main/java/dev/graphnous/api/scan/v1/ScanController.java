@@ -1,6 +1,7 @@
 package dev.graphnous.api.scan.v1;
 
 import dev.graphnous.application.context.RequestContextProvider;
+import dev.graphnous.application.enhancer.ScanEnhancementService;
 import dev.graphnous.api.v1.generated.scan.ScanExecution;
 import dev.graphnous.api.v1.generated.scanlog.ScanLogPage;
 import dev.graphnous.application.project.scanner.logs.ScanLogListener;
@@ -17,6 +18,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,7 +27,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+
+import static org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath;
 
 @RestController
 @RequestMapping("/api/v1/scans")
@@ -36,12 +43,14 @@ public class ScanController {
     private final ScanMapper scanMapper = new ScanMapper();
     private final ScanLogSubscriber scanLogSubscriber;
     private final ScanLogService scanLogService;
+    private final ScanEnhancementService scanEnhancementService;
 
     public ScanController(
         final RequestContextProvider contextProvider,
         final ScanService scanService,
         final ScanLogSubscriber scanLogSubscriber,
-        final ScanLogService scanLogService
+        final ScanLogService scanLogService,
+        final ScanEnhancementService scanEnhancementService
     ) {
         this.contextProvider = contextProvider;
 
@@ -49,6 +58,7 @@ public class ScanController {
         this.scanLogSubscriber = scanLogSubscriber;
 
         this.scanLogService = scanLogService;
+        this.scanEnhancementService = scanEnhancementService;
     }
 
     @GetMapping("/{id}")
@@ -75,6 +85,87 @@ public class ScanController {
         );
 
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Not in the published OpenAPI spec yet, so its model is its own.
+     *
+     * @param enhancers the names of the enhancers to run, as
+     *                  GET /enhancers lists them; all of them when
+     *                  missing, none when empty, as when creating a scan
+     */
+    public record EnhanceScanRequest(
+        List<String> enhancers
+    ) {
+    }
+
+    /**
+     * Enhances a completed scan again, such as with an enhancer installed
+     * or updated since: what the enhancers added before is replaced.
+     * Enhancing continues in the background; the location is where to
+     * follow its step. 409 for a scan that is not completed, is already
+     * being enhanced, or kept no results to enhance.
+     */
+    /**
+     * Not in the published OpenAPI spec yet, so its model is its own.
+     *
+     * @param enhancers the names of the enhancers chosen to run on the
+     *                  scan's results when it was created; null when none
+     *                  were chosen, which ran every installed enhancer,
+     *                  and empty for none
+     * @param excludes  the patterns of the files left out of the scan,
+     *                  such as *.spec.ts; empty when every file was kept
+     */
+    public record ScanOptionsResponse(
+        List<String> enhancers,
+        List<String> excludes
+    ) {
+    }
+
+    /**
+     * What the scan was created with besides its source: which enhancers
+     * were chosen for it, such as to choose them again when enhancing it
+     * again, and which files it left out.
+     */
+    @GetMapping("/{id}/options")
+    public ResponseEntity<ScanOptionsResponse> getScanOptions(
+        @PathVariable("id") final UUID id
+    ) {
+        final var scan = this.scanService.getScan(
+            this.contextProvider.get(),
+            new Scan.ScanId(id)
+        );
+
+        return ResponseEntity.ok(new ScanOptionsResponse(
+            scan.enhancers() == null ? null : scan.enhancers().stream().sorted().toList(),
+            scan.excludes()
+        ));
+    }
+
+    @PostMapping("/{id}/enhancements")
+    public ResponseEntity<dev.graphnous.api.v1.generated.scan.Scan> enhanceScan(
+        @PathVariable("id") final UUID id,
+        @RequestBody(required = false) final EnhanceScanRequest request
+    ) {
+        // Without a choice, every installed enhancer runs
+        final var enhancers = request == null || request.enhancers() == null
+            ? null
+            : Set.copyOf(request.enhancers());
+
+        final var scan = this.scanEnhancementService.enhance(
+            this.contextProvider.get(),
+            new Scan.ScanId(id),
+            enhancers
+        );
+
+        final var location = fromCurrentContextPath()
+            .path("/api/v1/scans/{id}/steps")
+            .buildAndExpand(scan.id().id())
+            .toUri();
+
+        return ResponseEntity.accepted().location(location).body(
+            this.scanMapper.fromDomain(scan)
+        );
     }
 
     @GetMapping("/{id}/steps")

@@ -9,6 +9,9 @@ import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.exception.ConflictException;
 import dev.graphnous.application.exception.GraphnousException;
 import dev.graphnous.application.exception.ValidationException;
+import dev.graphnous.application.scan.result.ScanExcludes;
+import dev.graphnous.enhancer.Enhancer;
+import dev.graphnous.enhancer.EnhancerRegistry;
 import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.project.ProjectService;
@@ -18,12 +21,15 @@ import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.ScanStep;
 import dev.graphnous.domain.scan.ScanStep.ScanStepType;
+import dev.graphnous.domain.system.System;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ScanService {
 
@@ -38,6 +44,9 @@ public class ScanService {
     private final EntitlementService entitlementService;
 
     private final ProjectService projectService;
+    private final SystemService systemService;
+
+    private final EnhancerRegistry enhancerRegistry;
 
     private static final Logger log = LoggerFactory.getLogger(ScanService.class);
 
@@ -49,8 +58,10 @@ public class ScanService {
         final ScanSteps scanSteps,
         final ScanRetention scanRetention,
         final ProjectService projectService,
+        final SystemService systemService,
         final AuthorizationService authorizationService,
-        final EntitlementService entitlementService
+        final EntitlementService entitlementService,
+        final EnhancerRegistry enhancerRegistry
     ) {
         this.eventPublisher = eventPublisher;
 
@@ -63,6 +74,9 @@ public class ScanService {
         this.entitlementService = entitlementService;
 
         this.projectService = projectService;
+        this.systemService = systemService;
+
+        this.enhancerRegistry = enhancerRegistry;
     }
 
     public Page<Scan> getScans(
@@ -94,6 +108,61 @@ public class ScanService {
         );
     }
 
+    /**
+     * The scans of every project of the system.
+     */
+    public Page<Scan> getSystemScans(
+        final RequestContext context,
+        final PageQuery pageQuery,
+        final System.SystemId systemId
+    ) {
+        authorizationService.authorize(
+            context,
+            Permission.SCAN_READ
+        );
+
+        // Only the scans of a system of the caller's organization
+        this.systemService.getSystem(
+            context,
+            systemId
+        );
+
+        log.debug(
+            "Getting scans organizationId={} systemId={} page={} size={}",
+            context.organization().id(),
+            systemId.id(),
+            pageQuery.page(),
+            pageQuery.size()
+        );
+
+        return scanRepository.findAllInSystem(
+            systemId,
+            pageQuery
+        );
+    }
+
+    /**
+     * The latest completed scan of each project of the system: the scans
+     * whose results show what the system is like now.
+     */
+    public List<Scan> getLatestCompletedScans(
+        final RequestContext context,
+        final System.SystemId systemId
+    ) {
+        authorizationService.authorize(
+            context,
+            Permission.SCAN_READ
+        );
+
+        // Only the scans of a system of the caller's organization
+        this.systemService.getSystem(
+            context,
+            systemId
+        );
+
+        return scanRepository.findLatestCompletedInSystem(systemId);
+    }
+
     public Scan getScan(
         final RequestContext context,
         final Scan.ScanId id
@@ -118,31 +187,56 @@ public class ScanService {
         return scan;
     }
 
+    /**
+     * Creates a scan and starts it in the background, with the enhancers
+     * the command chose.
+     *
+     * @throws ValidationException when an enhancer it chose is not installed
+     */
     public Scan create(
         RequestContext context,
         CreateScanCommand command
     ) {
         log.info(
-            "Creating scan organizationId={} projectId={}",
+            "Creating scan organizationId={} projectId={} enhancers={}",
             context.organization().id(),
-            command.projectId().id()
+            command.projectId().id(),
+            command.enhancers() == null ? "all" : command.enhancers()
         );
+
+        requireInstalled(command.enhancers());
 
         // Its commit is known once the scan has checked it out
         final var scan = newScan(
             context,
             command.projectId(),
-            Scan.SourceRevision.requested(blankToNull(command.revision()), command.branch())
+            Scan.SourceRevision.requested(blankToNull(command.revision()), command.branch()),
+            command.enhancers(),
+            command.excludes()
         );
 
         this.eventPublisher.publish(
             new StartScanEvent(
                 scan.id(),
-                context
+                context,
+                command.enhancers()
             )
         );
 
         return scan;
+    }
+
+    private void requireInstalled(final Set<String> enhancers) {
+        if (enhancers == null) {
+            return;
+        }
+
+        final var installed = this.enhancerRegistry.enhancers().stream().map(Enhancer::name).collect(Collectors.toSet());
+        final var unknown = enhancers.stream().filter(name -> !installed.contains(name)).sorted().toList();
+
+        if (!unknown.isEmpty()) {
+            throw new ValidationException("No such enhancer: " + String.join(", ", unknown));
+        }
     }
 
     /**
@@ -172,7 +266,11 @@ public class ScanService {
         final var scan = newScan(
             context,
             command.projectId(),
-            new Scan.SourceRevision(command.revision(), command.branch())
+            new Scan.SourceRevision(command.revision(), command.branch()),
+            // Every installed enhancer runs on uploaded results
+            null,
+            // Without the files the project leaves out of its scans
+            null
         );
 
         for (final var step : List.of(ScanStepType.CHECKOUT, ScanStepType.PLAN, ScanStepType.SCAN)) {
@@ -200,13 +298,21 @@ public class ScanService {
     private Scan newScan(
         final RequestContext context,
         final Project.ProjectId projectId,
-        final Scan.SourceRevision revision
+        final Scan.SourceRevision revision,
+        final Set<String> enhancers,
+        final List<String> excludes
     ) {
         this.authorizationService.authorize(context, Permission.SCAN_CREATE);
         this.entitlementService.require(context.organization(), Entitlement.SCANS);
 
         // Only for an existing project the caller may read
         this.projectService.getProject(context, projectId);
+
+        // The files the scan was asked to leave out, or else the ones its
+        // project leaves out of every scan
+        final var excluded = excludes == null
+            ? ScanExcludes.normalize(this.projectService.getScanExcludes(context, projectId))
+            : ScanExcludes.normalize(excludes);
 
         // Before the limit is checked, so old scans make way for new ones
         this.scanRetention.makeRoomFor(projectId);
@@ -225,7 +331,9 @@ public class ScanService {
                 revision,
                 Instant.now(),
                 Instant.now(),
-                null
+                null,
+                enhancers,
+                excluded
             )
         );
 

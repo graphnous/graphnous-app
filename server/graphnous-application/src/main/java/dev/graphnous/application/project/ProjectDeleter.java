@@ -1,12 +1,13 @@
 package dev.graphnous.application.project;
 
+import dev.graphnous.application.chat.ChatThreadRepository;
 import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.scan.ScanDeleter;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.system.System;
 
 /**
- * Deletes projects with their scans and notifications. Used by both the project and the
+ * Deletes projects with their scans, notifications and conversations. Used by both the project and the
  * system service, which is why it depends on repositories only.
  */
 public class ProjectDeleter {
@@ -14,15 +15,18 @@ public class ProjectDeleter {
     private final ProjectRepository projectRepository;
     private final ScanDeleter scanDeleter;
     private final NotificationRepository notificationRepository;
+    private final ChatThreadRepository chatThreadRepository;
 
     public ProjectDeleter(
         final ProjectRepository projectRepository,
         final ScanDeleter scanDeleter,
-        final NotificationRepository notificationRepository
+        final NotificationRepository notificationRepository,
+        final ChatThreadRepository chatThreadRepository
     ) {
         this.projectRepository = projectRepository;
         this.scanDeleter = scanDeleter;
         this.notificationRepository = notificationRepository;
+        this.chatThreadRepository = chatThreadRepository;
     }
 
     public void deleteProject(
@@ -34,6 +38,7 @@ public class ProjectDeleter {
         scanDeleter.deleteScans(projectId);
 
         notificationRepository.deleteByProjectId(projectId);
+        chatThreadRepository.deleteByProjectId(projectId);
 
         projectRepository.delete(systemId, projectId);
     }

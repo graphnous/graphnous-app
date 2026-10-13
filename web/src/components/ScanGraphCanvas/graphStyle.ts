@@ -1,15 +1,34 @@
 import type { StylesheetJson } from "cytoscape";
 
 import type { ScanGraphNodeType } from "@/types";
+import { resolveColors as resolveTokens } from "@/lib/theme/resolveColors";
 
 /**
  * How a type of node looks: its colour, as a theme token, its shape and
- * size, and what to call it in a legend.
+ * size, and what to call it in a legend. Related types share a colour and
+ * differ by shape.
  */
 export type NodeTypeStyle = {
     label: string;
     token: string;
-    shape: "ellipse" | "round-rectangle" | "rectangle" | "round-diamond" | "hexagon" | "barrel" | "tag" | "round-tag";
+    shape:
+        | "ellipse"
+        | "round-rectangle"
+        | "rectangle"
+        | "cut-rectangle"
+        | "round-diamond"
+        | "diamond"
+        | "rhomboid"
+        | "hexagon"
+        | "round-hexagon"
+        | "round-pentagon"
+        | "round-octagon"
+        | "round-triangle"
+        | "barrel"
+        | "tag"
+        | "round-tag"
+        | "vee"
+        | "star";
     size: number;
 };
 
@@ -24,6 +43,28 @@ export const NODE_TYPES: Record<ScanGraphNodeType, NodeTypeStyle> = {
     Field: { label: "Field", token: "--color-foreground-secondary", shape: "ellipse", size: 12 },
     Annotation: { label: "Annotation", token: "--color-graph-endpoint", shape: "round-tag", size: 14 },
     Dependency: { label: "Dependency", token: "--color-graph-external-dependency", shape: "barrel", size: 20 },
+
+    // An enhancer that ran on the scan, which what it added hangs from
+    Enhancement: { label: "Enhancer", token: "--color-foreground-secondary", shape: "star", size: 30 },
+
+    // The building blocks of a user interface, in one colour
+    Component: { label: "Component", token: "--chart-series-1", shape: "round-hexagon", size: 24 },
+    Directive: { label: "Directive", token: "--chart-series-1", shape: "round-triangle", size: 20 },
+    NgModule: { label: "Angular module", token: "--chart-series-1", shape: "cut-rectangle", size: 26 },
+
+    // What an application is wired from, in another
+    Application: { label: "Application", token: "--chart-series-8", shape: "star", size: 28 },
+    Configuration: { label: "Configuration", token: "--chart-series-8", shape: "cut-rectangle", size: 22 },
+    Controller: { label: "Controller", token: "--chart-series-8", shape: "round-pentagon", size: 24 },
+    Service: { label: "Service", token: "--chart-series-8", shape: "round-octagon", size: 22 },
+    Repository: { label: "Repository", token: "--chart-series-8", shape: "barrel", size: 22 },
+    Bean: { label: "Bean", token: "--chart-series-8", shape: "ellipse", size: 16 },
+
+    // What is served and called over HTTP, in the colour of endpoints
+    Route: { label: "Route", token: "--color-graph-endpoint", shape: "rhomboid", size: 24 },
+    Endpoint: { label: "Endpoint", token: "--color-graph-endpoint", shape: "diamond", size: 22 },
+    PathVariable: { label: "Path variable", token: "--color-graph-endpoint", shape: "ellipse", size: 12 },
+    HttpCall: { label: "HTTP call", token: "--color-graph-endpoint", shape: "vee", size: 18 },
 };
 
 /**
@@ -47,47 +88,23 @@ const BASE_TOKENS = {
 };
 
 /**
- * Resolves the theme's colours as they apply inside the element, in the
- * current colour scheme, to rgb() the canvas can draw with: the theme's
- * colours use light-dark() and color-mix(), which it cannot.
+ * Resolves the graph's colours as they apply inside the element, in the
+ * current colour scheme.
  */
 export function resolveColors(element: HTMLElement): GraphColors {
-    const probe = document.createElement("span");
-    probe.style.display = "none";
-    element.appendChild(probe);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 1;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-
-    const resolve = (token: string) => {
-        probe.style.color = `var(${token})`;
-        const color = getComputedStyle(probe).color;
-
-        if (!context) {
-            return color;
-        }
-
-        // Drawn and read back, which turns any CSS colour into rgb
-        context.clearRect(0, 0, 1, 1);
-        context.fillStyle = color;
-        context.fillRect(0, 0, 1, 1);
-        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
-
-        return `rgb(${r}, ${g}, ${b})`;
-    };
+    const tokens = Object.entries(BASE_TOKENS);
+    const nodeTokens = Object.values(NODE_TYPES).map((style) => style.token);
+    const resolved = resolveTokens(element, [...tokens.map(([, token]) => token), ...nodeTokens]);
 
     const colors: Record<string, string> = {};
 
-    for (const [name, token] of Object.entries(BASE_TOKENS)) {
-        colors[name] = resolve(token);
+    for (const [name, token] of tokens) {
+        colors[name] = resolved[token];
     }
 
-    for (const style of Object.values(NODE_TYPES)) {
-        colors[style.token] ??= resolve(style.token);
+    for (const token of nodeTokens) {
+        colors[token] = resolved[token];
     }
-
-    probe.remove();
 
     return colors as GraphColors;
 }
@@ -116,6 +133,11 @@ export function graphStylesheet(colors: GraphColors): StylesheetJson {
                 "min-zoomed-font-size": 7,
                 "border-width": 0,
                 "overlay-padding": 4,
+                // A type an enhancer added that has no look of its own yet
+                "background-color": colors.muted,
+                shape: "ellipse",
+                width: 16,
+                height: 16,
             },
         },
         ...Object.entries(NODE_TYPES).map(([type, style]) => ({
@@ -182,6 +204,111 @@ export function graphStylesheet(colors: GraphColors): StylesheetJson {
             style: {
                 "line-color": colors["--color-graph-external-dependency"],
                 "target-arrow-color": colors["--color-graph-external-dependency"],
+                "line-style": "dotted",
+            },
+        },
+        {
+            // What ties an enhancer and what it added to the scan: drawn
+            // quietly, as it says where a node comes from, not what it does
+            selector: 'edge[type = "HAS_ENHANCEMENT"], edge[type = "ADDED"], edge[type = "ENHANCE"]',
+            style: {
+                "line-style": "dashed",
+                "target-arrow-shape": "none",
+                opacity: 0.35,
+            },
+        },
+        {
+            selector: 'edge[type = "RENDERS"], edge[type = "IMPORTS"], edge[type = "INJECTS"]',
+            style: {
+                width: 1.5,
+                "line-color": colors["--chart-series-1"],
+                "target-arrow-color": colors["--chart-series-1"],
+                opacity: 0.9,
+            },
+        },
+        {
+            selector: 'edge[type = "INJECTS"]',
+            style: { "line-style": "dashed" },
+        },
+        {
+            selector: 'edge[type = "HAS_ENDPOINT"], edge[type = "HAS_PATH_VARIABLE"], edge[type = "HAS_HTTP_CALL"]',
+            style: {
+                "line-color": colors["--color-graph-endpoint"],
+                "target-arrow-color": colors["--color-graph-endpoint"],
+            },
+        },
+        {
+            // Between projects: what makes a system of them
+            selector: 'edge[type = "CALLS_ENDPOINTS_OF"]',
+            style: {
+                width: 3,
+                "line-color": colors["--color-graph-endpoint"],
+                "target-arrow-color": colors["--color-graph-endpoint"],
+                "arrow-scale": 1,
+                label: "data(label)",
+                "font-size": 10,
+                color: colors.foreground,
+                "text-background-color": colors.background,
+                "text-background-opacity": 0.85,
+                "text-background-padding": "2px",
+                "text-rotation": "autorotate",
+                opacity: 1,
+            },
+        },
+        {
+            selector: 'edge[type = "REQUESTS"]',
+            style: {
+                width: 1.5,
+                "line-color": colors["--color-graph-endpoint"],
+                "target-arrow-color": colors["--color-graph-endpoint"],
+                "line-style": "dashed",
+                opacity: 0.9,
+            },
+        },
+        {
+            // What bodies use, of the usages layer: calls stand out most
+            selector: 'edge[type = "CALLS"], edge[type = "INSTANTIATES"], edge[type = "READS"], edge[type = "WRITES"], edge[type = "USES"]',
+            style: {
+                width: 1.5,
+                "line-color": colors["--color-graph-method"],
+                "target-arrow-color": colors["--color-graph-method"],
+                label: "data(label)",
+                "font-size": 8,
+                color: colors.muted,
+                "text-background-color": colors.background,
+                "text-background-opacity": 0.85,
+                "text-background-padding": "1px",
+                "text-rotation": "autorotate",
+                "min-zoomed-font-size": 7,
+                opacity: 0.9,
+            },
+        },
+        {
+            selector: 'edge[type = "INSTANTIATES"]',
+            style: {
+                "line-color": colors["--color-graph-class"],
+                "target-arrow-color": colors["--color-graph-class"],
+                "line-style": "dashed",
+            },
+        },
+        {
+            selector: 'edge[type = "READS"], edge[type = "WRITES"]',
+            style: {
+                width: 1,
+                "line-color": colors.muted,
+                "target-arrow-color": colors.muted,
+            },
+        },
+        {
+            selector: 'edge[type = "WRITES"]',
+            style: { "line-style": "dashed" },
+        },
+        {
+            selector: 'edge[type = "USES"]',
+            style: {
+                width: 1,
+                "line-color": colors.border,
+                "target-arrow-color": colors.border,
                 "line-style": "dotted",
             },
         },

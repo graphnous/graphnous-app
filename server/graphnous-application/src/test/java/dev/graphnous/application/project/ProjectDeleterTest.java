@@ -1,5 +1,6 @@
 package dev.graphnous.application.project;
 
+import dev.graphnous.application.chat.ChatThreadRepository;
 import dev.graphnous.application.exception.ConflictException;
 import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.scan.ScanDeleter;
@@ -34,6 +35,9 @@ class ProjectDeleterTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private ChatThreadRepository chatThreadRepository;
 
     private final System.SystemId systemId = new System.SystemId(UUID.randomUUID());
 
@@ -98,6 +102,6 @@ class ProjectDeleterTest {
     }
 
     private ProjectDeleter deleter() {
-        return new ProjectDeleter(projectRepository, scanDeleter, notificationRepository);
+        return new ProjectDeleter(projectRepository, scanDeleter, notificationRepository, chatThreadRepository);
     }
 }

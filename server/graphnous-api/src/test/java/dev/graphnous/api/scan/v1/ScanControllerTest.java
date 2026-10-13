@@ -1,6 +1,7 @@
 package dev.graphnous.api.scan.v1;
 
 import dev.graphnous.application.context.RequestContextProvider;
+import dev.graphnous.application.enhancer.ScanEnhancementService;
 import dev.graphnous.application.exception.AuthorizationException;
 import dev.graphnous.application.exception.ConflictException;
 import dev.graphnous.application.exception.NotFoundException;
@@ -19,16 +20,21 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.hamcrest.Matchers.endsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,6 +53,103 @@ class ScanControllerTest {
 
     @MockitoBean
     private RequestContextProvider contextProvider;
+
+    @MockitoBean
+    private ScanEnhancementService scanEnhancementService;
+
+    // Not in the published OpenAPI spec yet, so not validated against it
+
+    @Test
+    void getWhatAScanWasCreatedWith() throws Exception {
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("abc123", "main"), now, now, now,
+            Set.of("spring", "react"), List.of("*.spec.ts", "generated/")
+        );
+
+        when(scanService.getScan(any(), eq(scan.id()))).thenReturn(scan);
+
+        mockMvc.perform(get("/api/v1/scans/{id}/options", scan.id().id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.enhancers[0]").value("react"))
+            .andExpect(jsonPath("$.enhancers[1]").value("spring"))
+            .andExpect(jsonPath("$.excludes[0]").value("*.spec.ts"))
+            .andExpect(jsonPath("$.excludes[1]").value("generated/"));
+    }
+
+    @Test
+    void getNoChoicesForAScanCreatedWithoutAny() throws Exception {
+        final var scan = completedScan();
+
+        when(scanService.getScan(any(), eq(scan.id()))).thenReturn(scan);
+
+        mockMvc.perform(get("/api/v1/scans/{id}/options", scan.id().id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.enhancers").isEmpty())
+            .andExpect(jsonPath("$.excludes").isEmpty());
+    }
+
+    @Test
+    void enhanceScanWithEveryEnhancer() throws Exception {
+        final var scan = completedScan();
+
+        when(scanEnhancementService.enhance(any(), eq(scan.id()), isNull())).thenReturn(scan);
+
+        mockMvc.perform(post("/api/v1/scans/{id}/enhancements", scan.id().id()))
+            .andExpect(status().isAccepted())
+            .andExpect(header().string("Location", endsWith("/api/v1/scans/" + scan.id().id() + "/steps")))
+            .andExpect(jsonPath("$.id").value(scan.id().id().toString()));
+    }
+
+    @Test
+    void enhanceScanWithTheEnhancersAskedFor() throws Exception {
+        final var scan = completedScan();
+
+        when(scanEnhancementService.enhance(any(), eq(scan.id()), eq(Set.of("react", "nextjs")))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/scans/{id}/enhancements", scan.id().id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enhancers\": [\"react\", \"nextjs\"]}")
+        )
+            .andExpect(status().isAccepted());
+    }
+
+    @Test
+    void enhanceScanWithNoEnhancers() throws Exception {
+        final var scan = completedScan();
+
+        when(scanEnhancementService.enhance(any(), eq(scan.id()), eq(Set.of()))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/scans/{id}/enhancements", scan.id().id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enhancers\": []}")
+        )
+            .andExpect(status().isAccepted());
+
+        // Not every enhancer, as without a choice
+        verify(scanEnhancementService).enhance(any(), eq(scan.id()), eq(Set.of()));
+    }
+
+    @Test
+    void enhanceScanThatCannotBeEnhanced() throws Exception {
+        when(scanEnhancementService.enhance(any(), any(), any()))
+            .thenThrow(new ConflictException("Scan kept no results to enhance"));
+
+        mockMvc.perform(post("/api/v1/scans/{id}/enhancements", UUID.randomUUID()))
+            .andExpect(status().isConflict());
+    }
+
+    private static Scan completedScan() {
+        final var now = Instant.now();
+
+        return new Scan(
+            Scan.ScanId.generate(), Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("4f2a9c1e88d0a19c3e7f0b42c0ffee1234567890", "main", "v1.2.0"), now, now, now
+        );
+    }
 
     @Test
     void getScan() throws Exception {

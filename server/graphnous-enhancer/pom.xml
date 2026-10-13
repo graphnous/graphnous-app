@@ -21,6 +21,8 @@
         <module>graphnous-enhancer-core</module>
         <module>graphnous-enhancer-spring</module>
         <module>graphnous-enhancer-angular</module>
+        <module>graphnous-enhancer-react</module>
+        <module>graphnous-enhancer-nextjs</module>
     </modules>
 
     <properties>
@@ -54,6 +56,16 @@
             <dependency>
                 <groupId>dev.graphnous</groupId>
                 <artifactId>graphnous-enhancer-angular</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.graphnous</groupId>
+                <artifactId>graphnous-enhancer-react</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.graphnous</groupId>
+                <artifactId>graphnous-enhancer-nextjs</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

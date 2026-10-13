@@ -209,6 +209,97 @@ class EnhancementRepositoryImplTest {
     }
 
     @Test
+    void replacesWhatAnEnhancerAddedBeforeInAnyVersion() {
+        final var scanId = storedScan();
+
+        repository.save(scanId, List.of(
+            enhancements("spring", "1.0.0", new Enhancement(
+                List.of(
+                    new Node(CONTROLLER, ORDER, List.of("Controller"), Map.of()),
+                    new Node(ENDPOINT, ORDER, List.of("Endpoint"), Map.of())
+                ),
+                List.of()
+            )),
+            enhancements("jpa", "2.1.0", new Enhancement(
+                List.of(new Node(ORDER + "|entity", ORDER, List.of("JpaEntity"), Map.of())),
+                List.of()
+            ))
+        ));
+
+        repository.replace(scanId, List.of(enhancements("spring", "1.1.0", new Enhancement(
+            List.of(new Node(CONTROLLER, ORDER, List.of("Controller"), Map.of("baseUrl", "/orders"))),
+            List.of()
+        ))));
+
+        assertThat(list("""
+            MATCH (:Scan {id: $scanId})-[:HAS_ENHANCEMENT]->(enhancement:Enhancement)
+            RETURN enhancement.name AS name, enhancement.version AS version
+            ORDER BY name
+            """, scanId)).containsExactly(
+            Map.of("name", "jpa", "version", "2.1.0"),
+            Map.of("name", "spring", "version", "1.1.0")
+        );
+        // The endpoint of the older version is gone, what jpa added is not
+        assertThat(list("""
+            MATCH (node:ENHANCED {scanId: $scanId})
+            RETURN [label IN labels(node) WHERE label <> 'ENHANCED'][0] AS label
+            ORDER BY label
+            """, scanId)).containsExactly(
+            Map.of("label", "Controller"),
+            Map.of("label", "JpaEntity")
+        );
+        assertThat(count("""
+            MATCH (:Class {qualifiedName: 'com.example.Order'})-[:ENHANCE]->(:Controller {baseUrl: '/orders'})
+            RETURN count(*) AS count
+            """)).isEqualTo(1);
+    }
+
+    @Test
+    void readsTheHttpCallsAndEndpointsOfScansBack() {
+        final var scanId = storedScan();
+        final var other = storedScan();
+        final var method = ORDER + "|method:com.example.Order.compareTo";
+
+        repository.save(scanId, List.of(
+            enhancements("spring", "1.0.0", new Enhancement(
+                List.of(
+                    new Node(CONTROLLER, ORDER, List.of("Controller"), Map.of()),
+                    new Node(ENDPOINT, ORDER, List.of("Endpoint"), Map.of("httpMethod", "GET", "url", "/orders"))
+                ),
+                List.of()
+            )),
+            enhancements("fetch-browser", "1.0.0", new Enhancement(
+                List.of(new Node(method + "|httpCall:3:5", ORDER, List.of("HttpCall"), Map.of("client", "fetch", "url", "/orders/{id}"))),
+                List.of()
+            ))
+        ));
+        repository.save(other, List.of(enhancements("spring", "1.0.0", new Enhancement(
+            List.of(new Node(ENDPOINT, ORDER, List.of("Endpoint"), Map.of("httpMethod", "POST", "url", "/orders"))),
+            List.of()
+        ))));
+
+        final var now = java.time.Instant.now();
+        final var scan = new Scan(
+            scanId, dev.graphnous.domain.project.Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("abc123", "main"), now, now, now
+        );
+
+        final var links = new dev.graphnous.persistence.scan.links.HttpLinkRepositoryImpl(driver);
+
+        assertThat(links.findEndpoints(List.of(scan))).containsExactly(
+            new dev.graphnous.application.scan.links.HttpLinks.Endpoint(
+                scanId.id() + "|" + ENDPOINT, scanId, scan.projectId(), "GET", "/orders"
+            )
+        );
+        assertThat(links.findCalls(List.of(scan))).containsExactly(
+            new dev.graphnous.application.scan.links.HttpLinks.Call(
+                scanId.id() + "|" + method + "|httpCall:3:5", scanId, scan.projectId(), null, "/orders/{id}", "fetch"
+            )
+        );
+        assertThat(links.findCalls(List.of())).isEmpty();
+    }
+
+    @Test
     void deletesTheEnhancementsWithTheResults() {
         final var scanId = storedScan();
 

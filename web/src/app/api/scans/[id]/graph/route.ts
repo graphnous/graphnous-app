@@ -3,7 +3,9 @@ import { type NextRequest } from "next/server";
 
 /**
  * The part of the scan's graph around a node: ?focus=<node id>&depth=<hops>,
- * each optional. Without a focus it is around the scan itself; the API
+ * each optional, and ?layers=<layer ids, by commas> for only those layers
+ * of it: every layer without, only the focus with none. Without a focus it
+ * is around the scan itself; the API
  * answers 404 for a focus that is not in the scan's graph and 400 for a
  * depth out of range.
  */
@@ -18,6 +20,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         if (value) {
             query.set(name, value);
         }
+    }
+
+    // Also when empty, which shows no layer
+    const layers = request.nextUrl.searchParams.get("layers");
+
+    if (layers !== null) {
+        query.set("layers", layers);
     }
 
     const search = query.size > 0 ? `?${query}` : "";

@@ -23,6 +23,10 @@ public class ScanMapper {
         entity.setUpdatedAt(domain.updatedAt());
         entity.setStartedAt(domain.startedAt());
 
+        entity.setEnhancers(domain.enhancers());
+        // Nothing rather than an empty list, as for the scans before there were any
+        entity.setExcludes(domain.excludes().isEmpty() ? null : domain.excludes());
+
         return entity;
     }
 
@@ -38,7 +42,9 @@ public class ScanMapper {
             ),
             entity.getCreatedAt(),
             entity.getUpdatedAt(),
-            entity.getStartedAt()
+            entity.getStartedAt(),
+            entity.getEnhancers(),
+            entity.getExcludes()
         );
     }
 }

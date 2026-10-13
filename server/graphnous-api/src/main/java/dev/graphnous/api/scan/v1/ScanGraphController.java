@@ -44,6 +44,8 @@ public class ScanGraphController {
      * @param depth     the hops from the focus it reaches
      * @param truncated whether more nodes were within reach than it holds;
      *                  the nearest are kept
+     * @param layers    every layer of the scan's graph, shown or not: what
+     *                  the scan found, then what each enhancer added
      */
     public record ScanGraphResponse(
         UUID scanId,
@@ -51,7 +53,20 @@ public class ScanGraphController {
         int depth,
         List<ScanGraphNode> nodes,
         List<ScanGraphEdge> edges,
-        boolean truncated
+        boolean truncated,
+        List<ScanGraphLayer> layers
+    ) {
+    }
+
+    /**
+     * @param id   what layers takes to show it: result for what the scan
+     *             found, an enhancer's name, an @ and its version, such
+     *             as spring@1.0.0, or usages for what bodies use
+     * @param name such as spring 1.0.0
+     */
+    public record ScanGraphLayer(
+        String id,
+        String name
     ) {
     }
 
@@ -159,18 +174,27 @@ public class ScanGraphController {
      * Without a focus the graph is around the scan itself, two hops deep by
      * default: its targets and their modules. With one, it is that node and
      * its neighbours, one hop deep by default. A depth goes up to 5.
+     * <p>
+     * With layers, only the nodes of those layers show, and what is reached
+     * through them: ?layers=result,spring@1.0.0. Every layer without it,
+     * only the focus with none. The layer usages is what the bodies of
+     * methods call, create, read, write and name: it shows only when it is
+     * among the layers asked for, and then as one relationship for each
+     * kind of use between two nodes, with how many places.
      */
     @GetMapping("/{id}/graph")
     public ResponseEntity<ScanGraphResponse> getGraph(
         @PathVariable("id") final UUID id,
         @RequestParam(name = "focus", required = false) final String focus,
-        @RequestParam(name = "depth", required = false) final Integer depth
+        @RequestParam(name = "depth", required = false) final Integer depth,
+        @RequestParam(name = "layers", required = false) final List<String> layers
     ) {
         final var neighbourhood = scanGraphService.getNeighbourhood(
             contextProvider.get(),
             new Scan.ScanId(id),
             focus,
-            depth
+            depth,
+            layers
         );
 
         return ResponseEntity.ok(fromDomain(id, neighbourhood));
@@ -230,7 +254,10 @@ public class ScanGraphController {
             neighbourhood.edges().stream()
                 .map(edge -> new ScanGraphEdge(edge.source(), edge.target(), edge.type(), edge.properties()))
                 .toList(),
-            neighbourhood.truncated()
+            neighbourhood.truncated(),
+            neighbourhood.layers().stream()
+                .map(layer -> new ScanGraphLayer(layer.id(), layer.name()))
+                .toList()
         );
     }
 }

@@ -5,6 +5,8 @@ import dev.graphnous.domain.scan.Scan;
 import jakarta.persistence.*;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -38,6 +40,37 @@ public class ScanEntity {
 
     @Column(name = "started_at")
     private Instant startedAt;
+
+    /**
+     * The names of the enhancers chosen when the scan was created; null
+     * when none were chosen.
+     */
+    @Convert(converter = EnhancerNamesConverter.class)
+    @Column(name = "enhancers", updatable = false, columnDefinition = "TEXT")
+    private Set<String> enhancers;
+
+    /**
+     * The patterns of the files left out of the scan; null for none.
+     */
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "excludes", updatable = false, columnDefinition = "TEXT")
+    private List<String> excludes;
+
+    public void setExcludes(final List<String> excludes) {
+        this.excludes = excludes;
+    }
+
+    public List<String> getExcludes() {
+        return this.excludes;
+    }
+
+    public void setEnhancers(final Set<String> enhancers) {
+        this.enhancers = enhancers;
+    }
+
+    public Set<String> getEnhancers() {
+        return this.enhancers;
+    }
 
     public void setStartedAt(final Instant startedAt) {
         this.startedAt = startedAt;

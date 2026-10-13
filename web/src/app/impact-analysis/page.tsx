@@ -6,9 +6,35 @@ import {
     Stack,
 } from "@graphnous/theme";
 
-import { useSystemStore } from "@/lib/store/systemStore";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function ProjectsPage() {
+import { ImpactAnalysis } from "@/components/ImpactAnalysis/ImpactAnalysis";
+import { useListProjects } from "@/lib/hooks/project/useListProjects";
+import { useSystemStore } from "@/lib/store/systemStore";
+import { breadcrumbs } from "@/lib/breadcrumbs";
+
+/**
+ * Reads what a link asked for, ?scan=<scan id>&node=<node id>&name=<name>,
+ * which needs a Suspense boundary around it when the page is prerendered.
+ */
+function LinkedImpactAnalysis({ systemId }: { systemId: string | undefined }) {
+    const searchParams = useSearchParams();
+    const { projects } = useListProjects();
+
+    const scanId = searchParams.get("scan");
+    const nodeId = searchParams.get("node");
+
+    const initial = scanId && nodeId ? { scanId, nodeId, name: searchParams.get("name") } : null;
+
+    return (
+        // Starts over for another system, as its choices are of its own
+        // projects, and for another link
+        <ImpactAnalysis key={`${systemId}|${scanId}|${nodeId}`} projects={projects} initial={initial} />
+    );
+}
+
+export default function ImpactAnalysisPage() {
     const selectedSystem = useSystemStore(
         (state) => state.selectedSystem,
     );
@@ -18,12 +44,12 @@ export default function ProjectsPage() {
             <Stack gap={8}>
                 <PageHeader
                     title="Impact Analysis"
-                    breadcrumbs={[
-                        { label: selectedSystem?.name || '', href: "/" },
-                        { label: "Impact Analysis" },
-                    ]}
+                    breadcrumbs={breadcrumbs(selectedSystem, { label: "Impact Analysis" })}
                     description={`Understand what could be affected when a component, API, or infrastructure resource changes.`}
                 />
+                <Suspense fallback={null}>
+                    <LinkedImpactAnalysis systemId={selectedSystem?.id} />
+                </Suspense>
             </Stack>
         </Container>
     );

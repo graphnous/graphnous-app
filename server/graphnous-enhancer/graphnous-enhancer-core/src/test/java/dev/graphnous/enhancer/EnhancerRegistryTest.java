@@ -23,6 +23,14 @@ class EnhancerRegistryTest {
     }
 
     @Test
+    void returnsEveryEnhancerInRegisteredOrder() {
+        final var spring = enhancer(Language.JAVA);
+        final var react = enhancer(Language.TYPESCRIPT);
+
+        assertThat(new EnhancerRegistry(List.of(spring, react)).enhancers()).containsExactly(spring, react);
+    }
+
+    @Test
     void returnsNoEnhancersForALanguageWithout() {
         final var registry = new EnhancerRegistry(List.of(enhancer(Language.JAVA)));
 

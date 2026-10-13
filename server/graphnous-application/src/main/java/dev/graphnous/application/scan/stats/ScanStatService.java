@@ -1,10 +1,18 @@
 package dev.graphnous.application.scan.stats;
 
+import dev.graphnous.application.authorization.AuthorizationService;
+import dev.graphnous.application.authorization.Permission;
+import dev.graphnous.application.context.RequestContext;
+import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.application.system.SystemService;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.stats.ScanStats;
+import dev.graphnous.domain.scan.stats.SystemStats;
+import dev.graphnous.domain.system.System;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -31,12 +40,80 @@ public class ScanStatService {
 
     private final ScanStatRepository scanStatRepository;
 
+    private final ProjectService projectService;
+    private final SystemService systemService;
+    private final AuthorizationService authorizationService;
+
     private static final Logger log = LoggerFactory.getLogger(ScanStatService.class);
 
     public ScanStatService(
-        final ScanStatRepository scanStatRepository
+        final ScanStatRepository scanStatRepository,
+        final ProjectService projectService,
+        final SystemService systemService,
+        final AuthorizationService authorizationService
     ) {
         this.scanStatRepository = scanStatRepository;
+
+        this.projectService = projectService;
+        this.systemService = systemService;
+        this.authorizationService = authorizationService;
+    }
+
+    /**
+     * The stats of the project's latest scan that has any: a scan only has
+     * stats once its results are stored, so a scan still running, or one
+     * that failed before, is passed over. None when none of the project's
+     * scans has stats, such as before its first scan completed.
+     *
+     * @throws NotFoundException when the project is not one of the caller's
+     */
+    public Optional<ScanStats> getLatestStats(
+        final RequestContext context,
+        final Project.ProjectId projectId
+    ) {
+        authorizationService.authorize(
+            context,
+            Permission.SCAN_READ
+        );
+
+        this.projectService.getProject(context, projectId);
+
+        log.debug(
+            "Getting latest scan stats organizationId={} projectId={}",
+            context.organization().id(),
+            projectId.id()
+        );
+
+        return this.scanStatRepository.findLatestByProjectId(projectId);
+    }
+
+    /**
+     * The stats of the system: those of the latest scan that has any of
+     * each of its projects, added up. All zero for a system none of whose
+     * projects has a scan with stats.
+     */
+    public SystemStats getSystemStats(
+        final RequestContext context,
+        final System.SystemId systemId
+    ) {
+        authorizationService.authorize(
+            context,
+            Permission.SCAN_READ
+        );
+
+        // Only the stats of a system of the caller's organization
+        this.systemService.getSystem(context, systemId);
+
+        log.debug(
+            "Getting system stats organizationId={} systemId={}",
+            context.organization().id(),
+            systemId.id()
+        );
+
+        return SystemStats.of(
+            systemId,
+            this.scanStatRepository.findLatestBySystemId(systemId)
+        );
     }
 
     /**

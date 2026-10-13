@@ -3,8 +3,10 @@ package dev.graphnous.persistence.project;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,23 @@ public interface ProjectJpaRepository extends JpaRepository<ProjectEntity, UUID>
 
     int countBySystemId(
         final UUID systemId
+    );
+
+    /**
+     * The patterns of the files the project leaves out of its scans, as
+     * JSON; not part of the entity, so saving a project leaves them alone.
+     */
+    @Query(value = "SELECT scan_excludes FROM projects WHERE id = :id", nativeQuery = true)
+    String findScanExcludes(
+        @Param("id") final UUID id
+    );
+
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE projects SET scan_excludes = :excludes WHERE id = :id", nativeQuery = true)
+    int updateScanExcludes(
+        @Param("id") final UUID id,
+        @Param("excludes") final String excludes
     );
 
     @Query("SELECT p.id FROM ProjectEntity p WHERE p.systemId = :systemId")

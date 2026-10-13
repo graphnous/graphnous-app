@@ -12,7 +12,10 @@ import java.util.UUID;
 
 public interface ChatThreadJpaRepository extends JpaRepository<ChatThreadEntity, UUID> {
 
-    Page<ChatThreadEntity> findAllBySystemIdAndUserId(
+    /**
+     * About the system as a whole: not about one of its projects.
+     */
+    Page<ChatThreadEntity> findAllBySystemIdAndUserIdAndProjectIdIsNull(
         final UUID systemId,
         final UUID userId,
         final Pageable pageable
@@ -21,9 +24,30 @@ public interface ChatThreadJpaRepository extends JpaRepository<ChatThreadEntity,
     /**
      * The threads of the single user of a server without security.
      */
-    Page<ChatThreadEntity> findAllBySystemIdAndUserIdIsNull(
+    Page<ChatThreadEntity> findAllBySystemIdAndUserIdIsNullAndProjectIdIsNull(
         final UUID systemId,
         final Pageable pageable
+    );
+
+    Page<ChatThreadEntity> findAllByProjectIdAndUserId(
+        final UUID projectId,
+        final UUID userId,
+        final Pageable pageable
+    );
+
+    /**
+     * The threads of the single user of a server without security.
+     */
+    Page<ChatThreadEntity> findAllByProjectIdAndUserIdIsNull(
+        final UUID projectId,
+        final Pageable pageable
+    );
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM ChatThreadEntity t WHERE t.projectId = :projectId")
+    void deleteByProjectId(
+        @Param("projectId") final UUID projectId
     );
 
     @Modifying

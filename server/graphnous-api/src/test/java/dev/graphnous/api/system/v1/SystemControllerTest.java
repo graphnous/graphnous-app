@@ -11,10 +11,21 @@ import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.project.CreateProjectCommand;
 import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.application.scan.ScanService;
+import dev.graphnous.application.scan.dependencies.ScanDependency;
+import dev.graphnous.application.scan.dependencies.ScanDependencyFilter;
+import dev.graphnous.application.scan.dependencies.ScanDependencyService;
+import dev.graphnous.application.scan.dependencies.SystemDependency;
+import dev.graphnous.application.scan.dependencies.SystemLibrary;
+import dev.graphnous.application.scan.links.HttpLinkService;
+import dev.graphnous.application.scan.links.HttpLinks;
+import dev.graphnous.application.scan.stats.ScanStatService;
 import dev.graphnous.application.system.CreateSystemCommand;
 import dev.graphnous.application.system.SystemService;
 import dev.graphnous.application.system.UpdateSystemCommand;
 import dev.graphnous.domain.project.Project;
+import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.domain.scan.stats.SystemStats;
 import dev.graphnous.domain.system.System;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,11 +37,14 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,7 +85,247 @@ class SystemControllerTest {
     private ProjectService projectService;
 
     @MockitoBean
+    private ScanService scanService;
+
+    @MockitoBean
+    private ScanStatService scanStatService;
+
+    @MockitoBean
+    private ScanDependencyService scanDependencyService;
+
+    @MockitoBean
+    private HttpLinkService httpLinkService;
+
+    @MockitoBean
     private RequestContextProvider contextProvider;
+
+    // Not in the published OpenAPI spec yet, so not validated against it
+
+    @Test
+    void getStats() throws Exception {
+        final var systemId = new System.SystemId(UUID.randomUUID());
+
+        when(scanStatService.getSystemStats(any(), eq(systemId))).thenReturn(
+            new SystemStats(
+                systemId,
+                2,
+                3,
+                Map.of("JAVA", List.of("backend/src/main/java/com/example/Order.java")),
+                11,
+                41
+            )
+        );
+
+        mockMvc.perform(get("/api/v1/systems/{id}/stats", systemId.id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.systemId").value(systemId.id().toString()))
+            .andExpect(jsonPath("$.numberOfProjectsScanned").value(2))
+            .andExpect(jsonPath("$.numberOfModulesScanned").value(3))
+            .andExpect(jsonPath("$.languages.JAVA[0]").value("backend/src/main/java/com/example/Order.java"))
+            .andExpect(jsonPath("$.numberOfClassesParsed").value(11))
+            .andExpect(jsonPath("$.numberOfMethodsParsed").value(41));
+    }
+
+    @Test
+    void getStatsOfAnUnknownSystem() throws Exception {
+        when(scanStatService.getSystemStats(any(), any()))
+            .thenThrow(new NotFoundException("System not found"));
+
+        mockMvc.perform(get("/api/v1/systems/{id}/stats", UUID.randomUUID()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getDependencies() throws Exception {
+        final var systemId = new System.SystemId(UUID.randomUUID());
+        final var projectId = Project.ProjectId.generate();
+        final var scanId = Scan.ScanId.generate();
+
+        when(scanDependencyService.getSystemDependencies(
+            any(),
+            eq(systemId),
+            eq(new ScanDependencyFilter("junit", null, "test")),
+            eq(new PageQuery(0, 50, new dev.graphnous.application.pagination.Sort(
+                "name", dev.graphnous.application.pagination.Sort.Direction.ASC
+            )))
+        )).thenReturn(new Page<>(
+            List.of(new SystemDependency(
+                projectId,
+                scanId,
+                new ScanDependency("dependency:org.junit.jupiter:junit-jupiter:", "orders", "org.junit.jupiter:junit-jupiter", null, "test")
+            )),
+            0, 50, 1, 1
+        ));
+
+        mockMvc.perform(
+            get("/api/v1/systems/{id}/dependencies", systemId.id())
+                .queryParam("query", "junit")
+                .queryParam("scope", "test")
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].id").value("dependency:org.junit.jupiter:junit-jupiter:"))
+            .andExpect(jsonPath("$.content[0].projectId").value(projectId.id().toString()))
+            .andExpect(jsonPath("$.content[0].scanId").value(scanId.id().toString()))
+            .andExpect(jsonPath("$.content[0].module").value("orders"))
+            .andExpect(jsonPath("$.content[0].name").value("org.junit.jupiter:junit-jupiter"))
+            .andExpect(jsonPath("$.content[0].scope").value("test"))
+            .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void getLinks() throws Exception {
+        final var systemId = new System.SystemId(UUID.randomUUID());
+        final var frontendScan = Scan.ScanId.generate();
+        final var backendScan = Scan.ScanId.generate();
+        final var frontend = Project.ProjectId.generate();
+        final var backend = Project.ProjectId.generate();
+
+        when(httpLinkService.getLinks(any(), eq(systemId), eq(List.of(frontendScan, backendScan)))).thenReturn(
+            new HttpLinks.Found(
+                List.of(new HttpLinks.Link(
+                    new HttpLinks.Call("call", frontendScan, frontend, null, "/api/orders/{id}", "fetch"),
+                    new HttpLinks.Endpoint("endpoint", backendScan, backend, "GET", "/api/orders/{id}"),
+                    HttpLinks.Match.PATH
+                )),
+                4,
+                9
+            )
+        );
+
+        mockMvc.perform(
+            get("/api/v1/systems/{id}/links", systemId.id())
+                .queryParam("scans", frontendScan.id() + "," + backendScan.id())
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.links[0].call.id").value("call"))
+            .andExpect(jsonPath("$.links[0].call.projectId").value(frontend.id().toString()))
+            .andExpect(jsonPath("$.links[0].call.httpMethod").isEmpty())
+            .andExpect(jsonPath("$.links[0].endpoint.scanId").value(backendScan.id().toString()))
+            .andExpect(jsonPath("$.links[0].endpoint.httpMethod").value("GET"))
+            .andExpect(jsonPath("$.links[0].match").value("PATH"))
+            .andExpect(jsonPath("$.links[0].crossesProjects").value(true))
+            .andExpect(jsonPath("$.calls").value(4))
+            .andExpect(jsonPath("$.endpoints").value(9));
+    }
+
+    @Test
+    void getLinksOfTheLatestScansByDefault() throws Exception {
+        final var systemId = new System.SystemId(UUID.randomUUID());
+
+        when(httpLinkService.getLinks(any(), eq(systemId), isNull())).thenReturn(new HttpLinks.Found(List.of(), 0, 0));
+
+        mockMvc.perform(get("/api/v1/systems/{id}/links", systemId.id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.links").isEmpty());
+    }
+
+    @Test
+    void getLibraries() throws Exception {
+        final var systemId = new System.SystemId(UUID.randomUUID());
+        final var backend = Project.ProjectId.generate();
+        final var frontend = Project.ProjectId.generate();
+
+        when(scanDependencyService.getSystemLibraries(
+            any(),
+            eq(systemId),
+            eq("slf4j"),
+            eq(true),
+            eq(new PageQuery(0, 50, new dev.graphnous.application.pagination.Sort(
+                "versions", dev.graphnous.application.pagination.Sort.Direction.DESC
+            )))
+        )).thenReturn(new Page<>(
+            List.of(new SystemLibrary("org.slf4j:slf4j-api", List.of(
+                new SystemLibrary.Version("2.0.18", List.of(backend)),
+                new SystemLibrary.Version("2.0.9", List.of(frontend))
+            ))),
+            0, 50, 1, 1
+        ));
+
+        mockMvc.perform(
+            get("/api/v1/systems/{id}/libraries", systemId.id())
+                .queryParam("query", "slf4j")
+                .queryParam("drift", "true")
+                .queryParam("sort", "versions")
+                .queryParam("direction", "desc")
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].name").value("org.slf4j:slf4j-api"))
+            .andExpect(jsonPath("$.content[0].versions[0].version").value("2.0.18"))
+            .andExpect(jsonPath("$.content[0].versions[0].projects[0]").value(backend.id().toString()))
+            .andExpect(jsonPath("$.content[0].versions[1].projects[0]").value(frontend.id().toString()))
+            .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void getLibrariesWithAnInvalidSort() throws Exception {
+        mockMvc.perform(
+            get("/api/v1/systems/{id}/libraries", UUID.randomUUID())
+                .param("sort", "scope")
+        )
+        .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getDependenciesOfAnUnknownSystem() throws Exception {
+        when(scanDependencyService.getSystemDependencies(any(), any(), any(), any()))
+            .thenThrow(new NotFoundException("System not found"));
+
+        mockMvc.perform(get("/api/v1/systems/{id}/dependencies", UUID.randomUUID()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getDependenciesWithAnInvalidSort() throws Exception {
+        mockMvc.perform(
+            get("/api/v1/systems/{id}/dependencies", UUID.randomUUID())
+                .param("sort", "version")
+        )
+        .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getScansNewestFirstByDefault() throws Exception {
+        final var systemId = new System.SystemId(UUID.randomUUID());
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("abc123", "main"), now, now, now
+        );
+
+        when(scanService.getSystemScans(
+            any(),
+            argThat((PageQuery query) ->
+                query.page() == 0 && query.size() == 20
+                    && query.sort().property().equals("createdAt")
+                    && query.sort().direction() == dev.graphnous.application.pagination.Sort.Direction.DESC
+            ),
+            eq(systemId)
+        )).thenReturn(new Page<>(List.of(scan), 0, 20, 1, 1));
+
+        mockMvc.perform(get("/api/v1/systems/{id}/scans", systemId.id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].id").value(scan.id().id().toString()))
+            .andExpect(jsonPath("$.content[0].status").value("COMPLETED"))
+            .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void getScansOfAnUnknownSystem() throws Exception {
+        when(scanService.getSystemScans(any(), any(), any()))
+            .thenThrow(new NotFoundException("System not found"));
+
+        mockMvc.perform(get("/api/v1/systems/{id}/scans", UUID.randomUUID()))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getScansWithAnInvalidSort() throws Exception {
+        mockMvc.perform(
+            get("/api/v1/systems/{id}/scans", UUID.randomUUID())
+                .param("sort", "branch")
+        )
+        .andExpect(status().isBadRequest());
+    }
 
     @Test
     void getSystems() throws Exception {

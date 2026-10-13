@@ -3,10 +3,17 @@ package dev.graphnous.domain.scan;
 import dev.graphnous.domain.project.Project;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * @param startedAt when the scan started running; null until then
+ * @param enhancers the names of the enhancers chosen to run on its results
+ *                  when it was created; null when none were chosen, which
+ *                  runs every installed enhancer, and empty for none
+ * @param excludes  the patterns of the files left out of its results, such
+ *                  as {@code *.spec.ts}; none when every file is kept
  */
 public record Scan(
     ScanId id,
@@ -15,8 +22,46 @@ public record Scan(
     SourceRevision revision,
     Instant createdAt,
     Instant updatedAt,
-    Instant startedAt
+    Instant startedAt,
+    Set<String> enhancers,
+    List<String> excludes
 ) {
+
+    public Scan {
+        enhancers = enhancers == null ? null : Set.copyOf(enhancers);
+        excludes = excludes == null ? List.of() : List.copyOf(excludes);
+    }
+
+    /**
+     * A scan that keeps every file.
+     */
+    public Scan(
+        final ScanId id,
+        final Project.ProjectId projectId,
+        final ScanStatus status,
+        final SourceRevision revision,
+        final Instant createdAt,
+        final Instant updatedAt,
+        final Instant startedAt,
+        final Set<String> enhancers
+    ) {
+        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, enhancers, null);
+    }
+
+    /**
+     * A scan for which no enhancers were chosen.
+     */
+    public Scan(
+        final ScanId id,
+        final Project.ProjectId projectId,
+        final ScanStatus status,
+        final SourceRevision revision,
+        final Instant createdAt,
+        final Instant updatedAt,
+        final Instant startedAt
+    ) {
+        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, null, null);
+    }
 
     /**
      * The scan with a new status at {@code at}. The first move to RUNNING
@@ -30,7 +75,7 @@ public record Scan(
             ? at
             : startedAt;
 
-        return new Scan(id, projectId, newStatus, revision, createdAt, at, started);
+        return new Scan(id, projectId, newStatus, revision, createdAt, at, started, enhancers, excludes);
     }
 
     /**
@@ -45,7 +90,9 @@ public record Scan(
             new SourceRevision(commit, revision.branch(), revision.requestedRevision()),
             createdAt,
             updatedAt,
-            startedAt
+            startedAt,
+            enhancers,
+            excludes
         );
     }
 

@@ -3,12 +3,15 @@
 import { Alert, Button, EmptyState, Field, Select, Spinner, Text } from "@graphnous/theme";
 import { ArrowCounterClockwiseIcon, ArrowLeftIcon, GraphIcon } from "@phosphor-icons/react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { LayerFilter } from "@/components/LayerFilter/LayerFilter";
+import { NodeTypeFilter, nodeTypes, withoutTypes } from "@/components/NodeTypeFilter/NodeTypeFilter";
 import { NodeDetails } from "@/components/ScanGraphCanvas/NodeDetails";
 import { NODE_TYPES } from "@/components/ScanGraphCanvas/graphStyle";
 import type { ScanGraphLayout } from "@/components/ScanGraphCanvas/ScanGraphCanvas";
 import { completedScans, ScanSelector } from "@/components/ScanSelector/ScanSelector";
+import { chosenLayers, tickedLayers } from "@/lib/graphLayers";
 import { useGetScanGraph } from "@/lib/hooks/scan/graph/useGetScanGraph";
 import type { Scan, ScanGraphNodeType } from "@/types";
 
@@ -34,6 +37,11 @@ export type ProjectGraphProps = {
      * newest at first.
      */
     scans: Scan[];
+    /**
+     * The scan to show the graph of, and only that one: without choosing
+     * another, such as on the page of the scan itself.
+     */
+    scanId?: string;
 };
 
 /**
@@ -41,9 +49,9 @@ export type ProjectGraphProps = {
  * around whichever node is double-clicked or focused on, with the way
  * back. The scan to explore is chosen at the top right.
  */
-export function ProjectGraph({ scans }: ProjectGraphProps) {
+export function ProjectGraph({ scans, scanId: onlyScanId }: ProjectGraphProps) {
     const [chosenScanId, setChosenScanId] = useState<string | null>(null);
-    const scanId = chosenScanId ?? completedScans(scans)[0]?.id ?? null;
+    const scanId = onlyScanId ?? chosenScanId ?? completedScans(scans)[0]?.id ?? null;
 
     // The nodes focused on, in order, so the way back is known; the scan
     // itself while empty
@@ -54,7 +62,16 @@ export function ProjectGraph({ scans }: ProjectGraphProps) {
     const [depth, setDepth] = useState<number | null>(null);
     const [layout, setLayout] = useState<ScanGraphLayout>("rings");
 
-    const { graph, loading, error } = useGetScanGraph({ scanId, focus, depth });
+    // The ids of the layers shown: what the scan found, and what each
+    // enhancer added; all of them while null
+    const [layers, setLayers] = useState<string[] | null>(null);
+
+    // The types of node left out of the picture; they are still loaded
+    const [hiddenTypes, setHiddenTypes] = useState<string[]>([]);
+
+    const { graph: loaded, loading, error } = useGetScanGraph({ scanId, focus, depth, layers });
+
+    const graph = useMemo(() => withoutTypes(loaded, hiddenTypes), [loaded, hiddenTypes]);
 
     const focusOn = (id: string) => {
         if (id === (graph?.focus ?? null)) {
@@ -77,6 +94,8 @@ export function ProjectGraph({ scans }: ProjectGraphProps) {
 
     const chooseScan = (scan: Scan) => {
         setChosenScanId(scan.id);
+        // Another scan has layers of its own
+        setLayers(null);
         reset();
     };
 
@@ -123,6 +142,24 @@ export function ProjectGraph({ scans }: ProjectGraphProps) {
                         />
                     </Field>
                 </div>
+                <div className="w-48">
+                    <Field label="Layers">
+                        <LayerFilter
+                            layers={loaded?.layers ?? []}
+                            shown={tickedLayers(loaded?.layers ?? [], layers)}
+                            onShownChange={(ticked) => setLayers(chosenLayers(loaded?.layers ?? [], ticked))}
+                        />
+                    </Field>
+                </div>
+                <div className="w-44">
+                    <Field label="Node types">
+                        <NodeTypeFilter
+                            types={nodeTypes(loaded)}
+                            hidden={hiddenTypes}
+                            onHiddenChange={setHiddenTypes}
+                        />
+                    </Field>
+                </div>
                 <div className="w-28">
                     <Field label="Layout">
                         <Select
@@ -132,16 +169,18 @@ export function ProjectGraph({ scans }: ProjectGraphProps) {
                         />
                     </Field>
                 </div>
-                <div className="w-72">
-                    <Field label="Scan">
-                        <ScanSelector
-                            scans={scans}
-                            value={scanId}
-                            onScanChange={chooseScan}
-                            disabled={completedScans(scans).length === 0}
-                        />
-                    </Field>
-                </div>
+                {!onlyScanId && (
+                    <div className="w-72">
+                        <Field label="Scan">
+                            <ScanSelector
+                                scans={scans}
+                                value={scanId}
+                                onScanChange={chooseScan}
+                                disabled={completedScans(scans).length === 0}
+                            />
+                        </Field>
+                    </div>
+                )}
             </div>
 
             {!scanId ? (
@@ -160,7 +199,7 @@ export function ProjectGraph({ scans }: ProjectGraphProps) {
 
                     {graph?.truncated && (
                         <Alert tone="warning">
-                            There are more nodes within reach than fit: the nearest {graph.nodes.length} are shown.
+                            There are more nodes within reach than fit: the nearest {loaded?.nodes.length} are loaded.
                             Focus on a node, or choose a smaller depth, to see the rest.
                         </Alert>
                     )}
@@ -186,7 +225,7 @@ export function ProjectGraph({ scans }: ProjectGraphProps) {
                                 </div>
                             )}
 
-                            {graph && graph.nodes.length <= 1 && !loading && (
+                            {loaded && loaded.nodes.length <= 1 && !loading && (
                                 <div className="absolute inset-x-0 bottom-6 text-center">
                                     <Text size="sm" tone="muted">The scan found nothing to show here.</Text>
                                 </div>
@@ -199,6 +238,7 @@ export function ProjectGraph({ scans }: ProjectGraphProps) {
                                     node={selectedNode}
                                     isFocus={selectedNode.id === graph?.focus}
                                     onFocus={focusOn}
+                                    usagesOf={{ scanId, nodeId: selectedNode.id }}
                                 />
                             ) : (
                                 <Text size="sm" tone="muted">

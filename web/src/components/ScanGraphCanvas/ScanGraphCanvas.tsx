@@ -4,6 +4,7 @@ import cytoscape, { type Core, type ElementDefinition, type LayoutOptions, type 
 import { useEffect, useRef } from "react";
 
 import type { ScanGraph, ScanGraphNode } from "@/types";
+import { onColorSchemeChange } from "@/lib/theme/resolveColors";
 
 import { graphStylesheet, resolveColors } from "./graphStyle";
 
@@ -45,6 +46,17 @@ function label(node: ScanGraphNode): string {
             return `${name}()`;
         case "File":
             return name.split("/").at(-1) ?? name;
+        case "Endpoint":
+        case "HttpCall":
+            // They have no name of their own: GET /orders
+            return [node.properties.httpMethod, node.properties.url].filter(Boolean).join(" ") || name;
+        case "Route":
+            return typeof node.properties.url === "string" ? node.properties.url : name;
+        case "Controller":
+            // Without a name, by what it serves
+            return node.name ?? (typeof node.properties.baseUrl === "string" && node.properties.baseUrl
+                ? node.properties.baseUrl
+                : name);
         default:
             return name;
     }
@@ -63,7 +75,8 @@ function elements(graph: ScanGraph): ElementDefinition[] {
             depth: node.depth,
             label: label(node),
         },
-        classes: node.id === graph.focus ? "focus" : undefined,
+        // Every node at no hops is a focus: a graph of several scans has one each
+        classes: node.id === graph.focus || node.depth === 0 ? "focus" : undefined,
     }));
 
     const edges: ElementDefinition[] = graph.edges.map((edge) => ({
@@ -73,6 +86,13 @@ function elements(graph: ScanGraph): ElementDefinition[] {
             source: edge.source,
             target: edge.target,
             type: edge.type,
+            // What to write on it, for the relationships that say how much:
+            // what they say themselves, or in how many places a body uses it
+            label: typeof edge.properties.label === "string"
+                ? edge.properties.label
+                : typeof edge.properties.places === "number" && edge.properties.places > 1
+                    ? `×${edge.properties.places}`
+                    : "",
         },
     }));
 
@@ -96,7 +116,7 @@ function layoutOptions(cy: Core, graph: ScanGraph, layout: ScanGraphLayout): Lay
             directed: false,
             spacingFactor: 1.1,
             // A collection rather than a selector, as ids are not valid in one
-            roots: cy.getElementById(graph.focus) as unknown as string[],
+            roots: cy.nodes().filter((node) => node.data("depth") === 0) as unknown as string[],
         };
     }
 
@@ -171,11 +191,7 @@ export function ScanGraphCanvas({
             }
         };
 
-        const scheme = window.matchMedia("(prefers-color-scheme: dark)");
-        scheme.addEventListener("change", restyle);
-
-        const theme = new MutationObserver(restyle);
-        theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
+        const stopRestyling = onColorSchemeChange(restyle);
 
         // A graph laid out while the container had no size yet, such as
         // right after it mounts, is laid out again once it has one
@@ -197,8 +213,7 @@ export function ScanGraphCanvas({
         cy.current = instance;
 
         return () => {
-            scheme.removeEventListener("change", restyle);
-            theme.disconnect();
+            stopRestyling();
             resize.disconnect();
             instance.destroy();
             cy.current = null;

@@ -1,7 +1,9 @@
 "use client";
 
-import { Button, Code, CopyButton, DescriptionList, Heading, Text } from "@graphnous/theme";
+import { Button, Code, CopyButton, DescriptionList, Heading, Link, Text } from "@graphnous/theme";
 import { CrosshairIcon } from "@phosphor-icons/react";
+
+import { hasUsages, impactHref } from "@/lib/impact";
 
 import type { ScanGraphNode } from "@/types";
 
@@ -14,6 +16,12 @@ export type NodeDetailsProps = {
      */
     isFocus: boolean;
     onFocus: (id: string) => void;
+    /**
+     * The scan the node is of and its id in that scan's graph, to link to
+     * what a change to it affects; no link without them. The id is asked
+     * for, as a graph of several scans gives its nodes ids of its own.
+     */
+    usagesOf?: { scanId: string; nodeId: string } | null;
 };
 
 /**
@@ -30,7 +38,7 @@ function formatValue(value: unknown): string {
 /**
  * What the scan found about a node of its graph, and focusing on it.
  */
-export function NodeDetails({ node, isFocus, onFocus }: NodeDetailsProps) {
+export function NodeDetails({ node, isFocus, onFocus, usagesOf }: NodeDetailsProps) {
     const style = NODE_TYPES[node.type];
 
     const properties = Object.entries(node.properties)
@@ -72,6 +80,14 @@ export function NodeDetails({ node, isFocus, onFocus }: NodeDetailsProps) {
             >
                 {isFocus ? "In focus" : "Focus on this node"}
             </Button>
+
+            {usagesOf && hasUsages(node.type) && (
+                <div>
+                    <Link href={impactHref(usagesOf.scanId, usagesOf.nodeId, node.name)}>
+                        See what a change affects
+                    </Link>
+                </div>
+            )}
 
             {properties.length > 0 && <DescriptionList items={properties} />}
         </div>

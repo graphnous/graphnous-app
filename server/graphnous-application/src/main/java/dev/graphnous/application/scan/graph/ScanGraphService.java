@@ -8,7 +8,9 @@ import dev.graphnous.domain.scan.Scan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Reads the graph of a scan, for a user who may read the scan: each read
@@ -86,6 +88,23 @@ public class ScanGraphService {
         final String focus,
         final Integer depth
     ) {
+        return getNeighbourhood(context, scanId, focus, depth, null);
+    }
+
+    /**
+     * The neighbourhood, of only the layers shown.
+     *
+     * @param layers the ids of the layers shown (see
+     *               {@link ScanGraph.Layer}); every layer when null, only
+     *               the focus when empty
+     */
+    public ScanGraph.Neighbourhood getNeighbourhood(
+        final RequestContext context,
+        final Scan.ScanId scanId,
+        final String focus,
+        final Integer depth,
+        final Collection<String> layers
+    ) {
         scanService.getScan(context, scanId);
 
         final var node = focus == null || focus.isBlank() ? null : focus.trim();
@@ -103,7 +122,15 @@ public class ScanGraphService {
             hops
         );
 
-        return scanGraphRepository.findNeighbourhood(scanId, node, hops, MAX_NODES)
+        final var shown = layers == null
+            ? null
+            : layers.stream().filter(layer -> layer != null && !layer.isBlank()).map(String::trim).collect(Collectors.toSet());
+
+        final var neighbourhood = shown == null
+            ? scanGraphRepository.findNeighbourhood(scanId, node, hops, MAX_NODES)
+            : scanGraphRepository.findNeighbourhood(scanId, node, hops, MAX_NODES, shown);
+
+        return neighbourhood
             .orElseThrow(() -> new NotFoundException(
                 "Node " + node + " is not in the graph of scan " + scanId.id()
             ));

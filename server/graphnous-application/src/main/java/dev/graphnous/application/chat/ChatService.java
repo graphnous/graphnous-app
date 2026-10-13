@@ -1,5 +1,7 @@
 package dev.graphnous.application.chat;
 
+import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.domain.project.Project;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.RequestContext;
@@ -16,15 +18,16 @@ import java.time.Clock;
 import java.util.Objects;
 
 /**
- * The conversations with the assistant. A thread is private to the user who
- * started it, and only while they may read its system: anyone else is told
- * it does not exist.
+ * The conversations with the assistant, about a system or about one of
+ * its projects. A thread is private to the user who started it, and only
+ * while they may read its system: anyone else is told it does not exist.
  */
 public class ChatService {
 
     private final ChatThreadRepository chatThreadRepository;
     private final AuthorizationService authorizationService;
     private final SystemService systemService;
+    private final ProjectService projectService;
     private final Clock clock;
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
@@ -33,11 +36,13 @@ public class ChatService {
         final ChatThreadRepository chatThreadRepository,
         final AuthorizationService authorizationService,
         final SystemService systemService,
+        final ProjectService projectService,
         final Clock clock
     ) {
         this.chatThreadRepository = chatThreadRepository;
         this.authorizationService = authorizationService;
         this.systemService = systemService;
+        this.projectService = projectService;
         this.clock = clock;
     }
 
@@ -65,7 +70,50 @@ public class ChatService {
     }
 
     /**
-     * The caller's threads about the system.
+     * Starts a thread about a project, which is of the project's system.
+     */
+    public ChatThread createForProject(
+        final RequestContext context,
+        final Project.ProjectId projectId
+    ) {
+        this.authorizationService.authorize(context, Permission.CHAT_WRITE);
+
+        // Only about a project of the caller's organization
+        final var project = this.projectService.getProject(context, projectId);
+
+        final var thread = this.chatThreadRepository.save(
+            ChatThread.start(project.systemId(), projectId, context.user().id(), this.clock.instant())
+        );
+
+        log.info(
+            "Created chat thread organizationId={} systemId={} projectId={} threadId={}",
+            context.organization().id(),
+            project.systemId().id(),
+            projectId.id(),
+            thread.id().id()
+        );
+
+        return thread;
+    }
+
+    /**
+     * The caller's threads about the project.
+     */
+    public Page<ChatThread> getProjectThreads(
+        final RequestContext context,
+        final PageQuery pageQuery,
+        final Project.ProjectId projectId
+    ) {
+        this.authorizationService.authorize(context, Permission.CHAT_READ);
+
+        this.projectService.getProject(context, projectId);
+
+        return this.chatThreadRepository.findAllOfProject(projectId, context.user().id(), pageQuery);
+    }
+
+    /**
+     * The caller's threads about the system as a whole; those about one of
+     * its projects are that project's.
      */
     public Page<ChatThread> getThreads(
         final RequestContext context,

@@ -5,20 +5,29 @@ import {
     ConfirmDialog,
     EmptyState,
     IconButton,
+    Link,
     Menu,
     Sort,
     Table,
+    Timestamp,
     useToast,
 } from "@graphnous/theme";
 import { DotsThreeIcon, TrashIcon } from "@phosphor-icons/react";
 
 import { ScanRevision } from "@/components/ScanRevision/ScanRevision";
+import { ScanStatusBadge } from "@/components/ScanStatusBadge/ScanStatusBadge";
 import { useDeleteScan } from "@/lib/hooks/scan/useDeleteScan";
-import type { Page, Scan, ScanStatus } from "@/types";
+import type { Page, Project, Scan, ScanStatus } from "@/types";
 import { useState } from "react";
 
 export type ScansTableProps = {
     page: Page<Scan>;
+    /**
+     * The projects the scans may be of, to show each scan's project in a
+     * first column, such as for the scans of a whole system; no column
+     * without them.
+     */
+    projects?: Project[];
     /**
      * Called after a scan was deleted, such as to load the scans again.
      */
@@ -36,11 +45,13 @@ const ACTIVE: ScanStatus[] = ["PENDING", "QUEUED", "RUNNING"];
  */
 export function ScansTable({
     page,
+    projects,
     onScanDeleted,
 }: ScansTableProps) {
     const [sort, setSort] = useState<Sort>({
         field: 'createdAt',
-        direction: 'asc'
+        // The newest first
+        direction: 'desc'
     });
 
     // The scan whose delete is being confirmed
@@ -75,19 +86,55 @@ export function ScansTable({
         closeDelete();
     };
 
+    const projectsById = new Map(projects?.map((project) => [project.id, project]));
+
+    const projectColumn: Column<Scan>[] = projects ? [
+        {
+            key: 'project',
+            header: 'Project',
+            cell: (scan) => {
+                const project = projectsById.get(scan.projectId);
+
+                return (
+                    <Link href={`/projects/${scan.projectId}`}>
+                        {project?.name ?? 'Unknown project'}
+                    </Link>
+                );
+            }
+        }
+    ] : [];
+
     const columns: Column<Scan>[] = [
+        ...projectColumn,
         {
             key: 'branch',
             header: 'Branch',
             sortable: true,
-            cell: (scan) => <span className="font-medium">
+            cell: (scan) => <Link href={`/scans/${scan.id}`} className="font-medium">
                 {scan.branch}
-            </span>
+            </Link>
         },
         {
             key: 'revision',
             header: 'Revision',
             cell: (scan) => <ScanRevision revision={scan.revision} requestedRevision={scan.requestedRevision} />
+        },
+        {
+            key: 'status',
+            header: 'Status',
+            cell: (scan) => <ScanStatusBadge status={scan.status} />
+        },
+        {
+            key: 'startedAt',
+            header: 'Started',
+            sortable: true,
+            cell: (scan) => <Moment value={scan.startedAt} />
+        },
+        {
+            key: 'completedAt',
+            header: 'Completed',
+            sortable: true,
+            cell: (scan) => <Moment value={scan.completedAt} />
         },
         {
             key: 'action',
@@ -116,9 +163,11 @@ export function ScansTable({
         }
     ]
 
-    const rows = page.content.sort((a, b) => {
-        const field = sort.field as 'branch' | 'revision';
-        // A scan without a revision yet sorts first
+    // A copy, as the scans are the caller's
+    const rows = [...page.content].sort((a, b) => {
+        const field = sort.field as 'branch' | 'revision' | 'startedAt' | 'completedAt';
+        // A scan without a revision or time yet sorts first; the times are
+        // ISO 8601, which sort as text
         const order = (a[field] ?? '').localeCompare(b[field] ?? '');
         return sort.direction === 'asc' ? order : -order;
     });
@@ -150,4 +199,11 @@ export function ScansTable({
             />
         </>
     );
+}
+
+/**
+ * When something happened, or a dash when it has not yet.
+ */
+function Moment({ value }: { value: string | null | undefined }) {
+    return value ? <Timestamp value={value} /> : <span aria-label="Not yet">–</span>;
 }

@@ -2,6 +2,24 @@
 @import "@graphnous/theme/theme.css";
 
 /*
+ * The categorical colours of charts, assigned in this order and never
+ * cycled; light-dark(<light>, <dark>) as the theme. Validated for colour
+ * vision deficiency and contrast against --surface in both schemes; the
+ * light aqua, yellow and magenta are below 3:1, so charts using them show
+ * their values as text too.
+ */
+:root {
+  --chart-series-1: light-dark(#2a78d6, #3987e5); /* blue */
+  --chart-series-2: light-dark(#eb6834, #d95926); /* orange */
+  --chart-series-3: light-dark(#1baf7a, #199e70); /* aqua */
+  --chart-series-4: light-dark(#eda100, #c98500); /* yellow */
+  --chart-series-5: light-dark(#e87ba4, #d55181); /* magenta */
+  --chart-series-6: light-dark(#008300, #008300); /* green */
+  --chart-series-7: light-dark(#4a3aa7, #9085e9); /* violet */
+  --chart-series-8: light-dark(#e34948, #e66767); /* red */
+}
+
+/*
  * The chat (CopilotKit) in the Graphnous theme: CopilotKit sets its own,
  * neutral palette on [data-copilotkit] under the same names as the theme's
  * tokens, so they are set again here, from the theme's values. Captured on

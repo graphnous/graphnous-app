@@ -6,7 +6,9 @@ import java.util.UUID;
 /**
  * One step of executing a scan. A scan has every step, in order, from the
  * moment it is created; each step moves from PENDING to RUNNING to
- * COMPLETED or FAILED, or is SKIPPED when an earlier step failed.
+ * COMPLETED or FAILED, or is SKIPPED when an earlier step failed. Only a
+ * step that can be done again for a completed scan, such as enhancing its
+ * results, restarts.
  *
  * @param startedAt  when the step started running; null until then
  * @param finishedAt when it completed, failed or was skipped
@@ -66,6 +68,14 @@ public record ScanStep(
         return status == ScanStepStatus.PENDING
             ? new ScanStep(id, scanId, type, ScanStepStatus.RUNNING, at, null, null)
             : this;
+    }
+
+    /**
+     * Runs the step anew, however it went before: its error and when it
+     * finished are forgotten.
+     */
+    public ScanStep restart(final Instant at) {
+        return new ScanStep(id, scanId, type, ScanStepStatus.RUNNING, at, null, null);
     }
 
     /**

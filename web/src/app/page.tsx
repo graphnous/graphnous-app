@@ -17,10 +17,12 @@ import { PlayIcon } from "@phosphor-icons/react";
 
 import { useSystemStore } from "@/lib/store/systemStore";
 import { useListProjects } from "@/lib/hooks/project/useListProjects";
+import { useSystemStats } from "@/lib/hooks/system/useSystemStats";
 import { ProjectsTable } from "@/components/ProjectsTable/ProjectsTable";
 import { CreateProjectModal, CreateProjectModalRef } from "@/components/CreateProjectModal/CreateProjectModal";
 import { useRef } from "react";
 import { StatsCard } from "@/components/StatsCard/StatsCard";
+import { breadcrumbs } from "@/lib/breadcrumbs";
 
 export default function Home() {
   const selectedSystem = useSystemStore(
@@ -28,6 +30,21 @@ export default function Home() {
   );
 
   const { page, refresh } = useListProjects()
+
+  const {
+    stats,
+    loading: statsLoading,
+    error: statsError,
+  } = useSystemStats(selectedSystem?.id);
+
+  const numberOfFiles = Object.values(stats?.languages ?? {})
+    .reduce((total, files) => total + files.length, 0);
+
+  /**
+   * The stat as shown: a dash while loading, or when the stats failed to load.
+   */
+  const stat = (value: number | undefined) =>
+    statsLoading || value === undefined ? "–" : value.toLocaleString();
 
   const createProjectModalRef = useRef<CreateProjectModalRef>(null);
 
@@ -37,19 +54,19 @@ export default function Home() {
       <Stack gap={8}>
         <PageHeader
           title={selectedSystem?.name}
-          breadcrumbs={[
-            { label: selectedSystem?.name || '', href: "/" },
-            { label: "Overview" },
-          ]}
+          breadcrumbs={breadcrumbs(selectedSystem, { label: "Overview" })}
         />
 
         <section className="flex gap-4 flex-row">
           <StatsCard className="flex-1" title="Projects" stat={page.totalElements} />
-          <StatsCard className="flex-1" title="Modules" stat={120} />
-          <StatsCard className="flex-1" title="Files" stat={4812} />
-          <StatsCard className="flex-1" title="Classes" stat={1441} />
-          <StatsCard className="flex-1" title="Methods" stat={2875} />
+          <StatsCard className="flex-1" title="Modules" stat={stat(stats?.numberOfModulesScanned)} />
+          <StatsCard className="flex-1" title="Files" stat={stat(stats ? numberOfFiles : undefined)} />
+          <StatsCard className="flex-1" title="Classes" stat={stat(stats?.numberOfClassesParsed)} />
+          <StatsCard className="flex-1" title="Methods" stat={stat(stats?.numberOfMethodsParsed)} />
         </section>
+        {statsError && (
+          <Text>{statsError.message}</Text>
+        )}
         <Section title="Projects">
           <ProjectsTable
             page={page}

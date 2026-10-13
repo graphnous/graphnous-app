@@ -3,8 +3,10 @@ package dev.graphnous.persistence.scan.result;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.graphnous.core.model.Annotation;
+import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.Field;
+import dev.graphnous.core.model.FieldAccess;
 import dev.graphnous.core.model.File;
 import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.Module;
@@ -38,6 +40,14 @@ import java.util.Map;
  * property {@code arguments.<name>}, e.g. {@code arguments.value} for
  * {@code @Path("/orders")}, and all arguments together are kept as JSON in
  * {@code arguments}.
+ * <p>
+ * What the body of a method or function uses becomes a relationship from
+ * it, one for each place it does, with the line: {@code CALLS} to a method
+ * or function, {@code INSTANTIATES} to a class it constructs,
+ * {@code READS} and {@code WRITES} to a field or variable, and
+ * {@code USES} to a class it names as a type. Only what the scanner
+ * resolved to something the scan has itself is kept: a call into a library
+ * has nothing to point at.
  */
 record ScanResultGraph(
     List<Map<String, Object>> targets,
@@ -56,8 +66,21 @@ record ScanResultGraph(
     List<Map<String, Object>> implementsTypes,
     List<Map<String, Object>> classAnnotations,
     List<Map<String, Object>> methodAnnotations,
-    List<Map<String, Object>> fieldAnnotations
+    List<Map<String, Object>> fieldAnnotations,
+    Map<String, List<Map<String, Object>>> usages
 ) {
+
+    /**
+     * The relationships from a method or function to what its body uses,
+     * each with the label of what it points at.
+     */
+    static final Map<String, String> USAGES = Map.of(
+        "CALLS", "Method",
+        "INSTANTIATES", "Class",
+        "READS", "Field",
+        "WRITES", "Field",
+        "USES", "Class"
+    );
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -120,6 +143,39 @@ record ScanResultGraph(
         private final List<Map<String, Object>> classAnnotations = new ArrayList<>();
         private final List<Map<String, Object>> methodAnnotations = new ArrayList<>();
         private final List<Map<String, Object>> fieldAnnotations = new ArrayList<>();
+
+        /**
+         * The ids of the methods and functions, classes, and fields and
+         * variables, by their target and qualified name, as calls, type
+         * uses and field accesses name them; the first of a name, as for
+         * overloads that share one.
+         */
+        private final Map<String, String> methodIds = new HashMap<>();
+        private final Map<String, String> classIds = new HashMap<>();
+        private final Map<String, String> fieldIds = new HashMap<>();
+
+        /**
+         * The class of each constructor, which is what constructing it
+         * instantiates.
+         */
+        private final Map<String, String> constructorClasses = new HashMap<>();
+
+        /**
+         * What the bodies use, to resolve once everything has an id: what
+         * is used may be declared after what uses it.
+         */
+        private final List<PendingUsage> pending = new ArrayList<>();
+
+        /**
+         * @param key what is used, by its target and qualified name
+         */
+        private record PendingUsage(
+            String type,
+            String sourceId,
+            String key,
+            Map<String, Object> properties
+        ) {
+        }
 
         private Builder(final String scanId) {
             this.scanId = scanId;
@@ -235,6 +291,8 @@ record ScanResultGraph(
                 return classId;
             }
 
+            classIds.putIfAbsent(key(type.getQualifiedName()), classId);
+
             classes.put(classId, row(
                 "id", classId,
                 "targetId", targetId,
@@ -273,6 +331,14 @@ record ScanResultGraph(
 
             row.put("classId", classId);
             methods.add(row);
+
+            methodIds.putIfAbsent(key(method.getQualifiedName()), methodId);
+
+            if (method.getKind() == Method.Kind.CONSTRUCTOR) {
+                constructorClasses.put(methodId, classId);
+            }
+
+            addUsages(methodId, method);
         }
 
         /**
@@ -286,6 +352,120 @@ record ScanResultGraph(
             row.put("fileId", fileId);
             row.put("packageId", packageId);
             functions.add(row);
+
+            methodIds.putIfAbsent(key(function.getQualifiedName()), functionId);
+
+            addUsages(functionId, function);
+        }
+
+        /**
+         * What is used by its target and qualified name: names are only
+         * unique within a target.
+         */
+        private String key(final String qualifiedName) {
+            return targetId + "|" + qualifiedName;
+        }
+
+        /**
+         * Keeps what the body of the method or function uses, as far as the
+         * scanner resolved it.
+         */
+        private void addUsages(final String methodId, final Method method) {
+            for (final var call : method.getCalls()) {
+                if (Boolean.FALSE.equals(call.getResolved()) || call.getTarget() == null) {
+                    continue;
+                }
+
+                final var properties = row("line", call.getStartLine());
+
+                if (call.getKind() == Call.Kind.CONSTRUCTOR) {
+                    pending.add(new PendingUsage("INSTANTIATES", methodId, key(call.getTarget()), properties));
+                } else {
+                    // Passing a method on, as in onClick={this.save}, is not calling it
+                    properties.put("reference", call.getKind() == Call.Kind.METHOD_REFERENCE);
+                    pending.add(new PendingUsage("CALLS", methodId, key(call.getTarget()), properties));
+                }
+            }
+
+            for (final var access : method.getFieldAccesses()) {
+                if (Boolean.FALSE.equals(access.getResolved()) || access.getTarget() == null) {
+                    continue;
+                }
+
+                final var kind = access.getAccess();
+
+                if (kind != FieldAccess.Access.WRITE) {
+                    pending.add(new PendingUsage("READS", methodId, key(access.getTarget()), row("line", access.getStartLine())));
+                }
+
+                if (kind == FieldAccess.Access.WRITE || kind == FieldAccess.Access.READ_WRITE) {
+                    pending.add(new PendingUsage("WRITES", methodId, key(access.getTarget()), row("line", access.getStartLine())));
+                }
+            }
+
+            for (final var use : method.getTypeUses()) {
+                if (Boolean.FALSE.equals(use.getResolved()) || use.getTarget() == null) {
+                    continue;
+                }
+
+                pending.add(new PendingUsage(
+                    "USES",
+                    methodId,
+                    key(rawType(use.getTarget())),
+                    row("line", use.getStartLine(), "kind", string(use.getKind()))
+                ));
+            }
+        }
+
+        /**
+         * The usages by relationship, each from a method or function to the
+         * node of the scan it uses; those of what the scan does not have
+         * are left out.
+         */
+        private Map<String, List<Map<String, Object>>> usages() {
+            final var usages = new LinkedHashMap<String, List<Map<String, Object>>>();
+
+            for (final var usage : pending) {
+                final var targetId = switch (usage.type()) {
+                    case "CALLS" -> methodIds.get(usage.key());
+                    case "INSTANTIATES" -> instantiated(usage.key());
+                    case "READS", "WRITES" -> fieldIds.get(usage.key());
+                    default -> classIds.get(usage.key());
+                };
+
+                if (targetId == null) {
+                    continue;
+                }
+
+                final var row = new HashMap<>(usage.properties());
+                row.put("sourceId", usage.sourceId());
+                row.put("targetId", targetId);
+
+                usages.computeIfAbsent(usage.type(), type -> new ArrayList<>()).add(row);
+            }
+
+            return usages;
+        }
+
+        /**
+         * The class a constructor call instantiates: that of the
+         * constructor it names, or the class it names itself, also when
+         * that has no constructor of its own, as {@code Order.constructor}.
+         */
+        private String instantiated(final String key) {
+            final var constructor = methodIds.get(key);
+
+            if (constructor != null && constructorClasses.containsKey(constructor)) {
+                return constructorClasses.get(constructor);
+            }
+
+            if (classIds.containsKey(key)) {
+                return classIds.get(key);
+            }
+
+            final var member = key.lastIndexOf('.');
+
+            return member < 0 ? null : classIds.get(key.substring(0, member));
         }
 
         /**
@@ -330,6 +510,10 @@ record ScanResultGraph(
 
             row.put("classId", classId);
             fields.add(row);
+
+            if (field.getQualifiedName() != null) {
+                fieldIds.putIfAbsent(key(field.getQualifiedName()), fieldId);
+            }
         }
 
         /**
@@ -343,6 +527,10 @@ record ScanResultGraph(
             row.put("fileId", fileId);
             row.put("packageId", packageId);
             variables.add(row);
+
+            if (variable.getQualifiedName() != null) {
+                fieldIds.putIfAbsent(key(variable.getQualifiedName()), variableId);
+            }
         }
 
         /**
@@ -428,7 +616,8 @@ record ScanResultGraph(
                 implementsTypes,
                 distinctById(classAnnotations),
                 distinctById(methodAnnotations),
-                distinctById(fieldAnnotations)
+                distinctById(fieldAnnotations),
+                usages()
             );
         }
 
@@ -510,15 +699,27 @@ record ScanResultGraph(
         /**
          * A map of alternating keys and values; unlike {@link Map#of} it
          * accepts null values, which the driver stores as absent properties.
+         * Neo4j cannot store null in a list, so a null in a list value, such
+         * as the type of an untyped TypeScript parameter, becomes an empty
+         * string; dropping it would misalign lists read by position, such
+         * as the parameter names and types.
          */
         private static Map<String, Object> row(final Object... keysAndValues) {
             final var row = new HashMap<String, Object>();
 
             for (int i = 0; i < keysAndValues.length; i += 2) {
-                row.put((String) keysAndValues[i], keysAndValues[i + 1]);
+                row.put((String) keysAndValues[i], withoutNulls(keysAndValues[i + 1]));
             }
 
             return row;
+        }
+
+        private static Object withoutNulls(final Object value) {
+            if (value instanceof List<?> list && list.contains(null)) {
+                return list.stream().map(item -> item == null ? "" : item).toList();
+            }
+
+            return value;
         }
     }
 }

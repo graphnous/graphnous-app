@@ -1,5 +1,6 @@
 package dev.graphnous.persistence.project;
 
+import dev.graphnous.persistence.scan.StringListConverter;
 import dev.graphnous.application.exception.GraphnousException;
 import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
@@ -30,6 +31,25 @@ public class ProjectRepositoryImpl implements ProjectRepository {
         this.neo4jRepository = neo4jRepository;
 
         this.projectMapper = new ProjectMapper();
+    }
+
+    @Override
+    public List<String> findScanExcludes(final Project.ProjectId id) {
+        final var excludes = StringListConverter.read(this.jpaRepository.findScanExcludes(id.id()));
+
+        return excludes == null ? List.of() : List.copyOf(excludes);
+    }
+
+    @Override
+    public void saveScanExcludes(
+        final Project.ProjectId id,
+        final List<String> excludes
+    ) {
+        // Nothing rather than an empty list, as for a project that never had any
+        this.jpaRepository.updateScanExcludes(
+            id.id(),
+            excludes == null || excludes.isEmpty() ? null : StringListConverter.write(excludes)
+        );
     }
 
     @Override
