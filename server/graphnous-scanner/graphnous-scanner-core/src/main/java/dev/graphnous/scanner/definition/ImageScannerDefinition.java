@@ -24,14 +24,18 @@ import java.util.regex.Pattern;
  * @param image    the image the scanner runs in
  * @param command  the command running the scanner; it replaces the image's
  *                 entrypoint
- * @param output   the absolute container path the scanner writes its
- *                 result to, in a directory such as {@code /output}
+ * @param output      the absolute container path the scanner writes its
+ *                    result to, in a directory such as {@code /output}
+ * @param mounts      what the container mounts besides the repository
+ * @param environment the environment variables of the container
  */
 public record ImageScannerDefinition(
     ScanTarget.Language language,
     String image,
     List<String> command,
-    String output
+    String output,
+    List<ScannerMount> mounts,
+    Map<String, String> environment
 ) implements ScannerDefinition {
 
     public static final String REPOSITORY = "{repository}";
@@ -63,6 +67,29 @@ public record ImageScannerDefinition(
         }
 
         command = List.copyOf(command);
+        mounts = mounts == null ? List.of() : List.copyOf(mounts);
+        environment = environment == null ? Map.of() : Map.copyOf(environment);
+
+        final var outputDirectory = output.substring(0, output.lastIndexOf('/'));
+
+        for (final var mount : mounts) {
+            // The sandbox creates the output directory itself
+            final var prefix = mount.target().endsWith("/") ? mount.target() : mount.target() + "/";
+
+            if (mount.target().equals(outputDirectory) || outputDirectory.startsWith(prefix)) {
+                throw new IllegalArgumentException(
+                    "The " + language + " scanner's mount at " + mount.target() + " would hide its output " + output
+                );
+            }
+        }
+
+        for (final var name : environment.keySet()) {
+            if (name.isBlank() || name.contains("=")) {
+                throw new IllegalArgumentException(
+                    "The " + language + " scanner's environment has an invalid variable name: " + name
+                );
+            }
+        }
 
         for (final var argument : command) {
             final var matcher = PLACEHOLDER.matcher(argument);
@@ -76,6 +103,18 @@ public record ImageScannerDefinition(
                 }
             }
         }
+    }
+
+    /**
+     * A scanner without mounts or environment variables of its own.
+     */
+    public ImageScannerDefinition(
+        final ScanTarget.Language language,
+        final String image,
+        final List<String> command,
+        final String output
+    ) {
+        this(language, image, command, output, List.of(), Map.of());
     }
 
     @Override

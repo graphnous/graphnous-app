@@ -9,6 +9,7 @@ import com.github.dockerjava.api.model.MountType;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.definition.ScannerDefinition;
+import dev.graphnous.scanner.definition.ScannerMount;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -113,6 +115,41 @@ class DockerSandboxTest {
 
         assertThat(stdout).containsExactly("class Service { }", "read-only");
         assertThat(repository.resolve("created")).doesNotExist();
+    }
+
+    @Test
+    void givesTheScannerItsMountsAndEnvironment() throws IOException {
+        final var volume = "graphnous-sandbox-test-" + UUID.randomUUID();
+        final var script = """
+            echo "$CACHE_TOKEN"
+            cat /cache/previous 2>/dev/null || echo empty
+            echo kept > /cache/previous
+            printf '%s' '%s' > "$6"
+            """.formatted("%s", RESULT);
+
+        final var scanner = new ImageScannerDefinition(
+            ScanTarget.Language.JAVA,
+            IMAGE,
+            List.of(
+                "sh", "-c", script, "scanner",
+                "--path", ImageScannerDefinition.REPOSITORY,
+                "--target", ImageScannerDefinition.TARGET,
+                "--output", ImageScannerDefinition.OUTPUT
+            ),
+            "/output/scan-result.json",
+            List.of(new ScannerMount(ScannerMount.Type.VOLUME, volume, "/cache", false)),
+            Map.of("CACHE_TOKEN", "secret")
+        );
+
+        try {
+            sandbox.execute(scanner, repository, target());
+            sandbox.execute(scanner, repository, target());
+
+            // The volume keeps what the first scan wrote for the second
+            assertThat(stdout).containsExactly("secret", "empty", "secret", "kept");
+        } finally {
+            docker.removeVolumeCmd(volume).exec();
+        }
     }
 
     @Test

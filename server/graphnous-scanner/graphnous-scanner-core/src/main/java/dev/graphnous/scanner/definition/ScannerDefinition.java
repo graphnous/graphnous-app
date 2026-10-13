@@ -3,6 +3,7 @@ package dev.graphnous.scanner.definition;
 import dev.graphnous.core.model.ScanTarget;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * A scanner published as an image: the image holds the scanner and its
@@ -30,5 +31,21 @@ public interface ScannerDefinition {
      * Where in the container the scanner writes its result.
      */
     String output();
+
+    /**
+     * What the scanner's container mounts besides the repository, such as
+     * a cache it keeps between scans.
+     */
+    default List<ScannerMount> mounts() {
+        return List.of();
+    }
+
+    /**
+     * The environment variables of the scanner's container, such as the
+     * credentials it needs.
+     */
+    default Map<String, String> environment() {
+        return Map.of();
+    }
 
 }

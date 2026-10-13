@@ -4,6 +4,7 @@ import dev.graphnous.core.model.ScanTarget;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -93,6 +94,55 @@ class ImageScannerDefinitionTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("output must be an absolute file path in a directory");
         }
+    }
+
+    @Test
+    void hasNoMountsOrEnvironmentUnlessConfigured() {
+        final var scanner = scanner(List.of("scan"));
+
+        assertThat(scanner.mounts()).isEmpty();
+        assertThat(scanner.environment()).isEmpty();
+    }
+
+    @Test
+    void keepsItsMountsAndEnvironment() {
+        final var cache = new ScannerMount(ScannerMount.Type.VOLUME, "graphnous-maven", "/maven-repository", false);
+        final var settings = new ScannerMount(ScannerMount.Type.BIND, "/etc/graphnous/maven-settings", "/maven-settings", true);
+
+        final var scanner = new ImageScannerDefinition(
+            ScanTarget.Language.JAVA, IMAGE, List.of("scan"), OUTPUT,
+            List.of(cache, settings), Map.of("NEXUS_TOKEN", "secret")
+        );
+
+        assertThat(scanner.mounts()).containsExactly(cache, settings);
+        assertThat(scanner.environment()).containsExactly(Map.entry("NEXUS_TOKEN", "secret"));
+    }
+
+    @Test
+    void rejectsAMountThatHidesTheOutput() {
+        for (final var target : new String[] {"/output", "/"}) {
+            final var mount = new ScannerMount(ScannerMount.Type.VOLUME, "cache", target, false);
+
+            assertThatThrownBy(() -> new ImageScannerDefinition(
+                ScanTarget.Language.JAVA, IMAGE, List.of("scan"), OUTPUT, List.of(mount), Map.of()
+            ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("would hide its output");
+        }
+    }
+
+    @Test
+    void rejectsInvalidMountsAndVariables() {
+        assertThatThrownBy(() -> new ScannerMount(ScannerMount.Type.VOLUME, "cache", "relative", false))
+            .hasMessageContaining("target must be an absolute path");
+        assertThatThrownBy(() -> new ScannerMount(ScannerMount.Type.BIND, "relative", "/cache", false))
+            .hasMessageContaining("source must be an absolute path on the Docker host");
+        assertThatThrownBy(() -> new ScannerMount(null, "cache", "/cache", false))
+            .hasMessageContaining("needs a type");
+        assertThatThrownBy(() -> new ImageScannerDefinition(
+            ScanTarget.Language.JAVA, IMAGE, List.of("scan"), OUTPUT, List.of(), Map.of("A=B", "x")
+        ))
+            .hasMessageContaining("invalid variable name");
     }
 
     private static ImageScannerDefinition scanner(final List<String> command) {

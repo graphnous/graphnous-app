@@ -112,11 +112,16 @@ language:
 graphnous:
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.1.0
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.0
       command: [java, -jar, /opt/graphnous/java-scanner.jar,
                 --path, "{repository}", --target, "{target}",
-                --java-version, "{languageVersion}", --output, "{output}"]
+                --java-version, "{languageVersion}", --output, "{output}",
+                --download-dependencies]
       output: /output/scan-result.json
+      mounts:
+        - type: volume
+          source: graphnous-maven
+          target: /maven-repository
 ```
 
 For each target the server starts a container of the image with the
@@ -128,6 +133,51 @@ and `{output}` the output, which the server reads the result from once
 the container has stopped. A target of a language without a scanner fails
 to scan. To try another version, change the image's tag; to try a local
 build, the image only has to exist on the Docker daemon.
+
+A scanner may also have `mounts` and `environment`, which only its own
+containers get:
+
+| Key | |
+|---|---|
+| `mounts[].type` | `volume`: the named Docker volume `source`, created on first use. `bind`: the directory or file `source` on the Docker host. |
+| `mounts[].source` | The volume name, or the absolute path on the Docker host. |
+| `mounts[].target` | Where the container sees it. |
+| `mounts[].read-only` | Whether the scanner may only read it; default `false`. |
+| `environment` | The environment variables of the container, by name. |
+
+### Libraries of Java projects
+
+The Java scanner resolves calls into the libraries of a project from their
+jars. With `--download-dependencies`, it downloads them from Maven Central
+into the Maven repository at `/maven-repository`, which the
+`graphnous-maven` volume keeps for the next scans. Scanner containers
+therefore need outbound HTTPS to `repo.maven.apache.org`.
+
+For private repositories, such as a company Nexus or Artifactory, mount a
+Maven `settings.xml` at `/maven-settings/settings.xml`: the scanner
+downloads from its mirrors and the repositories of its active profiles,
+with the credentials of its servers. Refer to secrets as `${env.NAME}` in
+it, and pass them as environment variables of the Java scanner only:
+
+```yaml
+graphnous:
+  scanners:
+    JAVA:
+      # ...
+      mounts:
+        - type: volume
+          source: graphnous-maven
+          target: /maven-repository
+        - type: bind
+          source: /etc/graphnous/maven-settings
+          target: /maven-settings
+          read-only: true
+      environment:
+        NEXUS_TOKEN: ${NEXUS_TOKEN:}
+```
+
+See the [Java scanner's README](https://github.com/graphnous/Graphnous-java-scanner#libraries)
+for what it reads from the settings.
 
 ## Security
 

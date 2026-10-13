@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.Mount;
+import com.github.dockerjava.api.model.MountType;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ScannerDefinition;
+import dev.graphnous.scanner.definition.ScannerMount;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 import dev.graphnous.scanner.sandbox.ScanSandbox;
 
@@ -17,13 +20,16 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Runs a scanner in a container of its image, with its command as the
- * entrypoint. The repository is the only mount, made available read-only
- * as the {@link DockerWorkspace} describes. The directory of the scanner's
+ * entrypoint. The repository is mounted read-only as the
+ * {@link DockerWorkspace} describes, next to the mounts and environment
+ * variables of the scanner's definition, such as a cache it keeps between
+ * scans. The directory of the scanner's
  * output is created writable before the container starts, and the result
  * is copied out of it after it stops, so no paths of this process have to
  * exist on the Docker host.
@@ -114,10 +120,11 @@ public class DockerSandbox implements ScanSandbox {
             containerId = docker
                 .createContainerCmd(image)
                 .withEntrypoint(definition.command(repository.repository(), target))
+                .withEnv(environment(definition))
                 .withLabels(labels)
                 .withHostConfig(
                     HostConfig.newHostConfig()
-                        .withMounts(List.of(repository.mount()))
+                        .withMounts(mounts(repository, definition))
                 )
                 .withPlatform(platform)
                 .exec()
@@ -157,6 +164,33 @@ public class DockerSandbox implements ScanSandbox {
                 Containers.remove(docker, containerId);
             }
         }
+    }
+
+    private static List<Mount> mounts(
+        final DockerWorkspace.Mounted repository,
+        final ScannerDefinition definition
+    ) {
+        final var mounts = new ArrayList<Mount>();
+        mounts.add(repository.mount());
+
+        definition.mounts().forEach(mount -> mounts.add(
+            new Mount()
+                .withType(mount.type() == ScannerMount.Type.VOLUME ? MountType.VOLUME : MountType.BIND)
+                .withSource(mount.source())
+                .withTarget(mount.target())
+                .withReadOnly(mount.readOnly())
+        ));
+
+        return mounts;
+    }
+
+    private static List<String> environment(final ScannerDefinition definition) {
+        return definition.environment()
+            .entrySet()
+            .stream()
+            .map(variable -> variable.getKey() + "=" + variable.getValue())
+            .sorted()
+            .toList();
     }
 
     private ScanResult readResult(
