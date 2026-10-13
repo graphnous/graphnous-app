@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashSet;
 import java.util.Map;
 
 /**
@@ -21,6 +22,8 @@ final class ContainerArchive {
     private static final int WRITABLE_DIRECTORY_MODE = 040777;
     private static final int PRIVATE_DIRECTORY_MODE = 040700;
     private static final int PRIVATE_FILE_MODE = 0100600;
+    private static final int READABLE_DIRECTORY_MODE = 040755;
+    private static final int READABLE_FILE_MODE = 0100444;
 
     private ContainerArchive() {
     }
@@ -69,6 +72,43 @@ final class ContainerArchive {
 
                 tar.putArchiveEntry(entry);
                 tar.write(data);
+                tar.closeArchiveEntry();
+            }
+        }
+
+        return bytes.toByteArray();
+    }
+
+    /**
+     * An archive to extract at the container root, holding the files, which
+     * any container user can read but not change, in the directories they
+     * are in.
+     *
+     * @param files the content of each file, by its absolute path
+     */
+    static byte[] readableFiles(final Map<String, byte[]> files) throws IOException {
+        final var bytes = new ByteArrayOutputStream();
+        final var directories = new LinkedHashSet<String>();
+
+        try (final var tar = new TarArchiveOutputStream(bytes)) {
+            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
+
+            for (final var file : files.entrySet()) {
+                final var name = relative(file.getKey());
+
+                // The directories the file is in, outermost first
+                for (int slash = name.indexOf('/'); slash > 0; slash = name.indexOf('/', slash + 1)) {
+                    if (directories.add(name.substring(0, slash))) {
+                        directory(tar, name.substring(0, slash), READABLE_DIRECTORY_MODE);
+                    }
+                }
+
+                final var entry = new TarArchiveEntry(name);
+                entry.setMode(READABLE_FILE_MODE);
+                entry.setSize(file.getValue().length);
+
+                tar.putArchiveEntry(entry);
+                tar.write(file.getValue());
                 tar.closeArchiveEntry();
             }
         }

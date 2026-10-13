@@ -2,6 +2,7 @@ package dev.graphnous.api.project.scanner.docker;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
+import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.scanner.ScanLogger;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.domain.scan.Scan;
@@ -17,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -58,7 +60,7 @@ class DockerRepositoryScannerTest {
 
         assertThat(plan.targets()).hasSize(1);
 
-        final var report = scanner.scan(scanId, repository, plan, logger);
+        final var report = scanner.scan(scanId, new OrganizationId(UUID.randomUUID()), repository, plan, logger);
 
         assertThat(report.results()).isEmpty();
         assertThat(report.failures())

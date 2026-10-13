@@ -3,9 +3,11 @@ package dev.graphnous.api.project.scanner.docker;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.definition.ScannerDefinition;
+import dev.graphnous.scanner.definition.ScannerFile;
 import dev.graphnous.scanner.definition.ScannerMount;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -36,19 +38,44 @@ public record ScannersProperties(
      *                    such as a cache the scanner keeps between scans
      * @param environment the environment variables of the container, such
      *                    as credentials the scanner needs
+     * @param files       files this server reads and puts into the
+     *                    container, such as settings with credentials; see
+     *                    {@link ConfiguredScannerFiles}
      */
     public record Scanner(
         String image,
         List<String> command,
         String output,
         List<Mount> mounts,
-        Map<String, String> environment
+        Map<String, String> environment,
+        List<File> files
     ) {
 
         public Scanner {
             mounts = mounts == null ? List.of() : List.copyOf(mounts);
             environment = environment == null ? Map.of() : Map.copyOf(environment);
+            files = files == null ? List.of() : List.copyOf(files);
+
+            for (final var file : files) {
+                if (file.source() == null) {
+                    throw new IllegalArgumentException("A scanner file needs the source this server reads it from");
+                }
+
+                // Rejected at startup rather than at the first scan
+                new ScannerFile(file.target(), new byte[0]);
+            }
         }
+    }
+
+    /**
+     * @param source where this server reads the file, e.g. a file mounted
+     *               into its container
+     * @param target where the scanner's container sees it
+     */
+    public record File(
+        Path source,
+        String target
+    ) {
     }
 
     /**

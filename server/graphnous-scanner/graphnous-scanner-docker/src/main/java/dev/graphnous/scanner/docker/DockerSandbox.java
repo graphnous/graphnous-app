@@ -12,6 +12,7 @@ import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ScannerDefinition;
+import dev.graphnous.scanner.definition.ScannerFile;
 import dev.graphnous.scanner.definition.ScannerMount;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 import dev.graphnous.scanner.sandbox.ScanSandbox;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -106,6 +108,19 @@ public class DockerSandbox implements ScanSandbox {
         final Path path,
         final ScanTarget target
     ) {
+        return execute(definition, path, target, List.of());
+    }
+
+    /**
+     * Runs the scanner with the files put into its container before it
+     * starts, readable by any user of the container.
+     */
+    public ScanResult execute(
+        final ScannerDefinition definition,
+        final Path path,
+        final ScanTarget target,
+        final List<ScannerFile> files
+    ) {
         final var repository = workspace.mount(path);
 
         final var image = definition.image();
@@ -136,6 +151,16 @@ public class DockerSandbox implements ScanSandbox {
                 ))
                 .withRemotePath("/")
                 .exec();
+
+            if (!files.isEmpty()) {
+                final var contents = new LinkedHashMap<String, byte[]>();
+                files.forEach(file -> contents.put(file.target(), file.content()));
+
+                docker.copyArchiveToContainerCmd(containerId)
+                    .withTarInputStream(new ByteArrayInputStream(ContainerArchive.readableFiles(contents)))
+                    .withRemotePath("/")
+                    .exec();
+            }
 
             final var exitCode = Containers.runAndForwardOutput(docker, containerId, scanProcessListener);
 

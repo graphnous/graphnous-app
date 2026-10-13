@@ -2,7 +2,9 @@ package dev.graphnous.api.project.scanner.docker;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
+import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.scanner.RepositoryScanner;
+import dev.graphnous.application.project.scanner.ScannerFiles;
 import dev.graphnous.application.project.scanner.ScanLogger;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.domain.scan.Scan;
@@ -35,6 +37,7 @@ public class DockerRepositoryScanner implements RepositoryScanner {
     private final DockerWorkspace workspace;
     private final ObjectMapper objectMapper;
     private final DockerScanContainers containers;
+    private final ScannerFiles files;
 
     public DockerRepositoryScanner(
         final ScanPlanner planner,
@@ -44,12 +47,29 @@ public class DockerRepositoryScanner implements RepositoryScanner {
         final ObjectMapper objectMapper,
         final DockerScanContainers containers
     ) {
+        this(planner, scanners, docker, workspace, objectMapper, containers, ScannerFiles.none());
+    }
+
+    /**
+     * @param files the files each scanner's containers get, for the
+     *              organization of the scan
+     */
+    public DockerRepositoryScanner(
+        final ScanPlanner planner,
+        final List<ScannerDefinition> scanners,
+        final DockerClient docker,
+        final DockerWorkspace workspace,
+        final ObjectMapper objectMapper,
+        final DockerScanContainers containers,
+        final ScannerFiles files
+    ) {
         this.planner = planner;
         this.scanners = scanners;
         this.docker = docker;
         this.workspace = workspace;
         this.objectMapper = objectMapper;
         this.containers = containers;
+        this.files = files;
     }
 
     @Override
@@ -67,6 +87,7 @@ public class DockerRepositoryScanner implements RepositoryScanner {
     @Override
     public ScanReport scan(
         final Scan.ScanId scanId,
+        final OrganizationId organization,
         final Path path,
         final ScanPlan plan,
         final ScanLogger logger
@@ -87,7 +108,12 @@ public class DockerRepositoryScanner implements RepositoryScanner {
                 throw new IllegalStateException("Scan was cancelled");
             }
 
-            return dockerSandbox.execute(definition, repository, target);
+            return dockerSandbox.execute(
+                definition,
+                repository,
+                target,
+                files.files(target.getLanguage(), organization)
+            );
         };
 
         return new DefaultScanExecutor(scanners, sandbox, List.of(listener)).execute(path, plan);

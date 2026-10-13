@@ -9,6 +9,7 @@ import com.github.dockerjava.api.model.MountType;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.definition.ImageScannerDefinition;
 import dev.graphnous.scanner.definition.ScannerDefinition;
+import dev.graphnous.scanner.definition.ScannerFile;
 import dev.graphnous.scanner.definition.ScannerMount;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -150,6 +152,21 @@ class DockerSandboxTest {
         } finally {
             docker.removeVolumeCmd(volume).exec();
         }
+    }
+
+    @Test
+    void givesTheScannerItsFilesReadableByItsUser() throws IOException {
+        // As alpine's "nobody", as the scanner images run as a user of their own
+        final var scanner = scanner("""
+            printf '%s' '%s' > "$6"
+            exec su -s /bin/sh nobody -c 'id -u; cat /maven-settings/settings.xml; echo; (echo changed > /maven-settings/settings.xml) 2>/dev/null || echo read-only'
+            """.formatted("%s", RESULT));
+
+        sandbox.execute(scanner, repository, target(), List.of(
+            new ScannerFile("/maven-settings/settings.xml", "<settings/>".getBytes(StandardCharsets.UTF_8))
+        ));
+
+        assertThat(stdout).containsExactly("65534", "<settings/>", "read-only");
     }
 
     @Test

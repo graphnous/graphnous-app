@@ -3,6 +3,7 @@ package dev.graphnous.api.configuration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.DockerClient;
 import dev.graphnous.api.event.SpringEventPublisher;
+import dev.graphnous.api.project.scanner.docker.ConfiguredScannerFiles;
 import dev.graphnous.api.project.scanner.docker.DockerRepositoryScanner;
 import dev.graphnous.api.project.scanner.docker.DockerScanContainers;
 import dev.graphnous.api.project.scanner.docker.DockerSourceCheckout;
@@ -14,6 +15,7 @@ import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.project.scanner.ProjectScanner;
 import dev.graphnous.application.project.scanner.RepositoryScanner;
 import dev.graphnous.application.project.scanner.ScanExecutor;
+import dev.graphnous.application.project.scanner.ScannerFiles;
 import dev.graphnous.application.project.scanner.SourceCheckout;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
@@ -29,6 +31,7 @@ import dev.graphnous.scanner.java.targetdetector.MavenScanTargetDetector;
 import dev.graphnous.scanner.plan.DefaultScanPlanner;
 import dev.graphnous.scanner.typescript.language.NodeVersionDetector;
 import dev.graphnous.scanner.typescript.targetdetector.NpmTargetDetector;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -125,12 +128,24 @@ public class ScannerConfiguration {
         );
     }
 
+    /**
+     * The files of the scanners as {@code graphnous.scanners} configures
+     * them; another implementation, such as one reading a secret vault per
+     * organization, takes its place.
+     */
+    @Bean
+    @ConditionalOnMissingBean(ScannerFiles.class)
+    public ScannerFiles scannerFiles(final ScannersProperties scanners) {
+        return new ConfiguredScannerFiles(scanners);
+    }
+
     @Bean
     public RepositoryScanner repositoryScanner(
         final DockerClient dockerClient,
         final DockerGitCheckout dockerGitCheckout,
         final DockerScanContainers dockerScanContainers,
-        final ScannersProperties scanners
+        final ScannersProperties scanners,
+        final ScannerFiles scannerFiles
     ) {
         final var planner = new DefaultScanPlanner(
             List.of(
@@ -150,7 +165,8 @@ public class ScannerConfiguration {
             // The scanners get the workspace the source was checked out in
             dockerGitCheckout.workspace(),
             scannerObjectMapper,
-            dockerScanContainers
+            dockerScanContainers,
+            scannerFiles
         );
     }
 

@@ -33,6 +33,21 @@ class ContainerArchiveTest {
     }
 
     @Test
+    void holdsFilesAnyUserCanReadInTheirDirectories() throws IOException {
+        final var files = new LinkedHashMap<String, byte[]>();
+        files.put("/maven-settings/settings.xml", "<settings/>".getBytes(StandardCharsets.UTF_8));
+        files.put("/maven-settings/security.xml", "<security/>".getBytes(StandardCharsets.UTF_8));
+
+        final var entries = entries(ContainerArchive.readableFiles(files));
+
+        assertThat(entries.keySet())
+            .containsExactly("maven-settings/", "maven-settings/settings.xml", "maven-settings/security.xml");
+        assertThat(entries.get("maven-settings/").getMode() & 0777).isEqualTo(0755);
+        assertThat(entries.get("maven-settings/settings.xml").getMode() & 0777).isEqualTo(0444);
+        assertThat(entries.get("maven-settings/settings.xml").getSize()).isEqualTo("<settings/>".length());
+    }
+
+    @Test
     void readsTheFirstFileOfAnArchive() throws IOException {
         final var archive = archive(Map.of("scan-result.json", "{\"format\":\"x\"}"));
 

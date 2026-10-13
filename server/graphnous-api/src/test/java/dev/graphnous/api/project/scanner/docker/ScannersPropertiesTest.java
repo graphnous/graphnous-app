@@ -10,9 +10,12 @@ import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ScannersPropertiesTest {
 
@@ -75,7 +78,9 @@ class ScannersPropertiesTest {
             "graphnous.scanners.JAVA.mounts[0].source", "/etc/graphnous/maven-settings",
             "graphnous.scanners.JAVA.mounts[0].target", "/maven-settings",
             "graphnous.scanners.JAVA.mounts[0].read-only", "true",
-            "graphnous.scanners.JAVA.environment.NEXUS_TOKEN", "secret"
+            "graphnous.scanners.JAVA.environment.NEXUS_TOKEN", "secret",
+            "graphnous.scanners.JAVA.files[0].source", "/etc/graphnous/maven-settings.xml",
+            "graphnous.scanners.JAVA.files[0].target", "/maven-settings/settings.xml"
         )));
 
         final var java = Binder.get(environment).bind("graphnous", ScannersProperties.class).get().definitions().getFirst();
@@ -84,6 +89,23 @@ class ScannersPropertiesTest {
             new ScannerMount(ScannerMount.Type.BIND, "/etc/graphnous/maven-settings", "/maven-settings", true)
         );
         assertThat(java.environment()).containsExactly(Map.entry("NEXUS_TOKEN", "secret"));
+
+        assertThat(Binder.get(environment).bind("graphnous", ScannersProperties.class).get()
+            .scanners().get(ScanTarget.Language.JAVA).files())
+            .containsExactly(new ScannersProperties.File(
+                Path.of("/etc/graphnous/maven-settings.xml"),
+                "/maven-settings/settings.xml"
+            ));
+    }
+
+    @Test
+    void rejectsAFileWithATargetThatIsNotAFileInADirectory() {
+        assertThatThrownBy(() -> new ScannersProperties.Scanner(
+            "scanner:1", List.of("scan"), "/output/scan-result.json", null, null,
+            List.of(new ScannersProperties.File(Path.of("/settings.xml"), "/settings.xml"))
+        ))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("must be an absolute file path in a directory");
     }
 
     @Test
