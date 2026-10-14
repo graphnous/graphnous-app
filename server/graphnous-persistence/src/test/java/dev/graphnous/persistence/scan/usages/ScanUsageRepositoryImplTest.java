@@ -71,7 +71,11 @@ class ScanUsageRepositoryImplTest {
         // Besides what the application has: ngOnInit constructs Totals, twice,
         // and the invoice service calls ngOnInit
         final var ngOnInit = method(result, ORDERS + "order-list.component:OrderListComponent.ngOnInit");
-        ngOnInit.getCalls().add(call(ORDERS + "totals:Totals.constructor", Call.Kind.CONSTRUCTOR, 22));
+        final var withArguments = call(ORDERS + "totals:Totals.constructor", Call.Kind.CONSTRUCTOR, 22);
+        withArguments.getArguments().add(argument(null, "this.orders", false));
+        withArguments.getArguments().add(argument("currency", "\"EUR\"", false));
+        withArguments.getArguments().add(argument(null, "options", true));
+        ngOnInit.getCalls().add(withArguments);
         ngOnInit.getCalls().add(call(ORDERS + "totals:Totals.constructor", Call.Kind.CONSTRUCTOR, 23));
         // Not of the scan, so not a usage
         ngOnInit.getCalls().add(call("rxjs:Subject.constructor", Call.Kind.CONSTRUCTOR, 24));
@@ -312,6 +316,42 @@ class ScanUsageRepositoryImplTest {
 
     private static String id(final Scan.ScanId scan, final String qualifiedName) {
         return scan.id() + "|.|.|class:" + ORDERS + qualifiedName;
+    }
+
+    @Test
+    void saysWhatEachCallPasses() {
+        final var totals = repository.findUsages(scanId, classId("totals:Totals"), 1, 100).orElseThrow();
+
+        assertThat(totals.usages())
+            .filteredOn(usage -> usage.relationship().equals("INSTANTIATES"))
+            .extracting(ScanUsages.Usage::line, ScanUsages.Usage::arguments)
+            .containsExactly(
+                tuple(22, List.of(
+                    new ScanUsages.Argument(null, "this.orders", false),
+                    new ScanUsages.Argument("currency", "\"EUR\"", false),
+                    new ScanUsages.Argument(null, "options", true)
+                )),
+                // Passes nothing, which is not the same as not saying
+                tuple(23, List.of())
+            );
+
+        // Only a call passes anything
+        assertThat(totals.usages())
+            .filteredOn(usage -> !List.of("CALLS", "INSTANTIATES").contains(usage.relationship()))
+            .allSatisfy(usage -> assertThat(usage.arguments()).isNull());
+    }
+
+    private static dev.graphnous.core.model.Argument argument(
+        final String name,
+        final String value,
+        final boolean spread
+    ) {
+        final var argument = new dev.graphnous.core.model.Argument();
+        argument.setName(name);
+        argument.setValue(value);
+        argument.setSpread(spread);
+
+        return argument;
     }
 
     @Test

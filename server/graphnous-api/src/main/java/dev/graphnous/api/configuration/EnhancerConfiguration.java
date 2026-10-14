@@ -13,6 +13,7 @@ import dev.graphnous.enhancer.Enhancer;
 import dev.graphnous.enhancer.EnhancerProvider;
 import dev.graphnous.enhancer.EnhancerRegistry;
 import dev.graphnous.enhancer.angular.AngularEnhancer;
+import dev.graphnous.enhancer.fetch.FetchBrowserEnhancer;
 import dev.graphnous.enhancer.nextjs.NextJsEnhancer;
 import dev.graphnous.enhancer.react.ReactEnhancer;
 import dev.graphnous.enhancer.spring.SpringEnhancer;
@@ -42,6 +43,11 @@ public class EnhancerConfiguration {
     @Bean
     public NextJsEnhancer nextJsEnhancer() {
         return new NextJsEnhancer();
+    }
+
+    @Bean
+    public FetchBrowserEnhancer fetchBrowserEnhancer() {
+        return new FetchBrowserEnhancer();
     }
 
     /**

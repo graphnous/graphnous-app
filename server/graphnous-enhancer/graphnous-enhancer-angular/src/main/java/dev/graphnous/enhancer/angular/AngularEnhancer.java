@@ -14,6 +14,7 @@ import dev.graphnous.enhancer.Enhancements;
 import dev.graphnous.enhancer.Enhancer;
 import dev.graphnous.enhancer.Node;
 import dev.graphnous.enhancer.Relationship;
+import dev.graphnous.enhancer.WrittenUrl;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,7 +35,7 @@ import java.util.regex.Pattern;
  * (Class)-[:ENHANCE]->(Directive {selector, standalone})
  * (Class)-[:ENHANCE]->(Service {providedIn})
  * (Class)-[:ENHANCE]->(NgModule)
- * (Method)-[:ENHANCE]->(HttpCall {httpMethod, client, line})
+ * (Method)-[:ENHANCE]->(HttpCall {httpMethod, client, url, line})
  * (Component|Directive|Service)-[:HAS_HTTP_CALL]->(HttpCall)
  * (Component|Directive|Service)-[:INJECTS]->(Component|Directive|Service|Class)
  * (Component|Directive)-[:IMPORTS]->(Component|Directive|NgModule)
@@ -62,8 +63,11 @@ import java.util.regex.Pattern;
  * is {@code HttpClient}, in a file that imports {@code @angular/common/http}.
  * Its HTTP method is the method called, or {@code REQUEST} and
  * {@code JSONP} for {@code request} and {@code jsonp}, which take it as an
- * argument or are always GET. Scan results do not keep the arguments of
- * calls, so the url is not known.
+ * argument or are always GET. Its url is the one its first argument gives,
+ * or its second for {@code request}, which takes the method first, with
+ * the parts only known when it runs as variables in braces, e.g.
+ * {@code /api/orders/{id}}; see {@link WrittenUrl}. It is left out when the
+ * scanner did not record the arguments, or the argument is spread.
  * <p>
  * What a component, directive or service takes in its constructor, of the
  * type of a class of the scan, it injects: the Angular node of that class
@@ -86,7 +90,7 @@ import java.util.regex.Pattern;
 public class AngularEnhancer implements Enhancer {
 
     static final String NAME = "angular";
-    static final String VERSION = "1.0.0";
+    static final String VERSION = "1.1.0";
 
     private static final String CORE = "@angular/core";
     private static final String HTTP = "@angular/common/http";
@@ -360,6 +364,7 @@ public class AngularEnhancer implements Enhancer {
                 final var metadata = new HashMap<String, Object>();
                 metadata.put("httpMethod", httpCall.get().httpMethod());
                 metadata.put("client", httpCall.get().client());
+                url(call, httpCall.get().httpMethod()).ifPresent(url -> metadata.put("url", url));
                 metadata.put("line", call.getStartLine());
 
                 nodes.add(new Node(callId, methodId, List.of("HttpCall"), metadata));
@@ -376,6 +381,25 @@ public class AngularEnhancer implements Enhancer {
     /**
      * @param client what the call is made on, as written, e.g. {@code this.http}
      */
+    /**
+     * The url the call requests, from the argument that gives it: the
+     * first, or the second of request(method, url).
+     */
+    private static Optional<String> url(final Call call, final String httpMethod) {
+        final var position = "REQUEST".equals(httpMethod) ? 1 : 0;
+
+        if (call.getArguments().size() <= position) {
+            return Optional.empty();
+        }
+
+        // What is spread before it may be any number of arguments
+        if (call.getArguments().subList(0, position + 1).stream().anyMatch(argument -> Boolean.TRUE.equals(argument.getSpread()))) {
+            return Optional.empty();
+        }
+
+        return Optional.of(WrittenUrl.of(call.getArguments().get(position).getValue()));
+    }
+
     private record HttpCall(String httpMethod, String client) {
     }
 

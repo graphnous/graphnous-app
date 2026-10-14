@@ -1,5 +1,6 @@
 package dev.graphnous.persistence.scan.result;
 
+import dev.graphnous.core.model.Argument;
 import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.EnumConstant;
@@ -281,11 +282,31 @@ class ScanResultGraphTest {
             .containsExactly(tuple("scan|.|.|class:com.example.Order", 11));
     }
 
+    @Test
+    void keepsWhatCallsPassWhenTheScannerRecordedIt() {
+        // No call of it passes anything, so the scanner may not record arguments
+        assertThat(ScanResultGraph.of("scan", List.of(javaOrders(false))).usages().get("INSTANTIATES"))
+            .allSatisfy(row -> assertThat(row).doesNotContainKeys("arguments", "argumentNames", "argumentSpreads"));
+
+        assertThat(ScanResultGraph.of("scan", List.of(javaOrders(true))).usages().get("INSTANTIATES"))
+            .singleElement()
+            .satisfies(row -> assertThat(row)
+                .containsEntry("arguments", List.of("id", "rest"))
+                .containsEntry("argumentNames", List.of("id", ""))
+                .containsEntry("argumentSpreads", List.of(false, true)));
+    }
+
+    private static ScanResult javaOrders() {
+        return javaOrders(false);
+    }
+
     /**
      * A record, an enum and a class that uses both, as the Java scanner
      * lists them.
+     *
+     * @param withArguments whether the scanner recorded what calls pass
      */
-    private static ScanResult javaOrders() {
+    private static ScanResult javaOrders(final boolean withArguments) {
         final var uuid = new TypeRef();
         uuid.setName("java.util.UUID");
 
@@ -314,6 +335,18 @@ class ScanResultGraphTest {
         create.setKind(Call.Kind.CONSTRUCTOR);
         create.setStartLine(11);
         create.setResolved(true);
+
+        if (withArguments) {
+            final var named = new Argument();
+            named.setName("id");
+            named.setValue("id");
+
+            final var rest = new Argument();
+            rest.setValue("rest");
+            rest.setSpread(true);
+
+            create.getArguments().addAll(List.of(named, rest));
+        }
 
         final var accessor = new Call();
         accessor.setTarget("com.example.Order.id()");

@@ -3,6 +3,7 @@ package dev.graphnous.persistence.scan.result;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.graphnous.core.model.Annotation;
+import dev.graphnous.core.model.Argument;
 import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.EnumConstant;
@@ -24,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * The scan results flattened into rows per node and relationship type, so
@@ -52,6 +54,14 @@ import java.util.Set;
  * {@code USES} to a class it names as a type. Only what the scanner
  * resolved to something the scan has itself is kept: a call into a library
  * has nothing to point at.
+ * <p>
+ * A {@code CALLS} or {@code INSTANTIATES} relationship has what the call
+ * passes, when the scanner recorded the arguments of calls: each as
+ * written in {@code arguments}, the name each is passed under in
+ * {@code argumentNames}, empty for one passed by position, and whether
+ * each is spread in {@code argumentSpreads}; all three are as long as each
+ * other, and empty for a call that passes nothing. A scan whose scanner
+ * did not record arguments has none of them.
  */
 record ScanResultGraph(
     List<Map<String, Object>> targets,
@@ -177,6 +187,12 @@ record ScanResultGraph(
         private final Map<String, String> accessorFields = new HashMap<>();
 
         /**
+         * Whether the scanner of the result being added recorded what its
+         * calls pass.
+         */
+        private boolean argumentsRecorded;
+
+        /**
          * What the bodies use, to resolve once everything has an id: what
          * is used may be declared after what uses it.
          */
@@ -211,7 +227,29 @@ record ScanResultGraph(
                 "buildSystemVersion", target.getBuildSystemVersion()
             ));
 
+            // Every call lists its arguments, or none does: a result
+            // read into the model cannot tell a call without arguments
+            // from one whose arguments were not recorded
+            argumentsRecorded = result.getModules().stream()
+                .flatMap(module -> module.getFiles().stream())
+                .flatMap(file -> Stream.concat(
+                    file.getFunctions().stream(),
+                    file.getClasses().stream().flatMap(Builder::methods)
+                ))
+                .flatMap(method -> method.getCalls().stream())
+                .anyMatch(call -> !call.getArguments().isEmpty());
+
             result.getModules().forEach(module -> addModule(targetId, module));
+        }
+
+        /**
+         * The methods of the class and of the classes nested in it.
+         */
+        private static Stream<Method> methods(final Class type) {
+            return Stream.concat(
+                type.getMethods().stream(),
+                type.getClasses().stream().flatMap(Builder::methods)
+            );
         }
 
         private void addModule(final String targetId, final Module module) {
@@ -395,6 +433,18 @@ record ScanResultGraph(
                 }
 
                 final var properties = row("line", call.getStartLine());
+
+                if (argumentsRecorded) {
+                    final var arguments = call.getArguments();
+
+                    properties.put("arguments", arguments.stream().map(Argument::getValue).toList());
+                    properties.put("argumentNames", arguments.stream()
+                        .map(argument -> argument.getName() == null ? "" : argument.getName())
+                        .toList());
+                    properties.put("argumentSpreads", arguments.stream()
+                        .map(argument -> Boolean.TRUE.equals(argument.getSpread()))
+                        .toList());
+                }
 
                 if (call.getKind() == Call.Kind.CONSTRUCTOR) {
                     pending.add(new PendingUsage("INSTANTIATES", methodId, key(call.getTarget()), properties));

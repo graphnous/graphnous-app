@@ -76,6 +76,9 @@ public class ScanUsageController {
      *                     field of
      * @param depth        1 for what uses it itself, 2 for what calls that,
      *                     and so on
+     * @param arguments    what a call or an instantiation passes, in the
+     *                     order written; null for another relationship, and
+     *                     when the scan did not record the arguments of calls
      */
     public record ScanUsageResponse(
         String relationship,
@@ -85,7 +88,21 @@ public class ScanUsageController {
         Integer line,
         ScanUsageNode target,
         String targetOwner,
-        int depth
+        int depth,
+        List<ScanUsageArgument> arguments
+    ) {
+    }
+
+    /**
+     * @param name   the name it is passed under, such as the attribute of a
+     *               rendered component; null when passed by position
+     * @param value  the expression passed, as written
+     * @param spread whether it is spread, so what it passes is not known
+     */
+    public record ScanUsageArgument(
+        String name,
+        String value,
+        boolean spread
     ) {
     }
 
@@ -127,7 +144,10 @@ public class ScanUsageController {
                     usage.line(),
                     fromDomain(usage.target()),
                     usage.targetOwner(),
-                    usage.depth()
+                    usage.depth(),
+                    usage.arguments() == null ? null : usage.arguments().stream()
+                        .map(argument -> new ScanUsageArgument(argument.name(), argument.value(), argument.spread()))
+                        .toList()
                 ))
                 .toList(),
             found.truncated()

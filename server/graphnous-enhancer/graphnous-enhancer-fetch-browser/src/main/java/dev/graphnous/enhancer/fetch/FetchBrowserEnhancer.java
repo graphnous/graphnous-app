@@ -9,6 +9,7 @@ import dev.graphnous.enhancer.Enhancement;
 import dev.graphnous.enhancer.Enhancements;
 import dev.graphnous.enhancer.Enhancer;
 import dev.graphnous.enhancer.Node;
+import dev.graphnous.enhancer.WrittenUrl;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,8 +36,8 @@ import java.util.regex.Pattern;
  * <p>
  * The url is the one the call's first argument gives, with the parts only
  * known when it runs as variables in braces, e.g. {@code /api/orders/{id}};
- * see {@link FetchUrl}. It is left out when the scanner did not record the
- * arguments. The call is identified by where it is.
+ * see {@link WrittenUrl}. It is left out when the scanner did not record the
+ * arguments, or the first is spread. The call is identified by where it is.
  */
 public class FetchBrowserEnhancer implements Enhancer {
 
@@ -183,8 +184,9 @@ public class FetchBrowserEnhancer implements Enhancer {
         final var metadata = new HashMap<String, Object>();
         metadata.put("client", CLIENT);
 
-        if (!call.getArguments().isEmpty()) {
-            metadata.put("url", FetchUrl.of(call.getArguments().getFirst()));
+        // fetch(...request) does not say what it requests
+        if (!call.getArguments().isEmpty() && !Boolean.TRUE.equals(call.getArguments().getFirst().getSpread())) {
+            metadata.put("url", WrittenUrl.of(call.getArguments().getFirst().getValue()));
         }
 
         metadata.put("startLine", call.getStartLine());

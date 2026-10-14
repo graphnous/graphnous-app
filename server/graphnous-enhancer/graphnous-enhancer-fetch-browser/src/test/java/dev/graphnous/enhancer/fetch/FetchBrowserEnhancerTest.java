@@ -1,5 +1,6 @@
 package dev.graphnous.enhancer.fetch;
 
+import dev.graphnous.core.model.Argument;
 import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.File;
@@ -65,7 +66,7 @@ class FetchBrowserEnhancerTest {
     @Test
     void takesTheUrlFromTheFirstArgument() {
         final var call = call("fetch", 3, 11);
-        call.setArguments(List.of("`/api/orders/${id}`", "{ method: \"DELETE\" }"));
+        call.setArguments(List.of(argument("`/api/orders/${id}`"), argument("{ method: \"DELETE\" }")));
 
         final var file = file();
         file.getFunctions().add(function("load", call));
@@ -199,5 +200,12 @@ class FetchBrowserEnhancerTest {
         result.getModules().add(module);
 
         return result;
+    }
+
+    private static Argument argument(final String value) {
+        final var argument = new Argument();
+        argument.setValue(value);
+
+        return argument;
     }
 }

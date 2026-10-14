@@ -26,6 +26,21 @@ export type ScanUsageRelationship =
   | "OVERRIDES";
 
 /**
+ * One thing a call passes, as written where it is called.
+ */
+export interface ScanUsageArgument {
+  /**
+   * The name it is passed under, such as the attribute of a rendered
+   * component; null when passed by position.
+   */
+  name: string | null;
+  /** The expression passed, as written; a long one is cut off and ends in … */
+  value: string;
+  /** Whether it is spread, as ...ids or {...props}, so what it passes is not known */
+  spread: boolean;
+}
+
+/**
  * One place that uses what was asked about, or one of its members.
  */
 export interface ScanUsage {
@@ -47,6 +62,12 @@ export interface ScanUsage {
   targetOwner: string | null;
   /** 1 for what uses it itself; 2 for what calls that, and so on */
   depth: number;
+  /**
+   * What a call or an instantiation passes, in the order written, empty
+   * when it passes nothing; null for another relationship, and when the
+   * scan did not record the arguments of calls.
+   */
+  arguments: ScanUsageArgument[] | null;
 }
 
 /**

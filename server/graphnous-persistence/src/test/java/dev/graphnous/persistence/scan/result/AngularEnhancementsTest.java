@@ -71,7 +71,7 @@ class AngularEnhancementsTest {
     void linksTheComponentsServicesDirectivesAndModulesToTheirClasses() {
         try (final var session = driver.session()) {
             final var nodes = session.run("""
-                    MATCH (:Scan {id: $scanId})-[:HAS_ENHANCEMENT]->(angular:Enhancement {name: 'angular', version: '1.0.0'})
+                    MATCH (:Scan {id: $scanId})-[:HAS_ENHANCEMENT]->(angular:Enhancement {name: 'angular', version: '1.1.0'})
                     MATCH (angular)-[:ADDED]->(node:ENHANCED)<-[:ENHANCE]-(class:Class {scanId: $scanId})
                     RETURN class.name AS class, [label IN labels(node) WHERE label <> 'ENHANCED'] AS labels
                     ORDER BY class

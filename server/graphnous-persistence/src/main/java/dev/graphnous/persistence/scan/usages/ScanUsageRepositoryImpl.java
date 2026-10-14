@@ -219,7 +219,8 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
                 WITH user, relationship, target, owner, targetOwner, head(collect(file.path)) AS file
                 ORDER BY file, user.id, target.id
                 LIMIT $limit
-                RETURN relationship, null AS line, file, owner.name AS owner, targetOwner.name AS targetOwner,
+                RETURN relationship, null AS line, null AS arguments, null AS argumentNames, null AS argumentSpreads,
+                       file, owner.name AS owner, targetOwner.name AS targetOwner,
                        user.id AS userId, labels(user)[0] AS userType, user.name AS userName,
                        user.qualifiedName AS userQualifiedName,
                        target.id AS targetId, labels(target)[0] AS targetType, target.name AS targetName,
@@ -250,8 +251,9 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
                 WITH user, usage, target, owner, targetOwner, head(collect(file.path)) AS file
                 ORDER BY file, usage.line, user.id, target.id
                 LIMIT $limit
-                RETURN type(usage) AS relationship, usage.line AS line, file, owner.name AS owner,
-                       targetOwner.name AS targetOwner,
+                RETURN type(usage) AS relationship, usage.line AS line, usage.arguments AS arguments,
+                       usage.argumentNames AS argumentNames, usage.argumentSpreads AS argumentSpreads,
+                       file, owner.name AS owner, targetOwner.name AS targetOwner,
                        user.id AS userId, labels(user)[0] AS userType, user.name AS userName,
                        user.qualifiedName AS userQualifiedName,
                        target.id AS targetId, labels(target)[0] AS targetType, target.name AS targetName,
@@ -273,8 +275,38 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
             line(record.get("line")),
             node(record.get("targetId"), record.get("targetType"), record.get("targetName"), record.get("targetQualifiedName")),
             string(record.get("targetOwner")),
-            depth
+            depth,
+            arguments(record)
         );
+    }
+
+    /**
+     * What the call passes; null when the usage does not say.
+     */
+    private static List<ScanUsages.Argument> arguments(final Record record) {
+        if (record.get("arguments").isNull()) {
+            return null;
+        }
+
+        final var values = record.get("arguments").asList(Value::asString);
+        final var names = record.get("argumentNames").isNull()
+            ? List.<String>of()
+            : record.get("argumentNames").asList(Value::asString);
+        final var spreads = record.get("argumentSpreads").isNull()
+            ? List.<Boolean>of()
+            : record.get("argumentSpreads").asList(Value::asBoolean);
+
+        final var arguments = new ArrayList<ScanUsages.Argument>();
+
+        for (int i = 0; i < values.size(); i++) {
+            arguments.add(new ScanUsages.Argument(
+                i < names.size() && !names.get(i).isEmpty() ? names.get(i) : null,
+                values.get(i),
+                i < spreads.size() && spreads.get(i)
+            ));
+        }
+
+        return arguments;
     }
 
     private static Integer line(final Value value) {

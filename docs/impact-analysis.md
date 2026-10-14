@@ -2,7 +2,8 @@
 
 What it takes for Graphnous to answer "if I change this, what else do I have
 to change?". Written on 2026-10-12, updated on 2026-10-14. Steps 1 and 2 of
-the plan are built; step 3 is not.
+the plan are built. Step 3 is built here, and waits for the schema and the
+scanners it needs to be published; see "What step 3 needs to go live".
 
 ## The goal
 
@@ -24,7 +25,7 @@ dependencies, plus what enhancers add.
 | Case | Needs | Recorded by a scanner | Stored in the graph |
 |---|---|---|---|
 | React component: where it is used | every `<OrderList />` site, with file and line | Yes, by the TypeScript scanner (JSX is recorded as a call) | No |
-| React component: which props each use passes | the attributes at each JSX site | No | No |
+| React component: which props each use passes | the attributes at each JSX site | With step 3 | With step 3 |
 | Java entity: where it is instantiated | every `new Order(...)` site | Yes, by the Java scanner from 0.3.0 | Yes |
 | Java method: who calls it | every call site | Yes, by the Java scanner from 0.3.0 | Yes |
 
@@ -35,9 +36,8 @@ dependencies, plus what enhancers add.
 - **Java.** The Java scanner records calls, constructor calls, field accesses
   and type uses from `0.3.0`, the image the server runs. `0.2.0` and earlier
   did not.
-- **Arguments and props.** No scanner records them and the scan-result schema
-  has no place for them. This is the same gap that blocks the HTTP links
-  between projects.
+- **Arguments and props.** Recorded with step 3: until its scanners are
+  released, no scanner records them.
 
 ## Plan
 
@@ -88,14 +88,47 @@ reads. What is still dropped, besides calls into libraries: uses of code the
 build generates, which the scanner resolves but does not scan, and `values()`
 of an enum, which no source declares.
 
-### Step 3: record arguments and props
+### Step 3: record arguments and props (built, not yet live)
 
-A schema change and a change in both scanners: the arguments of each call and
-the attributes of each JSX element.
+A schema change, a change in both scanners, and here.
+
+- **Schema** (`graphnous-schemas`). A call has `arguments`: one per argument,
+  in the order written, each the expression as written on one line, cut off
+  at 200 characters, with the `name` it is passed under when it is passed by
+  name, and whether it is `spread`. They are source, not values.
+- **TypeScript scanner.** Records them for calls and `new`, and the
+  attributes of a rendered component as named arguments: `customerId={id}`
+  is `id` under `customerId`, `disabled` is `true`, `{...props}` is spread.
+- **Java scanner.** Records them for calls, `new`, `this(...)` and
+  `super(...)`.
+- **Here.** A `CALLS` or `INSTANTIATES` relationship keeps what the call
+  passes (`arguments`, `argumentNames`, `argumentSpreads`), the usages
+  endpoint returns it per usage, and Impact Analysis shows it under each
+  place. Where calls pass arguments by name, the places can be narrowed to
+  those that do not pass one; a place that spreads something stays, marked,
+  as it may pass it.
+- **Urls of HTTP calls.** The `fetch-browser` enhancer, which waited for
+  arguments, is now built and installed, and the Angular enhancer (`1.1.0`)
+  gives its HTTP calls a `url`; both read it from the argument as written.
+  That is what the HTTP links between projects match on.
 
 Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
-`customerId`". It also unblocks the HTTP links between projects, the
-`fetch-browser` enhancer, and URLs on Angular HTTP calls.
+`customerId`", and each call site of a Java method shows what it passes.
+
+#### What step 3 needs to go live
+
+Each is on a `call-arguments` branch, in this order:
+
+1. Merge the schema change, which publishes it. The server and both scanners
+   build against the published schema, so until then they only build with
+   the schema's url overridden.
+2. Merge and release both scanners.
+3. Here: move `SCHEMAS_REF` in CI and the scanner images in
+   `application.yml` to those releases, then merge.
+
+A scan made before then has no arguments: it shows usages as before, and
+nothing about what they pass. It needs scanning again, not storing again,
+as the results it kept do not have them.
 
 ## What step 1 built
 
@@ -142,7 +175,7 @@ Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 |---|---|
 | Step 1 | usage sites for TypeScript and React: which files to change, not which props each passes |
 | Step 2 | callers and instantiation sites for Java |
-| Step 3 | the props and arguments at each site, so a new required parameter shows the call sites that lack it |
+| Step 3 | the props and arguments at each site, the places that do not pass a prop, and the urls of fetch and Angular HTTP calls |
 
 ## Caveats
 
