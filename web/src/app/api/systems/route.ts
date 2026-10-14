@@ -20,10 +20,14 @@ const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replac
  * A client that calls the API as the caller: their access token, when they
  * sent one, goes along, as the server checks it when security is on.
  */
-function systemsApi(): SystemsApi {
+function systemsApi(request: NextRequest): SystemsApi {
+  const authorization = request.headers.get("authorization");
+
   return new SystemsApi(
     new Configuration({
       basePath,
+      headers: authorization ? { Authorization: authorization } : undefined,
+      fetchApi: fetch
     }),
   );
 }
@@ -85,7 +89,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const systems = await systemsApi().listSystems({
+    const systems = await systemsApi(request).listSystems({
       page: page === null ? undefined : Number(page),
       size: size === null ? undefined : Number(size),
       sort: sort === null ? undefined : oneOf(ListSystemsSortEnum, sort),
@@ -122,7 +126,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const system = await systemsApi().createSystem({
+    const system = await systemsApi(request).createSystem({
       createSystemRequest: { name: name.trim(), description: description ?? undefined },
     });
 
