@@ -49,6 +49,23 @@ class WrittenUrlTest {
     }
 
     @Test
+    void takesTheUrlAConditionGivesWhenItGivesNoneOtherwise() {
+        assertThat(WrittenUrl.of("projectId ? `/api/projects/${encodeURIComponent(projectId)}/stats` : null"))
+            .isEqualTo("/api/projects/{projectId}/stats");
+        assertThat(WrittenUrl.of("enabled ? \"/api/enhancers\" : undefined")).isEqualTo("/api/enhancers");
+        assertThat(WrittenUrl.of("!id ? null : `/api/orders/${id}`")).isEqualTo("/api/orders/{id}");
+        assertThat(WrittenUrl.of("a && b ? `/x/${a ?? b}` : ''")).isEqualTo("/x/{a ?? b}");
+        assertThat(WrittenUrl.of("enabled ? path : null")).isEqualTo("{path}");
+    }
+
+    @Test
+    void writesAConditionOfTwoUrlsAsOneVariable() {
+        assertThat(WrittenUrl.of("admin ? \"/admin\" : \"/home\"")).isEqualTo("{admin ? \"/admin\" : \"/home\"}");
+        assertThat(WrittenUrl.of("a ? b ? \"/x\" : null : \"/y\"")).isEqualTo("{a ? b ? \"/x\" : null : \"/y\"}");
+        assertThat(WrittenUrl.of("config?.url ?? \"/api\"")).isEqualTo("{config?.url ?? \"/api\"}");
+    }
+
+    @Test
     void keepsEscapedCharacters() {
         assertThat(WrittenUrl.of("'/api/it\\'s'")).isEqualTo("/api/it's");
         assertThat(WrittenUrl.of("`/api/\\${literal}`")).isEqualTo("/api/${literal}");

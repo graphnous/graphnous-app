@@ -18,6 +18,10 @@ import java.util.regex.Pattern;
  * </ul>
  * A variable is named by its expression as written, without the encoding
  * around it, so {@code ${encodeURIComponent(id)}} is {@code {id}}.
+ * <p>
+ * A url only given when a condition holds, as in
+ * {@code id ? `/api/orders/${id}` : null}, is the url it is given:
+ * {@code /api/orders/{id}}.
  */
 public final class WrittenUrl {
 
@@ -32,9 +36,16 @@ public final class WrittenUrl {
     }
 
     public static String of(final String argument) {
+        final var expression = argument.strip();
+        final var given = whenGiven(expression);
+
+        if (given != null) {
+            return of(given);
+        }
+
         final var url = new StringBuilder();
 
-        for (final var part : split(argument.strip())) {
+        for (final var part : split(expression)) {
             if (isQuoted(part, '"') || isQuoted(part, '\'')) {
                 url.append(unescape(part.substring(1, part.length() - 1)));
             } else if (isQuoted(part, '`')) {
@@ -45,6 +56,68 @@ public final class WrittenUrl {
         }
 
         return url.toString();
+    }
+
+    /**
+     * The url of a conditional whose other alternative is none, e.g. the
+     * {@code `/a/${id}`} of {@code id ? `/a/${id}` : null}; null for any
+     * other expression.
+     */
+    private static String whenGiven(final String expression) {
+        var depth = 0;
+        var question = -1;
+        var nested = 0;
+        var i = 0;
+
+        while (i < expression.length()) {
+            final var c = expression.charAt(i);
+
+            if (c == '"' || c == '\'' || c == '`') {
+                i = skipString(expression, i);
+                continue;
+            }
+
+            if (c == '(' || c == '[' || c == '{') {
+                depth++;
+            } else if (c == ')' || c == ']' || c == '}') {
+                depth--;
+            } else if (depth == 0 && c == '?') {
+                final var next = i + 1 < expression.length() ? expression.charAt(i + 1) : ' ';
+
+                if (next == '?' || next == '.') {
+                    // ?? and ?. are no conditional
+                    i += 2;
+                    continue;
+                }
+
+                if (question < 0) {
+                    question = i;
+                } else {
+                    nested++;
+                }
+            } else if (depth == 0 && c == ':' && question >= 0) {
+                if (nested > 0) {
+                    nested--;
+                } else {
+                    final var given = expression.substring(question + 1, i).strip();
+                    final var otherwise = expression.substring(i + 1).strip();
+
+                    if (isNone(otherwise)) {
+                        return given;
+                    }
+
+                    return isNone(given) ? otherwise : null;
+                }
+            }
+
+            i++;
+        }
+
+        return null;
+    }
+
+    private static boolean isNone(final String expression) {
+        return List.of("null", "undefined", "\"\"", "''", "``").contains(expression);
     }
 
     /**

@@ -70,6 +70,17 @@ class HttpLinkMatcherTest {
     }
 
     @Test
+    void takesAVariableAfterTheTextOfTheLastSegmentForTheQuery() {
+        assertThat(endpointsOf("/api/orders{search}", "GET /api/orders", "GET /api/orders/{id}"))
+            .containsExactly("GET /api/orders");
+        assertThat(endpointsOf("/api/threads{size ? `?size=${size}` : \"\"}", "GET /api/threads"))
+            .containsExactly("GET /api/threads");
+        // Not of a segment before the last, nor of one that starts with a variable
+        assertThat(endpointsOf("/api/orders{x}/lines", "GET /api/orders/lines")).isEmpty();
+        assertThat(endpointsOf("/api/{id}{search}", "GET /api/orders")).isEmpty();
+    }
+
+    @Test
     void takesABaseOnlyKnownWhenItRunsForTheStartOfThePath() {
         final var links = links(
             List.of(call("{API_URL}/orders/{id}", null)),

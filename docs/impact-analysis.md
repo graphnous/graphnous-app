@@ -111,6 +111,16 @@ A schema change, a change in both scanners, and here.
   arguments, is now built and installed, and the Angular enhancer (`1.1.0`)
   gives its HTTP calls a `url`; both read it from the argument as written.
   That is what the HTTP links between projects match on.
+- **Calls through a wrapper, and their methods.** `fetch-browser` (`1.1.0`)
+  also takes a call of a function that wraps fetch for an HTTP call, such
+  as the web app's `graphnousFetch(path, ...)` and `useFetch(path)`, with
+  the url and method the wrapper requests for its arguments. It reads the
+  method from the options as written, GET without one. A url given only
+  when a condition holds (``id ? `/x/${id}` : null``) is that url, and a
+  variable right after the last segment's text (`/scans${search}`) is
+  taken for the query. On this repository that took the links found from
+  15, all from the browser into Next.js routes and half of them to the
+  wrong method, to 68, 24 of them from Next.js routes into the Spring API.
 
 Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 `customerId`", and each call site of a Java method shows what it passes.
