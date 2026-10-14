@@ -1,18 +1,12 @@
-import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
+import { forwardApi, graphnousApi } from "@/lib/server/graphnousApi";
 import { type NextRequest } from "next/server";
 
 /**
- * The stats of the project's latest scan that has any; all zero when none
- * has, and 404 for a project that is not the caller's.
+ * The stats of the project's latest scan that has any, with how many scans
+ * the project has.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+    const { id: projectId } = await params;
 
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/projects/${encodeURIComponent(id)}/stats`,
-            request.headers.get("authorization"),
-        ),
-        "get project stats",
-    );
+    return forwardApi(() => graphnousApi().projects.getProjectStatsRaw({ projectId }), "get project stats");
 }

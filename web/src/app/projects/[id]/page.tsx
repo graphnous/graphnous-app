@@ -156,6 +156,7 @@ export default function ProjectPage() {
                             </Card>
                         </section>
                         <section className="flex gap-4 flex-row mb-8">
+                            <StatsCard className="flex-1" title="Scans" stat={stat(stats?.numberOfScans)} />
                             <StatsCard className="flex-1" title="Files" stat={stat(stats ? numberOfFiles : undefined)} />
                             <StatsCard className="flex-1" title="Classes" stat={stat(stats?.numberOfClassesParsed)} />
                             <StatsCard className="flex-1" title="Methods" stat={stat(stats?.numberOfMethodsParsed)} />

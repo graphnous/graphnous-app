@@ -17,7 +17,7 @@ const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replac
  * A client that calls the API as the caller: their access token, when they
  * sent one, goes along, as the server checks it when security is on.
  */
-function capabilitiesApi(request: NextRequest): CapabilitiesApi {
+function capabilitiesApi(): CapabilitiesApi {
     return new CapabilitiesApi(
         new Configuration({
             basePath,
@@ -48,19 +48,12 @@ async function errorResponse(error: unknown, action: string): Promise<NextRespon
 }
 
 /**
- * The value when it is one of the allowed ones.
- */
-function oneOf<T extends string>(allowed: Record<string, T>, value: string): T | undefined {
-    return Object.values(allowed).find((option) => option === value);
-}
-
-/**
  * Lists systems, a page at a time: ?page=0&size=20&sort=name&direction=asc,
  * each optional.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
     try {
-        const capabilities = await capabilitiesApi(request).getCapabilities();
+        const capabilities = await capabilitiesApi().getCapabilities();
 
         return NextResponse.json({
             capabilities: [...capabilities.capabilities],

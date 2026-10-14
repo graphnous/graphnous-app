@@ -178,11 +178,15 @@ public class ScanConfiguration {
     @Bean
     ScanStatService scanStatService(
         final ScanStatRepository scanStatRepository,
+        final ScanRepository scanRepository,
+        final ProjectRepository projectRepository,
         final ProjectService projectService,
         final SystemService systemService,
         final AuthorizationService authorizationService
     ) {
-        return new ScanStatService(scanStatRepository, projectService, systemService, authorizationService);
+        return new ScanStatService(
+            scanStatRepository, scanRepository, projectRepository, projectService, systemService, authorizationService
+        );
     }
 
     @Bean

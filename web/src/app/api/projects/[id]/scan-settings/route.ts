@@ -1,5 +1,5 @@
-import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
-import { type NextRequest } from "next/server";
+import { forwardApi, graphnousApi } from "@/lib/server/graphnousApi";
+import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * What the project's scans leave out: { excludes }, the patterns of the
@@ -7,13 +7,10 @@ import { type NextRequest } from "next/server";
  * JAVA, none for every language they find.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+    const { id: projectId } = await params;
 
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/projects/${encodeURIComponent(id)}/scan-settings`,
-            request.headers.get("authorization"),
-        ),
+    return forwardApi(
+        () => graphnousApi().projects.getProjectScanSettingsRaw({ projectId }),
         "get the project's scan settings",
     );
 }
@@ -25,15 +22,34 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  * no scanner for.
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
-    const body = await request.text();
+    const { id: projectId } = await params;
+    const body = await jsonBody(request);
 
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/projects/${encodeURIComponent(id)}/scan-settings`,
-            request.headers.get("authorization"),
-            { method: "PUT", headers: { "Content-Type": "application/json" }, body },
-        ),
+    if (body === undefined) {
+        return NextResponse.json({ code: "MALFORMED_REQUEST", message: "The body must be JSON." }, { status: 400 });
+    }
+
+    const { excludes, languages } = body;
+
+    return forwardApi(
+        () => graphnousApi().projects.updateProjectScanSettingsRaw({
+            projectId,
+            // A setting left out stays as it is
+            scanSettings: {
+                excludes: Array.isArray(excludes) ? excludes : undefined,
+                languages: Array.isArray(languages) ? languages : undefined,
+            },
+        }),
         "update the project's scan settings",
     );
+}
+
+async function jsonBody(request: NextRequest): Promise<Record<string, unknown> | undefined> {
+    try {
+        const body: unknown = await request.json();
+
+        return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+    } catch {
+        return undefined;
+    }
 }

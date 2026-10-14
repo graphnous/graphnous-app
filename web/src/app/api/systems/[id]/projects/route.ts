@@ -18,13 +18,10 @@ const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replac
  * A client that calls the API as the caller: their access token, when they
  * sent one, goes along, as the server checks it when security is on.
  */
-function projectsApi(request: NextRequest): ProjectsApi {
-  const authorization = request.headers.get("authorization");
-
+function projectsApi(): ProjectsApi {
   return new ProjectsApi(
     new Configuration({
       basePath,
-      headers: authorization ? { Authorization: authorization } : undefined,
     }),
   );
 }
@@ -62,7 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id: systemId } = await params;
 
   try {
-    const projects = await projectsApi(request).listProjects({
+    const projects = await projectsApi().listProjects({
       systemId
     })
 
@@ -102,7 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   try {
-    const system = await projectsApi(request).createProject({
+    const system = await projectsApi().createProject({
       createProjectRequest: { name: name.trim(), description: description ?? undefined, gitUrl: gitUrl.trim() },
       systemId
     });

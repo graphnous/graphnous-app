@@ -167,29 +167,31 @@ public class ProjectController {
      * @param numberOfClassesParsed  the classes, each counted once per module
      * @param numberOfMethodsParsed  the methods of those classes, and the
      *                               functions declared outside any class
+     * @param numberOfScans          the project's scans, whatever their
+     *                               status
      */
     public record ScanStatsResponse(
         UUID scanId,
         int numberOfModulesScanned,
         Map<String, List<String>> languages,
         int numberOfClassesParsed,
-        int numberOfMethodsParsed
+        int numberOfMethodsParsed,
+        int numberOfScans
     ) {
     }
 
     /**
-     * The stats of the project's latest scan that has any; all zero, as
-     * for a system, when none has, such as before its first scan
-     * completed.
+     * The stats of the project's latest scan that has any, with how many
+     * scans the project has; all zero but that, as for a system, when none
+     * has, such as before its first scan completed.
      */
     @GetMapping("/{id}/stats")
     public ResponseEntity<ScanStatsResponse> getLatestScanStats(
         @PathVariable("id") final UUID projectId
     ) {
-        final var stats = this.scanStatService.getLatestStats(
-            this.contextProvider.get(),
-            new ProjectId(projectId)
-        );
+        final var context = this.contextProvider.get();
+        final var stats = this.scanStatService.getLatestStats(context, new ProjectId(projectId));
+        final var scans = this.scanStatService.countScans(context, new ProjectId(projectId));
 
         return ResponseEntity.ok(
             stats
@@ -198,9 +200,10 @@ public class ProjectController {
                     found.numberOfModulesScanned(),
                     found.languages(),
                     found.numberOfClassesParsed(),
-                    found.numberOfMethodsParsed()
+                    found.numberOfMethodsParsed(),
+                    scans
                 ))
-                .orElseGet(() -> new ScanStatsResponse(null, 0, Map.of(), 0, 0))
+                .orElseGet(() -> new ScanStatsResponse(null, 0, Map.of(), 0, 0, scans))
         );
     }
 

@@ -23,7 +23,23 @@ export type ScanUsageRelationship =
   | "EXTENDS"
   | "IMPLEMENTS"
   // A method of a subclass with the name of the one asked about
-  | "OVERRIDES";
+  | "OVERRIDES"
+  // A method or function that calls, over HTTP, an endpoint the target serves
+  | "REQUESTS";
+
+/**
+ * An HTTP call of an endpoint the target serves.
+ */
+export interface ScanUsageRequest {
+  /** What the call requests with, such as GET; null when the scan does not say */
+  callMethod: string | null;
+  /** The url the call requests, as written, with what is only known when it runs in braces */
+  callUrl: string | null;
+  /** The endpoint's method, or ANY */
+  endpointMethod: string | null;
+  /** The endpoint's path, such as /api/orders/{id} */
+  endpointUrl: string | null;
+}
 
 /**
  * One thing a call passes, as written where it is called.
@@ -68,6 +84,15 @@ export interface ScanUsage {
    * scan did not record the arguments of calls.
    */
   arguments: ScanUsageArgument[] | null;
+  /**
+   * The scan the user is in: the one asked about, or over HTTP that of
+   * another project of its system.
+   */
+  scanId: string;
+  /** The project of that scan */
+  projectId: string | null;
+  /** For REQUESTS, the call and the endpoint it requests; null otherwise */
+  request: ScanUsageRequest | null;
 }
 
 /**

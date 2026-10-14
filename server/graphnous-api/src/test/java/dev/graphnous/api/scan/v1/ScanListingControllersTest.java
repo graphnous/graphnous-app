@@ -1,5 +1,8 @@
 package dev.graphnous.api.scan.v1;
 
+import com.atlassian.oai.validator.OpenApiInteractionValidator;
+import com.atlassian.oai.validator.report.LevelResolver;
+import com.atlassian.oai.validator.report.ValidationReport;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.pagination.Page;
@@ -33,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -48,6 +52,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class ScanListingControllersTest {
+
+    private static final String OPENAPI_SPEC =
+            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
+
+    /**
+     * Checks only the response, for requests that are invalid on purpose.
+     */
+    private static final OpenApiInteractionValidator RESPONSE_VALIDATOR =
+        OpenApiInteractionValidator.createForSpecificationUrl(OPENAPI_SPEC)
+            .withLevelResolver(
+                LevelResolver.create()
+                    .withLevel("validation.request", ValidationReport.Level.IGNORE)
+                    .build()
+            )
+            .build();
 
     @Autowired
     private MockMvc mockMvc;
@@ -92,6 +111,7 @@ class ScanListingControllersTest {
                 .queryParam("target", "backend")
                 .queryParam("sort", "name"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].id").value(scanId.id() + "|backend|orders"))
             .andExpect(jsonPath("$.content[0].target").value("backend"))
             .andExpect(jsonPath("$.content[0].path").value("orders"))
@@ -116,6 +136,7 @@ class ScanListingControllersTest {
 
         mockMvc.perform(get("/api/v1/scans/{id}/packages", scanId.id()).queryParam("module", "orders"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].qualifiedName").value("com.example"))
             .andExpect(jsonPath("$.content[0].module").value("orders"))
             .andExpect(jsonPath("$.content[0].classes").value(3));
@@ -128,7 +149,7 @@ class ScanListingControllersTest {
         when(scanFileService.getFiles(
             any(),
             eq(scanId),
-            eq(new ScanFileFilter("order", "orders", null, "MAIN")),
+            eq(new ScanFileFilter("order", "orders", null, "main")),
             eq(new PageQuery(1, 10, new Sort("size", Sort.Direction.DESC)))
         )).thenReturn(new Page<>(
             List.of(new ScanFile(file, "backend", "orders", "src/main/java/com/example/Order.java", "JAVA", "MAIN", 120L, "abc", 1, 0)),
@@ -138,12 +159,13 @@ class ScanListingControllersTest {
         mockMvc.perform(get("/api/v1/scans/{id}/files", scanId.id())
                 .queryParam("query", "order")
                 .queryParam("module", "orders")
-                .queryParam("sourceSet", "MAIN")
+                .queryParam("sourceSet", "main")
                 .queryParam("page", "1")
                 .queryParam("size", "10")
                 .queryParam("sort", "size")
                 .queryParam("direction", "desc"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].id").value(file))
             .andExpect(jsonPath("$.content[0].path").value("src/main/java/com/example/Order.java"))
             .andExpect(jsonPath("$.content[0].size").value(120))
@@ -172,6 +194,7 @@ class ScanListingControllersTest {
 
         mockMvc.perform(get("/api/v1/scans/{id}/classes", scanId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].qualifiedName").value("com.example.Order"))
             .andExpect(jsonPath("$.content[0].packageName").value("com.example"))
             .andExpect(jsonPath("$.content[0].interfaces[0]").value("com.example.Identified"))
@@ -197,6 +220,7 @@ class ScanListingControllersTest {
 
         mockMvc.perform(get("/api/v1/scans/{id}/methods", scanId.id()).queryParam("kind", "function"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].kind").value("FUNCTION"))
             .andExpect(jsonPath("$.content[0].returnType").value("float"))
             .andExpect(jsonPath("$.content[0].parameterTypes[0]").value("app.orders.Order"))
@@ -218,6 +242,7 @@ class ScanListingControllersTest {
 
         mockMvc.perform(get("/api/v1/scans/{id}/dependencies", scanId.id()).queryParam("scope", "test"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].id").value("dependency:org.junit.jupiter:junit-jupiter:"))
             .andExpect(jsonPath("$.content[0].name").value("org.junit.jupiter:junit-jupiter"))
             .andExpect(jsonPath("$.content[0].scope").value("test"));
@@ -228,7 +253,8 @@ class ScanListingControllersTest {
         when(scanClassService.getClasses(any(), any(), any(), any())).thenThrow(new NotFoundException("Scan not found"));
 
         mockMvc.perform(get("/api/v1/scans/{id}/classes", scanId.id()))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -244,7 +270,8 @@ class ScanListingControllersTest {
             get("/api/v1/scans/{id}/dependencies", scanId.id()).queryParam("direction", "sideways"),
             get("/api/v1/scans/{id}/dependencies", "latest")
         )) {
-            mockMvc.perform(request).andExpect(status().isBadRequest());
+            mockMvc.perform(request).andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
         }
 
         verifyNoInteractions(

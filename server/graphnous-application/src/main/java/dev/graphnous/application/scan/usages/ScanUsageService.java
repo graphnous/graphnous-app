@@ -4,7 +4,11 @@ import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.scan.ScanService;
+import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
+
+import java.util.HashMap;
+import java.util.Objects;
 
 /**
  * Finds what uses a node of a scan, for a user who may read the scan:
@@ -47,7 +51,7 @@ public class ScanUsageService {
         final String nodeId,
         final Integer depth
     ) {
-        scanService.getScan(context, scanId);
+        final var scan = scanService.getScan(context, scanId);
 
         if (nodeId == null || nodeId.isBlank()) {
             throw new ValidationException("node is required");
@@ -59,9 +63,23 @@ public class ScanUsageService {
             throw new ValidationException("depth must be between 1 and " + MAX_DEPTH);
         }
 
-        return scanUsageRepository.findUsages(scanId, nodeId.trim(), steps, MAX_USAGES)
+        final var found = scanUsageRepository.findUsages(scanId, nodeId.trim(), steps, MAX_USAGES)
             .orElseThrow(() -> new NotFoundException(
                 "Node " + nodeId.trim() + " is not in the graph of scan " + scanId.id()
             ));
+
+        // Over HTTP, usages can be in the scans of other projects: each
+        // one checked, as getting it checks the user may read it
+        final var projects = new HashMap<Scan.ScanId, Project.ProjectId>();
+        projects.put(scanId, scan.projectId());
+
+        found.usages().stream()
+            .map(ScanUsages.Usage::scanId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .filter(other -> !projects.containsKey(other))
+            .forEach(other -> projects.put(other, scanService.getScan(context, other).projectId()));
+
+        return found.withProjects(projects);
     }
 }

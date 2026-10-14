@@ -1,41 +1,22 @@
-import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
+import { forwardApi, graphnousApi, queryOf } from "@/lib/server/graphnousApi";
 import { type NextRequest } from "next/server";
 
 /**
- * The part of the scan's graph around a node: ?focus=<node id>&depth=<hops>,
- * each optional, and ?layers=<layer ids, by commas> for only those layers
- * of it: every layer without, only the focus with none. Without a focus it
- * is around the scan itself; the API
- * answers 404 for a focus that is not in the scan's graph and 400 for a
- * depth out of range.
+ * The scan's graph, from ?focus=...&depth=...&layers=a,b; layers empty
+ * shows no layer, and missing shows every one.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+    const { id: scanId } = await params;
+    const query = queryOf(request);
 
-    const query = new URLSearchParams();
-
-    for (const name of ["focus", "depth"]) {
-        const value = request.nextUrl.searchParams.get(name);
-
-        if (value) {
-            query.set(name, value);
-        }
-    }
-
-    // Also when empty, which shows no layer
-    const layers = request.nextUrl.searchParams.get("layers");
-
-    if (layers !== null) {
-        query.set("layers", layers);
-    }
-
-    const search = query.size > 0 ? `?${query}` : "";
-
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/scans/${encodeURIComponent(id)}/graph${search}`,
-            request.headers.get("authorization"),
-        ),
+    return forwardApi(
+        () => graphnousApi().scans.getScanGraphRaw({
+            scanId,
+            focus: query.string("focus"),
+            depth: query.integer("depth"),
+            // Also when empty, which shows no layer
+            layers: query.list("layers") ?? undefined,
+        }),
         "get scan graph",
     );
 }

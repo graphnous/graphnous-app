@@ -20,6 +20,9 @@ import java.util.TreeMap;
  *                                from the root of its project's repository
  * @param numberOfClassesParsed   the classes of those projects
  * @param numberOfMethodsParsed   the methods of those projects
+ * @param numberOfProjects        the projects of the system, scanned or not
+ * @param numberOfScans           the scans of those projects, whatever
+ *                                their status
  */
 public record SystemStats(
     System.SystemId systemId,
@@ -27,7 +30,9 @@ public record SystemStats(
     int numberOfModulesScanned,
     Map<String, List<String>> languages,
     int numberOfClassesParsed,
-    int numberOfMethodsParsed
+    int numberOfMethodsParsed,
+    int numberOfProjects,
+    int numberOfScans
 ) {
 
     public SystemStats {
@@ -39,8 +44,16 @@ public record SystemStats(
 
     /**
      * Adds up the stats of projects, one per project.
+     *
+     * @param numberOfProjects the projects of the system, scanned or not
+     * @param numberOfScans    the scans of those projects
      */
-    public static SystemStats of(final System.SystemId systemId, final List<ScanStats> projects) {
+    public static SystemStats of(
+        final System.SystemId systemId,
+        final List<ScanStats> projects,
+        final int numberOfProjects,
+        final int numberOfScans
+    ) {
         final var languages = new TreeMap<String, List<String>>();
 
         int modules = 0;
@@ -58,6 +71,6 @@ public record SystemStats(
             );
         }
 
-        return new SystemStats(systemId, projects.size(), modules, languages, classes, methods);
+        return new SystemStats(systemId, projects.size(), modules, languages, classes, methods, numberOfProjects, numberOfScans);
     }
 }

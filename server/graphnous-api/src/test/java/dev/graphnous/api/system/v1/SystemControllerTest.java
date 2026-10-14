@@ -99,7 +99,6 @@ class SystemControllerTest {
     @MockitoBean
     private RequestContextProvider contextProvider;
 
-    // Not in the published OpenAPI spec yet, so not validated against it
 
     @Test
     void getStats() throws Exception {
@@ -112,18 +111,23 @@ class SystemControllerTest {
                 3,
                 Map.of("JAVA", List.of("backend/src/main/java/com/example/Order.java")),
                 11,
-                41
+                41,
+                3,
+                7
             )
         );
 
         mockMvc.perform(get("/api/v1/systems/{id}/stats", systemId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.systemId").value(systemId.id().toString()))
             .andExpect(jsonPath("$.numberOfProjectsScanned").value(2))
             .andExpect(jsonPath("$.numberOfModulesScanned").value(3))
             .andExpect(jsonPath("$.languages.JAVA[0]").value("backend/src/main/java/com/example/Order.java"))
             .andExpect(jsonPath("$.numberOfClassesParsed").value(11))
-            .andExpect(jsonPath("$.numberOfMethodsParsed").value(41));
+            .andExpect(jsonPath("$.numberOfMethodsParsed").value(41))
+            .andExpect(jsonPath("$.numberOfProjects").value(3))
+            .andExpect(jsonPath("$.numberOfScans").value(7));
     }
 
     @Test
@@ -132,7 +136,8 @@ class SystemControllerTest {
             .thenThrow(new NotFoundException("System not found"));
 
         mockMvc.perform(get("/api/v1/systems/{id}/stats", UUID.randomUUID()))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -163,6 +168,7 @@ class SystemControllerTest {
                 .queryParam("scope", "test")
         )
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].id").value("dependency:org.junit.jupiter:junit-jupiter:"))
             .andExpect(jsonPath("$.content[0].projectId").value(projectId.id().toString()))
             .andExpect(jsonPath("$.content[0].scanId").value(scanId.id().toString()))
@@ -192,11 +198,13 @@ class SystemControllerTest {
             )
         );
 
+        // Only the response: the validator does not read an array query parameter of OpenAPI 3.1
         mockMvc.perform(
             get("/api/v1/systems/{id}/links", systemId.id())
-                .queryParam("scans", frontendScan.id() + "," + backendScan.id())
+                .queryParam("scans", frontendScan.id().toString(), backendScan.id().toString())
         )
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR))
             .andExpect(jsonPath("$.links[0].call.id").value("call"))
             .andExpect(jsonPath("$.links[0].call.projectId").value(frontend.id().toString()))
             .andExpect(jsonPath("$.links[0].call.httpMethod").isEmpty())
@@ -216,6 +224,7 @@ class SystemControllerTest {
 
         mockMvc.perform(get("/api/v1/systems/{id}/links", systemId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.links").isEmpty());
     }
 
@@ -249,6 +258,7 @@ class SystemControllerTest {
                 .queryParam("direction", "desc")
         )
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].name").value("org.slf4j:slf4j-api"))
             .andExpect(jsonPath("$.content[0].versions[0].version").value("2.0.18"))
             .andExpect(jsonPath("$.content[0].versions[0].projects[0]").value(backend.id().toString()))
@@ -262,7 +272,8 @@ class SystemControllerTest {
             get("/api/v1/systems/{id}/libraries", UUID.randomUUID())
                 .param("sort", "scope")
         )
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -271,7 +282,8 @@ class SystemControllerTest {
             .thenThrow(new NotFoundException("System not found"));
 
         mockMvc.perform(get("/api/v1/systems/{id}/dependencies", UUID.randomUUID()))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -280,7 +292,8 @@ class SystemControllerTest {
             get("/api/v1/systems/{id}/dependencies", UUID.randomUUID())
                 .param("sort", "version")
         )
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -304,6 +317,7 @@ class SystemControllerTest {
 
         mockMvc.perform(get("/api/v1/systems/{id}/scans", systemId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].id").value(scan.id().id().toString()))
             .andExpect(jsonPath("$.content[0].status").value("COMPLETED"))
             .andExpect(jsonPath("$.totalElements").value(1));
@@ -315,7 +329,8 @@ class SystemControllerTest {
             .thenThrow(new NotFoundException("System not found"));
 
         mockMvc.perform(get("/api/v1/systems/{id}/scans", UUID.randomUUID()))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -324,7 +339,8 @@ class SystemControllerTest {
             get("/api/v1/systems/{id}/scans", UUID.randomUUID())
                 .param("sort", "branch")
         )
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -381,6 +397,7 @@ class SystemControllerTest {
     void getSystemWithAnInvalidId() throws Exception {
         mockMvc.perform(get("/api/v1/systems/not-a-uuid"))
             .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR))
             .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
     }
 
@@ -395,6 +412,7 @@ class SystemControllerTest {
     void unsupportedMethodIsNotAllowed() throws Exception {
         mockMvc.perform(delete("/api/v1/systems"))
             .andExpect(status().isMethodNotAllowed())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR))
             .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
     }
 

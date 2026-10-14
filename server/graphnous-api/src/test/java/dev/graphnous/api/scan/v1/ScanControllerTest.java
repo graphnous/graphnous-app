@@ -1,5 +1,8 @@
 package dev.graphnous.api.scan.v1;
 
+import com.atlassian.oai.validator.OpenApiInteractionValidator;
+import com.atlassian.oai.validator.report.LevelResolver;
+import com.atlassian.oai.validator.report.ValidationReport;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.enhancer.ScanEnhancementService;
 import dev.graphnous.application.exception.AuthorizationException;
@@ -46,6 +49,18 @@ class ScanControllerTest {
     private static final String OPENAPI_SPEC =
             "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
 
+    /**
+     * Checks only the response, for requests that are invalid on purpose.
+     */
+    private static final OpenApiInteractionValidator RESPONSE_VALIDATOR =
+        OpenApiInteractionValidator.createForSpecificationUrl(OPENAPI_SPEC)
+            .withLevelResolver(
+                LevelResolver.create()
+                    .withLevel("validation.request", ValidationReport.Level.IGNORE)
+                    .build()
+            )
+            .build();
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -58,7 +73,6 @@ class ScanControllerTest {
     @MockitoBean
     private ScanEnhancementService scanEnhancementService;
 
-    // Not in the published OpenAPI spec yet, so not validated against it
 
     @Test
     void getWhatAScanWasCreatedWith() throws Exception {
@@ -73,6 +87,7 @@ class ScanControllerTest {
 
         mockMvc.perform(get("/api/v1/scans/{id}/options", scan.id().id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.enhancers[0]").value("react"))
             .andExpect(jsonPath("$.enhancers[1]").value("spring"))
             .andExpect(jsonPath("$.excludes[0]").value("*.spec.ts"))
@@ -89,6 +104,7 @@ class ScanControllerTest {
 
         mockMvc.perform(get("/api/v1/scans/{id}/options", scan.id().id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.enhancers").isEmpty())
             .andExpect(jsonPath("$.excludes").isEmpty())
             .andExpect(jsonPath("$.languages").isEmpty());
@@ -100,8 +116,11 @@ class ScanControllerTest {
 
         when(scanEnhancementService.enhance(any(), eq(scan.id()), isNull(), eq(false))).thenReturn(scan);
 
+        // Without a body, which the spec allows but the validator takes for
+        // one of a content type it does not allow
         mockMvc.perform(post("/api/v1/scans/{id}/enhancements", scan.id().id()))
             .andExpect(status().isAccepted())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR))
             .andExpect(header().string("Location", endsWith("/api/v1/scans/" + scan.id().id() + "/steps")))
             .andExpect(jsonPath("$.id").value(scan.id().id().toString()));
     }
@@ -117,7 +136,8 @@ class ScanControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"enhancers\": [\"react\", \"nextjs\"]}")
         )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isAccepted())
+            .andExpect(openApi().isValid(OPENAPI_SPEC));
     }
 
     @Test
@@ -131,7 +151,8 @@ class ScanControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"enhancers\": []}")
         )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isAccepted())
+            .andExpect(openApi().isValid(OPENAPI_SPEC));
 
         // Not every enhancer, as without a choice
         verify(scanEnhancementService).enhance(any(), eq(scan.id()), eq(Set.of()), eq(false));
@@ -148,7 +169,8 @@ class ScanControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"restore\": true}")
         )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isAccepted())
+            .andExpect(openApi().isValid(OPENAPI_SPEC));
     }
 
     @Test
@@ -157,7 +179,8 @@ class ScanControllerTest {
             .thenThrow(new ConflictException("Scan kept no results to enhance"));
 
         mockMvc.perform(post("/api/v1/scans/{id}/enhancements", UUID.randomUUID()))
-            .andExpect(status().isConflict());
+            .andExpect(status().isConflict())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     private static Scan completedScan() {
@@ -210,6 +233,7 @@ class ScanControllerTest {
     void getScanWithAnInvalidId() throws Exception {
         mockMvc.perform(get("/api/v1/scans/not-a-uuid"))
             .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR))
             .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
     }
 
@@ -302,7 +326,8 @@ class ScanControllerTest {
             get("/api/v1/scans/{id}/logs", UUID.randomUUID())
                 .param("size", "1001")
         )
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test

@@ -1,4 +1,4 @@
-import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
+import { forwardApi, graphnousApi } from "@/lib/server/graphnousApi";
 import { type NextRequest } from "next/server";
 
 /**
@@ -9,13 +9,7 @@ import { type NextRequest } from "next/server";
  * language it found.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+    const { id: scanId } = await params;
 
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/scans/${encodeURIComponent(id)}/options`,
-            request.headers.get("authorization"),
-        ),
-        "get scan options",
-    );
+    return forwardApi(() => graphnousApi().scans.getScanOptionsRaw({ scanId }), "get scan options");
 }

@@ -4,7 +4,9 @@ import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.project.ProjectRepository;
 import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.application.scan.ScanRepository;
 import dev.graphnous.application.system.SystemService;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.ScanResult;
@@ -39,6 +41,8 @@ public class ScanStatService {
     static final String UNKNOWN_LANGUAGE = "UNKNOWN";
 
     private final ScanStatRepository scanStatRepository;
+    private final ScanRepository scanRepository;
+    private final ProjectRepository projectRepository;
 
     private final ProjectService projectService;
     private final SystemService systemService;
@@ -48,11 +52,15 @@ public class ScanStatService {
 
     public ScanStatService(
         final ScanStatRepository scanStatRepository,
+        final ScanRepository scanRepository,
+        final ProjectRepository projectRepository,
         final ProjectService projectService,
         final SystemService systemService,
         final AuthorizationService authorizationService
     ) {
         this.scanStatRepository = scanStatRepository;
+        this.scanRepository = scanRepository;
+        this.projectRepository = projectRepository;
 
         this.projectService = projectService;
         this.systemService = systemService;
@@ -88,8 +96,25 @@ public class ScanStatService {
     }
 
     /**
+     * How many scans the project has, whatever their status.
+     *
+     * @throws NotFoundException when the project is not one of the caller's
+     */
+    public int countScans(
+        final RequestContext context,
+        final Project.ProjectId projectId
+    ) {
+        authorizationService.authorize(context, Permission.SCAN_READ);
+
+        this.projectService.getProject(context, projectId);
+
+        return this.scanRepository.count(projectId);
+    }
+
+    /**
      * The stats of the system: those of the latest scan that has any of
-     * each of its projects, added up. All zero for a system none of whose
+     * each of its projects, added up, with how many projects it has and
+     * how many scans they have. All zero for a system none of whose
      * projects has a scan with stats.
      */
     public SystemStats getSystemStats(
@@ -112,7 +137,9 @@ public class ScanStatService {
 
         return SystemStats.of(
             systemId,
-            this.scanStatRepository.findLatestBySystemId(systemId)
+            this.scanStatRepository.findLatestBySystemId(systemId),
+            this.projectRepository.count(systemId),
+            this.scanRepository.countInSystem(systemId)
         );
     }
 

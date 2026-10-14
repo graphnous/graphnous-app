@@ -63,6 +63,14 @@ public interface ScanJpaRepository extends JpaRepository<ScanEntity, UUID> {
         final UUID projectId
     );
 
+    @Query("""
+        SELECT COUNT(s) FROM ScanEntity s
+        WHERE s.projectId IN (SELECT p.id FROM ProjectEntity p WHERE p.systemId = :systemId)
+        """)
+    int countBySystemId(
+        @Param("systemId") final UUID systemId
+    );
+
     @Query("SELECT s FROM ScanEntity s WHERE s.status NOT IN :active AND s.createdAt < :cutoff")
     List<ScanEntity> findAllByStatusNotInAndCreatedAtBefore(
         @Param("active") final Collection<Scan.ScanStatus> active,

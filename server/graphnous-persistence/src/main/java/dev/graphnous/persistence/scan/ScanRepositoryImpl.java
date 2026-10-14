@@ -169,6 +169,11 @@ public class ScanRepositoryImpl implements ScanRepository {
     }
 
     @Override
+    public int countInSystem(final System.SystemId systemId) {
+        return this.jpaRepository.countBySystemId(systemId.id());
+    }
+
+    @Override
     public void startScan(final UUID snapshotId, Scan.ScanId scanId) {
         final var scan = this.findById(scanId);
 

@@ -1,18 +1,11 @@
-import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
+import { forwardApi, graphnousApi } from "@/lib/server/graphnousApi";
 import { type NextRequest } from "next/server";
 
 /**
- * How the head scan's graph differs from the base scan's, the scan of the
- * path; the API answers 404 when either scan is not there.
+ * What was added, removed and changed from the scan to the head scan.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string; headId: string }> }) {
-    const { id, headId } = await params;
+    const { id: baseScanId, headId: headScanId } = await params;
 
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/scans/${encodeURIComponent(id)}/compare/${encodeURIComponent(headId)}`,
-            request.headers.get("authorization"),
-        ),
-        "compare scans",
-    );
+    return forwardApi(() => graphnousApi().scans.compareScansRaw({ baseScanId, headScanId }), "compare scans");
 }

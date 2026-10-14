@@ -1,5 +1,8 @@
 package dev.graphnous.api.chat.v1;
 
+import com.atlassian.oai.validator.OpenApiInteractionValidator;
+import com.atlassian.oai.validator.report.LevelResolver;
+import com.atlassian.oai.validator.report.ValidationReport;
 import dev.graphnous.application.chat.ChatService;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.exception.NotFoundException;
@@ -17,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -31,6 +35,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class ChatControllerTest {
+
+    private static final String OPENAPI_SPEC =
+            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
+
+    /**
+     * Checks only the response, for requests that are invalid on purpose.
+     */
+    private static final OpenApiInteractionValidator RESPONSE_VALIDATOR =
+        OpenApiInteractionValidator.createForSpecificationUrl(OPENAPI_SPEC)
+            .withLevelResolver(
+                LevelResolver.create()
+                    .withLevel("validation.request", ValidationReport.Level.IGNORE)
+                    .build()
+            )
+            .build();
 
     private static final Instant NOW = Instant.parse("2026-10-07T12:00:00Z");
 
@@ -61,6 +80,7 @@ class ChatControllerTest {
 
         mockMvc.perform(get("/api/v1/systems/{id}/chat/threads", systemId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.content[0].id").value(thread.id().id().toString()))
             .andExpect(jsonPath("$.content[0].title").value("Which systems do I have?"))
             .andExpect(jsonPath("$.content[0].messages").doesNotExist())
@@ -73,6 +93,7 @@ class ChatControllerTest {
 
         mockMvc.perform(post("/api/v1/systems/{id}/chat/threads", systemId.id()))
             .andExpect(status().isCreated())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(header().string("Location", "/api/v1/chat/threads/" + thread.id().id()))
             .andExpect(jsonPath("$.systemId").value(systemId.id().toString()));
     }
@@ -83,6 +104,7 @@ class ChatControllerTest {
 
         mockMvc.perform(get("/api/v1/chat/threads/{id}", thread.id().id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             // An array, not a string holding one
             .andExpect(jsonPath("$.messages[0].role").value("user"))
             .andExpect(jsonPath("$.messages[0].content").value("Which systems do I have?"));
@@ -93,13 +115,15 @@ class ChatControllerTest {
         when(chatService.getThread(any(), any())).thenThrow(new NotFoundException("Not found"));
 
         mockMvc.perform(get("/api/v1/chat/threads/{id}", UUID.randomUUID()))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
     void deletesAThread() throws Exception {
         mockMvc.perform(delete("/api/v1/chat/threads/{id}", thread.id().id()))
-            .andExpect(status().isNoContent());
+            .andExpect(status().isNoContent())
+            .andExpect(openApi().isValid(OPENAPI_SPEC));
 
         verify(chatService).delete(any(), eq(thread.id()));
     }

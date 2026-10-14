@@ -83,6 +83,14 @@ public interface ScanRepository {
         final Project.ProjectId projectId
     );
 
+    /**
+     * How many scans the projects of the system have, whatever their
+     * status.
+     */
+    int countInSystem(
+        final System.SystemId systemId
+    );
+
 
     void startScan(
         final UUID snapshotId,

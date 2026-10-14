@@ -1,8 +1,6 @@
 import {
     BASE_PATH,
     Configuration,
-    CreateProjectRequest,
-    CreateScanRequest,
     FetchError,
     ResponseError,
     ScansApi,
@@ -19,19 +17,12 @@ const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replac
  * A client that calls the API as the caller: their access token, when they
  * sent one, goes along, as the server checks it when security is on.
  */
-function scansApi(request: NextRequest): ScansApi {
-    const authorization = request.headers.get("authorization");
-
+function scansApi(): ScansApi {
     return new ScansApi(
         new Configuration({
             basePath,
-            headers: authorization ? { Authorization: authorization } : undefined,
         }),
     );
-}
-
-function badRequest(message: string): NextResponse {
-    return NextResponse.json({ code: "VALIDATION_ERROR", message }, { status: 400 });
 }
 
 /**
@@ -62,7 +53,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
 
     try {
-        const steps = await scansApi(request).getScanExecution({
+        const steps = await scansApi().getScanExecution({
             scanId: id
         });
 

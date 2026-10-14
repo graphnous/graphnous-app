@@ -26,4 +26,12 @@ export interface SystemStats {
    * class.
    */
   numberOfMethodsParsed: number;
+  /**
+   * The projects of the system, scanned or not.
+   */
+  numberOfProjects: number;
+  /**
+   * The scans of those projects, whatever their status.
+   */
+  numberOfScans: number;
 }

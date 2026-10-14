@@ -1,5 +1,7 @@
 package dev.graphnous.application.scan.stats;
 
+import dev.graphnous.application.scan.ScanRepository;
+import dev.graphnous.application.project.ProjectRepository;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.OrganizationContext;
@@ -34,6 +36,12 @@ class LatestScanStatsTest {
 
     @Mock
     private ProjectService projectService;
+
+    @Mock
+    private ScanRepository scanRepository;
+
+    @Mock
+    private ProjectRepository projectRepository;
 
     @Mock
     private SystemService systemService;
@@ -86,10 +94,16 @@ class LatestScanStatsTest {
             )
         ));
 
+        // Three projects, one not scanned yet, with seven scans between them
+        when(projectRepository.count(systemId)).thenReturn(3);
+        when(scanRepository.countInSystem(systemId)).thenReturn(7);
+
         final var stats = service().getSystemStats(context, systemId);
 
         assertThat(stats.systemId()).isEqualTo(systemId);
         assertThat(stats.numberOfProjectsScanned()).isEqualTo(2);
+        assertThat(stats.numberOfProjects()).isEqualTo(3);
+        assertThat(stats.numberOfScans()).isEqualTo(7);
         assertThat(stats.numberOfModulesScanned()).isEqualTo(3);
         assertThat(stats.languages()).containsExactly(
             Map.entry("JAVA", List.of("src/Order.java", "src/Cart.java")),
@@ -114,7 +128,19 @@ class LatestScanStatsTest {
         assertThat(stats.languages()).isEmpty();
     }
 
+    @Test
+    void countsTheScansOfAProject() {
+        when(scanRepository.count(projectId)).thenReturn(4);
+
+        assertThat(service().countScans(context, projectId)).isEqualTo(4);
+
+        verify(authorizationService).authorize(context, Permission.SCAN_READ);
+        verify(projectService).getProject(context, projectId);
+    }
+
     private ScanStatService service() {
-        return new ScanStatService(scanStatRepository, projectService, systemService, authorizationService);
+        return new ScanStatService(
+            scanStatRepository, scanRepository, projectRepository, projectService, systemService, authorizationService
+        );
     }
 }

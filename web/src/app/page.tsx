@@ -58,11 +58,10 @@ export default function Home() {
         />
 
         <section className="flex gap-4 flex-row">
-          <StatsCard className="flex-1" title="Projects" stat={page.totalElements} />
+          <StatsCard className="flex-1" title="Projects" stat={stat(stats?.numberOfProjects)} />
+          <StatsCard className="flex-1" title="Scans" stat={stat(stats?.numberOfScans)} />
           <StatsCard className="flex-1" title="Modules" stat={stat(stats?.numberOfModulesScanned)} />
           <StatsCard className="flex-1" title="Files" stat={stat(stats ? numberOfFiles : undefined)} />
-          <StatsCard className="flex-1" title="Classes" stat={stat(stats?.numberOfClassesParsed)} />
-          <StatsCard className="flex-1" title="Methods" stat={stat(stats?.numberOfMethodsParsed)} />
         </section>
         {statsError && (
           <Text>{statsError.message}</Text>

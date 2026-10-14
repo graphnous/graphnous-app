@@ -3,6 +3,7 @@ package dev.graphnous.persistence.scan.usages;
 import dev.graphnous.application.scan.usages.ScanUsageRepository;
 import dev.graphnous.application.scan.usages.ScanUsages;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.persistence.scan.links.HttpLinkRepositoryImpl;
 import dev.graphnous.persistence.scan.result.EnhancementRepositoryImpl;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
@@ -15,13 +16,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import static dev.graphnous.persistence.scan.GraphPages.number;
 import static dev.graphnous.persistence.scan.GraphPages.string;
 
 /**
  * Reads what uses a node from the relationships ScanResultRepositoryImpl
- * stores for the bodies of methods and functions, and for inheritance.
+ * stores for the bodies of methods and functions, and for inheritance; and
+ * over HTTP, from the links HttpLinkRepositoryImpl stores between scans.
  */
 @Repository
 public class ScanUsageRepositoryImpl implements ScanUsageRepository {
@@ -80,7 +83,12 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
                 usages.addAll(inheriting(tx, own, limit + 1));
 
                 for (int step = 1; step <= depth && !targets.isEmpty() && usages.size() <= limit; step++) {
-                    final var found = usages(tx, targets, step == 1 ? USED_BY : CALLED_BY, step, limit + 1 - usages.size());
+                    final var found = new ArrayList<>(
+                        usages(tx, targets, step == 1 ? USED_BY : CALLED_BY, step, limit + 1 - usages.size())
+                    );
+
+                    // And what calls, over HTTP, an endpoint one of them serves
+                    found.addAll(requests(tx, targets, step, limit + 1 - usages.size() - found.size()));
 
                     usages.addAll(found);
 
@@ -224,7 +232,8 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
                        user.id AS userId, labels(user)[0] AS userType, user.name AS userName,
                        user.qualifiedName AS userQualifiedName,
                        target.id AS targetId, labels(target)[0] AS targetType, target.name AS targetName,
-                       target.qualifiedName AS targetQualifiedName
+                       target.qualifiedName AS targetQualifiedName, user.scanId AS userScanId,
+                       null AS callMethod, null AS callUrl, null AS endpointMethod, null AS endpointUrl
                 """.formatted(MAX_INHERITANCE),
             Map.of("ids", ids, "limit", limit)
         ).list(record -> usage(record, 1));
@@ -257,8 +266,53 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
                        user.id AS userId, labels(user)[0] AS userType, user.name AS userName,
                        user.qualifiedName AS userQualifiedName,
                        target.id AS targetId, labels(target)[0] AS targetType, target.name AS targetName,
-                       target.qualifiedName AS targetQualifiedName
+                       target.qualifiedName AS targetQualifiedName, user.scanId AS userScanId,
+                       null AS callMethod, null AS callUrl, null AS endpointMethod, null AS endpointUrl
                 """.formatted(relationships),
+            Map.of("targets", targets, "limit", limit)
+        ).list(record -> usage(record, depth));
+    }
+
+    /**
+     * What calls, over HTTP, an endpoint one of the targets serves, as
+     * the links stored between the scans of a system have it:
+     * <pre>
+     * (target)-[:ENHANCE]->(Endpoint)<-[:REQUESTS]-(HttpCall)<-[:ENHANCE]-(user)
+     * </pre>
+     * The user can be in the scan of another project. By file and line,
+     * so the same request gives the same usages.
+     */
+    private static List<ScanUsages.Usage> requests(
+        final TransactionContext tx,
+        final List<String> targets,
+        final int depth,
+        final int limit
+    ) {
+        if (limit <= 0) {
+            return List.of();
+        }
+
+        return tx.run("""
+                MATCH (target) WHERE target.id IN $targets AND (target:Class OR target:Method OR target:Field)
+                MATCH (target)-[:ENHANCE]->(endpoint:%1$s:Endpoint)<-[:%2$s]-(call:%1$s:HttpCall)<-[:ENHANCE]-(user)
+                WHERE user:Class OR user:Method OR user:Field
+                OPTIONAL MATCH (owner:Class)-[:HAS_METHOD]->(user)
+                OPTIONAL MATCH (targetOwner:Class)-[:HAS_METHOD|HAS_FIELD]->(target)
+                OPTIONAL MATCH (file:File)-[:DECLARES]->(declared)
+                WHERE declared = user OR declared = owner
+                WITH user, call, endpoint, target, owner, targetOwner, head(collect(file.path)) AS file
+                ORDER BY file, call.startLine, user.id, target.id
+                LIMIT $limit
+                RETURN 'REQUESTS' AS relationship, call.startLine AS line, null AS arguments,
+                       null AS argumentNames, null AS argumentSpreads,
+                       file, owner.name AS owner, targetOwner.name AS targetOwner,
+                       user.id AS userId, labels(user)[0] AS userType, user.name AS userName,
+                       user.qualifiedName AS userQualifiedName,
+                       target.id AS targetId, labels(target)[0] AS targetType, target.name AS targetName,
+                       target.qualifiedName AS targetQualifiedName, user.scanId AS userScanId,
+                       call.httpMethod AS callMethod, call.url AS callUrl,
+                       endpoint.httpMethod AS endpointMethod, endpoint.url AS endpointUrl
+                """.formatted(EnhancementRepositoryImpl.ENHANCED, HttpLinkRepositoryImpl.REQUESTS),
             Map.of("targets", targets, "limit", limit)
         ).list(record -> usage(record, depth));
     }
@@ -276,7 +330,14 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
             node(record.get("targetId"), record.get("targetType"), record.get("targetName"), record.get("targetQualifiedName")),
             string(record.get("targetOwner")),
             depth,
-            arguments(record)
+            arguments(record),
+            record.get("userScanId").isNull() ? null : new Scan.ScanId(UUID.fromString(record.get("userScanId").asString())),
+            record.get("endpointUrl").isNull() ? null : new ScanUsages.Request(
+                string(record.get("callMethod")),
+                string(record.get("callUrl")),
+                string(record.get("endpointMethod")),
+                string(record.get("endpointUrl"))
+            )
         );
     }
 

@@ -129,7 +129,16 @@ A schema change, a change in both scanners, and here.
   project; and when they are read and were stored by an earlier version of
   the matching, or not at all, as for scans from before. Links of other
   scans, such as earlier ones chosen to compare, are found when asked for.
-  Impact analysis does not follow them yet.
+- **Impact analysis across HTTP.** Besides what calls a method, Impact
+  Analysis lists what requests an endpoint it serves, over the stored
+  links: `(target)-[:ENHANCE]->(Endpoint)<-[:REQUESTS]-(HttpCall)<-[:ENHANCE]-(user)`,
+  as `REQUESTS` usages with the call's and the endpoint's method and url.
+  The user can be in the scan of another project of the system, named on
+  the page, and following further goes on in that scan: from a Spring
+  method to the Next.js route that calls it, to the browser code that
+  requests that route. Only between the latest scans, whose links are
+  stored; and only calls the scan sees, so not those of a generated
+  OpenAPI client.
 
 Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 `customerId`", and each call site of a Java method shows what it passes.

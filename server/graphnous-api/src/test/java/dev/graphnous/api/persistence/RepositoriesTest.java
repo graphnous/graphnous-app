@@ -300,6 +300,24 @@ class RepositoriesTest {
     }
 
     @Test
+    void countsTheScansOfTheProjectsOfASystem() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var frontend = project(shop, "frontend");
+        project(shop, "docs");
+        final var other = project(system("Blog"), "blog");
+
+        scan(backend, Scan.ScanStatus.COMPLETED);
+        scan(backend, Scan.ScanStatus.FAILED);
+        scan(frontend, Scan.ScanStatus.RUNNING);
+        scan(other, Scan.ScanStatus.COMPLETED);
+
+        // Whatever their status, and of no other system
+        assertThat(scanRepository.countInSystem(shop.id())).isEqualTo(3);
+        assertThat(projectRepository.count(shop.id())).isEqualTo(3);
+    }
+
+    @Test
     void keepsWhatAProjectsScansLeaveOut() {
         final var shop = system("Shop");
         final var backend = project(shop, "backend");

@@ -1,27 +1,19 @@
 "use client";
 
 import {
-    Badge,
     Button,
-    Card,
-    CardBody,
-    CardHeader,
     Container,
     PageHeader,
     Section,
     Stack,
-    Text,
 } from "@graphnous/theme";
 
-import { PlayIcon } from "@phosphor-icons/react";
 
 import { useSystemStore } from "@/lib/store/systemStore";
 import { useListProjects } from "@/lib/hooks/project/useListProjects";
 import { ProjectsTable } from "@/components/ProjectsTable/ProjectsTable";
 import { CreateProjectModal, CreateProjectModalRef } from "@/components/CreateProjectModal/CreateProjectModal";
 import { useRef } from "react";
-import { ScansTable } from "@/components/ScansTable/ScansTable";
-import { useListScans } from "@/lib/hooks/scan/useListScans";
 import { breadcrumbs } from "@/lib/breadcrumbs";
 
 export default function ProjectsPage() {
@@ -53,11 +45,7 @@ export default function ProjectsPage() {
                 <CreateProjectModal ref={createProjectModalRef} onCreated={() => refresh()} />
 
                 <Section title="Projects">
-                    <Card>
-                        <CardBody>
-                            <ProjectsTable page={page} onProjectDeleted={() => refresh()} />
-                        </CardBody>
-                    </Card>
+                    <ProjectsTable page={page} onProjectDeleted={() => refresh()} />
                 </Section>
             </Stack>
         </Container>

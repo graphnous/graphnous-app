@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +21,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class EnhancerControllerTest {
+
+    private static final String OPENAPI_SPEC =
+            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
 
     @Autowired
     private MockMvc mockMvc;
@@ -38,6 +42,7 @@ class EnhancerControllerTest {
 
         mockMvc.perform(get("/api/v1/enhancers"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.length()").value(2))
             .andExpect(jsonPath("$[0].name").value("spring"))
             .andExpect(jsonPath("$[0].version").value("1.0.0"))
@@ -51,6 +56,7 @@ class EnhancerControllerTest {
 
         mockMvc.perform(get("/api/v1/enhancers"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$").isEmpty());
     }
 
