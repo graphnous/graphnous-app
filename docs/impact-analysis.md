@@ -2,8 +2,8 @@
 
 What it takes for Graphnous to answer "if I change this, what else do I have
 to change?". Written on 2026-10-12, updated on 2026-10-14. Steps 1 and 2 of
-the plan are built. Step 3 is built here, and waits for the schema and the
-scanners it needs to be published; see "What step 3 needs to go live".
+the plan are built, and step 3 is built with the schema and the scanners
+(Java `0.3.1`, TypeScript `0.1.1`) it needs.
 
 ## The goal
 
@@ -25,7 +25,7 @@ dependencies, plus what enhancers add.
 | Case | Needs | Recorded by a scanner | Stored in the graph |
 |---|---|---|---|
 | React component: where it is used | every `<OrderList />` site, with file and line | Yes, by the TypeScript scanner (JSX is recorded as a call) | No |
-| React component: which props each use passes | the attributes at each JSX site | With step 3 | With step 3 |
+| React component: which props each use passes | the attributes at each JSX site | Yes, by the TypeScript scanner from 0.1.1 | Yes |
 | Java entity: where it is instantiated | every `new Order(...)` site | Yes, by the Java scanner from 0.3.0 | Yes |
 | Java method: who calls it | every call site | Yes, by the Java scanner from 0.3.0 | Yes |
 
@@ -36,8 +36,8 @@ dependencies, plus what enhancers add.
 - **Java.** The Java scanner records calls, constructor calls, field accesses
   and type uses from `0.3.0`, the image the server runs. `0.2.0` and earlier
   did not.
-- **Arguments and props.** Recorded with step 3: until its scanners are
-  released, no scanner records them.
+- **Arguments and props.** Recorded from Java scanner `0.3.1` and
+  TypeScript scanner `0.1.1` (step 3), the images the server runs.
 
 ## Plan
 
@@ -88,7 +88,7 @@ reads. What is still dropped, besides calls into libraries: uses of code the
 build generates, which the scanner resolves but does not scan, and `values()`
 of an enum, which no source declares.
 
-### Step 3: record arguments and props (built, not yet live)
+### Step 3: record arguments and props (built)
 
 A schema change, a change in both scanners, and here.
 
@@ -115,20 +115,11 @@ A schema change, a change in both scanners, and here.
 Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 `customerId`", and each call site of a Java method shows what it passes.
 
-#### What step 3 needs to go live
+#### Scans made before step 3
 
-Each is on a `call-arguments` branch, in this order:
-
-1. Merge the schema change, which publishes it. The server and both scanners
-   build against the published schema, so until then they only build with
-   the schema's url overridden.
-2. Merge and release both scanners.
-3. Here: move `SCHEMAS_REF` in CI and the scanner images in
-   `application.yml` to those releases, then merge.
-
-A scan made before then has no arguments: it shows usages as before, and
-nothing about what they pass. It needs scanning again, not storing again,
-as the results it kept do not have them.
+A scan made with an earlier scanner has no arguments: it shows usages as
+before, and nothing about what they pass. It needs scanning again, not
+storing again, as the results it kept do not have them.
 
 ## What step 1 built
 

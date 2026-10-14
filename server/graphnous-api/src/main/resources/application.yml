@@ -67,7 +67,7 @@ graphnous:
   # and get files this server reads, all of which no other scanner gets.
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.0
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.1
       command:
         - java
         - -jar
@@ -97,7 +97,7 @@ graphnous:
       #   - source: /etc/graphnous/maven-settings.xml
       #     target: /maven-settings/settings.xml
     TYPESCRIPT:
-      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.1.0
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.1.1
       command:
         - node
         - /opt/graphnous/scanner.js

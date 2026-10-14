@@ -112,7 +112,7 @@ language:
 graphnous:
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.0
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.1
       command: [java, -jar, /opt/graphnous/java-scanner.jar,
                 --path, "{repository}", --target, "{target}",
                 --java-version, "{languageVersion}", --output, "{output}",
