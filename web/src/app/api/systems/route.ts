@@ -27,6 +27,7 @@ function systemsApi(request: NextRequest): SystemsApi {
     new Configuration({
       basePath,
       headers: authorization ? { Authorization: authorization } : undefined,
+      fetchApi: fetch
     }),
   );
 }
