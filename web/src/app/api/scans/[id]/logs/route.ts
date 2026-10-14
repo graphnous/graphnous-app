@@ -20,20 +20,15 @@ const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replac
  * A client that calls the API as the caller: their access token, when they
  * sent one, goes along, as the server checks it when security is on.
  */
-function scanLogsApi(request: NextRequest): ScanLogsApi {
-    const authorization = request.headers.get("authorization");
+function scanLogsApi(): ScanLogsApi {
 
     return new ScanLogsApi(
         new Configuration({
             basePath,
-            headers: authorization ? { Authorization: authorization } : undefined,
         }),
     );
 }
 
-function badRequest(message: string): NextResponse {
-    return NextResponse.json({ code: "VALIDATION_ERROR", message }, { status: 400 });
-}
 
 /**
  * Passes the API's error on as it is, status and body, so callers see why
@@ -64,7 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
 
     try {
-        const scanLogs = await scanLogsApi(request).listScanLogs({
+        const scanLogs = await scanLogsApi().listScanLogs({
             scanId: id
         });
 

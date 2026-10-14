@@ -17,7 +17,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,6 +70,23 @@ class DockerRepositoryScannerTest {
             .satisfies(failure -> assertThat(failure.error()).hasMessage("Scan was cancelled"));
 
         verify(docker, never()).createContainerCmd(anyString());
+    }
+
+    @Test
+    void logsTheTargetsItLeavesOut() throws IOException {
+        Files.writeString(repository.resolve("pom.xml"), POM);
+
+        final var logged = new ArrayList<String>();
+
+        final var plan = scanner().plan(
+            repository,
+            Set.of(ScanTarget.Language.TYPESCRIPT),
+            (level, message) -> logged.add(level + " " + message)
+        );
+
+        assertThat(plan.targets()).isEmpty();
+        assertThat(plan.leftOut()).hasSize(1);
+        assertThat(logged).contains("INFO Leaving out JAVA target .");
     }
 
     private DockerRepositoryScanner scanner() {

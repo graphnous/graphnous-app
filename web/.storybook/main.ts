@@ -21,8 +21,9 @@ const config: StorybookConfig = {
     optimizeDeps: {
       ...viteConfig.optimizeDeps,
       // Phosphor's icon entry point re-exports some 1,500 modules; bundled
-      // up front, stories do not load them one by one on first use
-      include: [...(viteConfig.optimizeDeps?.include ?? []), '@phosphor-icons/react/ssr'],
+      // up front, stories do not load them one by one on first use.
+      // floating-ui too: found while the tests run, it reloads them
+      include: [...(viteConfig.optimizeDeps?.include ?? []), '@phosphor-icons/react/ssr', '@floating-ui/react'],
     },
   }),
 };

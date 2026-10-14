@@ -26,7 +26,7 @@ class ScannersTest {
         final var java = Scanners.of(options(Scanners.JAVA_IMAGE, Scanners.TYPESCRIPT_IMAGE, false)).get(0);
 
         assertThat(java.command("/workspace", target(ScanTarget.Language.JAVA, "21"))).containsExactly(
-            "java", "-jar", "/opt/graphnous/java-scanner.jar",
+            "java", "-XX:MaxRAMPercentage=75", "-jar", "/opt/graphnous/java-scanner.jar",
             "--path", "/workspace",
             "--target", "backend",
             "--java-version", "21",

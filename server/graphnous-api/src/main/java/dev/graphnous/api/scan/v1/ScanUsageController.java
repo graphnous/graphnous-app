@@ -63,8 +63,10 @@ public class ScanUsageController {
 
     /**
      * @param relationship CALLS, INSTANTIATES, READS, WRITES, USES, EXTENDS,
-     *                     IMPLEMENTS or, for a method of a subclass with
-     *                     the name of the one asked about, OVERRIDES
+     *                     IMPLEMENTS; for a method of a subclass with the
+     *                     name of the one asked about, OVERRIDES; or for a
+     *                     method or function that calls an endpoint the
+     *                     target serves over HTTP, REQUESTS
      * @param user         the method, function or class that uses it
      * @param owner        the name of the class the user is a method of
      * @param file         the path of the file the user is in
@@ -79,6 +81,11 @@ public class ScanUsageController {
      * @param arguments    what a call or an instantiation passes, in the
      *                     order written; null for another relationship, and
      *                     when the scan did not record the arguments of calls
+     * @param scanId       the scan the user is in: the one asked about, or
+     *                     over HTTP that of another project of its system
+     * @param projectId    the project of that scan
+     * @param request      for REQUESTS, the call and the endpoint it
+     *                     requests; null otherwise
      */
     public record ScanUsageResponse(
         String relationship,
@@ -89,7 +96,28 @@ public class ScanUsageController {
         ScanUsageNode target,
         String targetOwner,
         int depth,
-        List<ScanUsageArgument> arguments
+        List<ScanUsageArgument> arguments,
+        UUID scanId,
+        UUID projectId,
+        ScanUsageRequest request
+    ) {
+    }
+
+    /**
+     * An HTTP call of an endpoint the target serves.
+     *
+     * @param callMethod     what the call requests with, such as GET; null
+     *                       when the scan does not say
+     * @param callUrl        the url the call requests, as written, with
+     *                       what is only known when it runs in braces
+     * @param endpointMethod the endpoint's method, or ANY
+     * @param endpointUrl    the endpoint's path
+     */
+    public record ScanUsageRequest(
+        String callMethod,
+        String callUrl,
+        String endpointMethod,
+        String endpointUrl
     ) {
     }
 
@@ -112,7 +140,9 @@ public class ScanUsageController {
      * For a class, also where its methods and fields are used. Inheritance
      * is followed: a method is also used where the method of its name of a
      * class above or below its own is, and the methods that override it
-     * are usages themselves.
+     * are usages themselves. So is an HTTP call of an endpoint a method
+     * serves, from another project of the system too, as the links stored
+     * between the latest scans of a system have it.
      *
      * @param node  the id of a class, method or field of the scan, or of
      *              what an enhancer added to one
@@ -147,11 +177,25 @@ public class ScanUsageController {
                     usage.depth(),
                     usage.arguments() == null ? null : usage.arguments().stream()
                         .map(argument -> new ScanUsageArgument(argument.name(), argument.value(), argument.spread()))
-                        .toList()
+                        .toList(),
+                    usage.scanId() == null ? id : usage.scanId().id(),
+                    projectOf(found, usage.scanId() == null ? new Scan.ScanId(id) : usage.scanId()),
+                    usage.request() == null ? null : new ScanUsageRequest(
+                        usage.request().callMethod(),
+                        usage.request().callUrl(),
+                        usage.request().endpointMethod(),
+                        usage.request().endpointUrl()
+                    )
                 ))
                 .toList(),
             found.truncated()
         ));
+    }
+
+    private static UUID projectOf(final ScanUsages.Found found, final Scan.ScanId scanId) {
+        final var project = found.projects().get(scanId);
+
+        return project == null ? null : project.id();
     }
 
     private static ScanUsageNode fromDomain(final ScanUsages.Node node) {

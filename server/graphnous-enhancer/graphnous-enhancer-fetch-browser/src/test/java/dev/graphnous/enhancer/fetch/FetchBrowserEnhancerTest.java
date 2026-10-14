@@ -6,6 +6,7 @@ import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.File;
 import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.Module;
+import dev.graphnous.core.model.Parameter;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.enhancer.Enhancement;
@@ -35,9 +36,9 @@ class FetchBrowserEnhancerTest {
         final var enhancements = enhancer.enhance(scanResult(file()));
 
         assertThat(enhancer.name()).isEqualTo("fetch-browser");
-        assertThat(enhancer.version()).isEqualTo("1.0.0");
+        assertThat(enhancer.version()).isEqualTo("1.1.0");
         assertThat(enhancements.name()).isEqualTo("fetch-browser");
-        assertThat(enhancements.version()).isEqualTo("1.0.0");
+        assertThat(enhancements.version()).isEqualTo("1.1.0");
     }
 
     @Test
@@ -71,7 +72,120 @@ class FetchBrowserEnhancerTest {
         final var file = file();
         file.getFunctions().add(function("load", call));
 
-        assertThat(enhance(file).nodes().getFirst().metadata()).containsEntry("url", "/api/orders/{id}");
+        assertThat(enhance(file).nodes().getFirst().metadata())
+            .containsEntry("url", "/api/orders/{id}")
+            .containsEntry("httpMethod", "DELETE");
+    }
+
+    @Test
+    void takesTheMethodFromTheOptions() {
+        final var file = file();
+        file.getFunctions().add(function("load",
+            fetch(1, "\"/api/orders\""),
+            fetch(2, "\"/api/orders\"", "{ headers }"),
+            fetch(3, "\"/api/orders\"", "{ method: 'put', body }"),
+            fetch(4, "\"/api/orders\"", "options"),
+            fetch(5, "\"/api/orders\"", "{ ...defaults, body }"),
+            fetch(6, "\"/api/orders\"", "{ method: verb }")
+        ));
+
+        // As fetch has it: GET without options, or without a method in them
+        assertThat(enhance(file).nodes())
+            .extracting(node -> node.metadata().get("httpMethod"))
+            .containsExactly("GET", "GET", "PUT", null, null, null);
+    }
+
+    @Test
+    void addsAnHttpCallForEachCallOfAFunctionThatWrapsFetch() {
+        final var api = file("src/lib/server/api.ts");
+        api.getFunctions().add(function(
+            "src/lib/server/api:apiFetch",
+            List.of("path", "authorization", "init"),
+            call("headers.set", 1, 1),
+            fetch(2, "`${API_URL}${path}`", "{ ...init, headers, cache: \"no-store\" }")
+        ));
+
+        final var route = file("src/app/api/orders/route.ts");
+        route.getFunctions().add(function(
+            "src/app/api/orders/route:POST",
+            List.of("request"),
+            wrapperCall("src/lib/server/api:apiFetch", 7, "`/api/v1/orders/${encodeURIComponent(id)}`", "auth", "{ method: \"POST\", body }"),
+            wrapperCall("src/lib/server/api:apiFetch", 9, "\"/api/v1/orders\"", "auth")
+        ));
+
+        final var nodes = enhancer.enhance(scanResult(api, route)).enhancements().stream()
+            .flatMap(enhancement -> enhancement.nodes().stream())
+            .filter(node -> node.sourceId().contains("route"))
+            .toList();
+
+        assertThat(nodes).extracting(Node::metadata).containsExactly(
+            Map.of(
+                "client", "fetch",
+                "url", "{API_URL}/api/v1/orders/{id}",
+                "httpMethod", "POST",
+                "via", "src/lib/server/api:apiFetch",
+                "startLine", 7, "startColumn", 1, "endLine", 7, "endColumn", 40
+            ),
+            // Options left out: GET, as fetch has it
+            Map.of(
+                "client", "fetch",
+                "url", "{API_URL}/api/v1/orders",
+                "httpMethod", "GET",
+                "via", "src/lib/server/api:apiFetch",
+                "startLine", 9, "startColumn", 1, "endLine", 9, "endColumn", 40
+            )
+        );
+    }
+
+    @Test
+    void addsTheCallsOfAFunctionThatWrapsAWrapper() {
+        final var file = file();
+        file.getFunctions().add(function("src/lib/orders:apiFetch", List.of("path", "init"),
+            fetch(1, "API_URL + path", "init")));
+        file.getFunctions().add(function("src/lib/orders:ordersFetch", List.of("id"),
+            wrapperCall("src/lib/orders:apiFetch", 2, "`/orders/${id}`")));
+        file.getFunctions().add(function("src/lib/orders:load", List.of(),
+            wrapperCall("src/lib/orders:ordersFetch", 3, "order.id")));
+
+        final var load = enhancer.enhance(scanResult(file)).enhancements().stream()
+            .flatMap(enhancement -> enhancement.nodes().stream())
+            .filter(node -> node.sourceId().endsWith(":load"))
+            .toList();
+
+        assertThat(load).singleElement().satisfies(node -> assertThat(node.metadata())
+            .containsEntry("url", "{API_URL}/orders/{order.id}")
+            .containsEntry("httpMethod", "GET")
+            .containsEntry("via", "src/lib/orders:ordersFetch"));
+    }
+
+    @Test
+    void doesNotTakeAFunctionThatFetchesAFixedUrlForAWrapper() {
+        final var file = file();
+        file.getFunctions().add(function("src/lib/orders:loadOrders", List.of("signal"),
+            fetch(1, "\"/api/orders\"", "{ signal }")));
+        file.getFunctions().add(function("src/lib/orders:load", List.of(),
+            wrapperCall("src/lib/orders:loadOrders", 2, "controller.signal")));
+
+        assertThat(enhancer.enhance(scanResult(file)).enhancements())
+            .flatExtracting(Enhancement::nodes)
+            .extracting(Node::sourceId)
+            .containsExactly(FILE + "|function:src/lib/orders:loadOrders");
+    }
+
+    @Test
+    void doesNotTakeACallByNameForACallOfAWrapper() {
+        final var file = file();
+        file.getFunctions().add(function("src/lib/orders:apiFetch", List.of("path"), fetch(1, "path")));
+
+        // Not resolved, so not known to be of the wrapper
+        final var byName = call("src/lib/orders:apiFetch", 2, 1);
+        byName.setArguments(List.of(argument("\"/api/orders\"")));
+        file.getFunctions().add(function("src/lib/orders:load", List.of(), byName));
+
+        assertThat(enhancer.enhance(scanResult(file)).enhancements())
+            .flatExtracting(Enhancement::nodes)
+            .extracting(Node::sourceId)
+            .containsExactly(FILE + "|function:src/lib/orders:apiFetch");
     }
 
     @Test
@@ -162,6 +276,35 @@ class FetchBrowserEnhancerTest {
         return call;
     }
 
+    private static Call fetch(final int line, final String... arguments) {
+        final var call = call("fetch", line, 1);
+        call.setArguments(java.util.Arrays.stream(arguments).map(FetchBrowserEnhancerTest::argument).toList());
+
+        return call;
+    }
+
+    private static Call wrapperCall(final String wrapper, final int line, final String... arguments) {
+        final var call = fetch(line, arguments);
+        call.setTarget(wrapper);
+        call.setResolved(true);
+
+        return call;
+    }
+
+    private static Method function(final String qualifiedName, final List<String> parameters, final Call... calls) {
+        final var function = method(qualifiedName, calls);
+        function.setName(qualifiedName.substring(qualifiedName.indexOf(':') + 1));
+        function.setKind(Method.Kind.FUNCTION);
+
+        parameters.forEach(name -> {
+            final var parameter = new Parameter();
+            parameter.setName(name);
+            function.getParameters().add(parameter);
+        });
+
+        return function;
+    }
+
     private static Method function(final String name, final Call... calls) {
         final var function = method("src/lib/orders:" + name, calls);
         function.setName(name);
@@ -179,17 +322,21 @@ class FetchBrowserEnhancerTest {
     }
 
     private static File file() {
+        return file(PATH);
+    }
+
+    private static File file(final String path) {
         final var file = new File();
-        file.setPath(PATH);
+        file.setPath(path);
         file.setLanguage("typescript");
 
         return file;
     }
 
-    private static ScanResult scanResult(final File file) {
+    private static ScanResult scanResult(final File... files) {
         final var module = new Module();
         module.setPath(".");
-        module.getFiles().add(file);
+        module.getFiles().addAll(List.of(files));
 
         final var target = new ScanTarget();
         target.setPath("web");

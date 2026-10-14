@@ -4,6 +4,8 @@ import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.persistence.system.SystemEntity;
 
+import java.util.Set;
+
 public class ScanMapper {
 
     public ScanEntity fromDomain(final dev.graphnous.domain.scan.Scan domain) {
@@ -26,6 +28,7 @@ public class ScanMapper {
         entity.setEnhancers(domain.enhancers());
         // Nothing rather than an empty list, as for the scans before there were any
         entity.setExcludes(domain.excludes().isEmpty() ? null : domain.excludes());
+        entity.setLanguages(domain.languages().isEmpty() ? null : domain.languages().stream().sorted().toList());
 
         return entity;
     }
@@ -44,7 +47,8 @@ public class ScanMapper {
             entity.getUpdatedAt(),
             entity.getStartedAt(),
             entity.getEnhancers(),
-            entity.getExcludes()
+            entity.getExcludes(),
+            entity.getLanguages() == null ? null : Set.copyOf(entity.getLanguages())
         );
     }
 }

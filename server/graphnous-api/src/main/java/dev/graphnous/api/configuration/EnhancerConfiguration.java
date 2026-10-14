@@ -1,5 +1,6 @@
 package dev.graphnous.api.configuration;
 
+import dev.graphnous.api.event.SpringEventPublisher;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.enhancer.EnhancementRepository;
 import dev.graphnous.application.enhancer.ScanEnhancementService;
@@ -74,7 +75,8 @@ public class EnhancerConfiguration {
         final EnhancementRepository enhancementRepository,
         final ScanSteps scanSteps,
         final ScanLogService scanLogService,
-        final ScanExecutor scanExecutor
+        final ScanExecutor scanExecutor,
+        final SpringEventPublisher eventPublisher
     ) {
         return new ScanEnhancementService(
             scanService,
@@ -86,7 +88,8 @@ public class EnhancerConfiguration {
             enhancementRepository,
             scanSteps,
             scanLogService,
-            scanExecutor
+            scanExecutor,
+            eventPublisher
         );
     }
 }

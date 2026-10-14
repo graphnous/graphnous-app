@@ -26,4 +26,9 @@ export interface ProjectStats {
    * class.
    */
   numberOfMethodsParsed: number;
+  /**
+   * The project's scans, whatever their status; also those without stats,
+   * such as one that failed or is still running.
+   */
+  numberOfScans: number;
 }

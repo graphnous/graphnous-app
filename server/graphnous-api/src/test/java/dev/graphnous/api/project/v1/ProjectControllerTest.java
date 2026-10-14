@@ -92,7 +92,6 @@ class ProjectControllerTest {
     @MockitoBean
     private ScanStatService scanStatService;
 
-    // Not in the published OpenAPI spec yet, so not validated against it
 
     @Test
     void getLatestScanStats() throws Exception {
@@ -110,28 +109,35 @@ class ProjectControllerTest {
                 31
             )
         ));
+        when(scanStatService.countScans(any(), eq(projectId))).thenReturn(5);
 
         mockMvc.perform(get("/api/v1/projects/{id}/stats", projectId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.scanId").value(scanId.id().toString()))
             .andExpect(jsonPath("$.numberOfModulesScanned").value(2))
             .andExpect(jsonPath("$.languages.JAVA[0]").value("backend/src/main/java/com/example/Order.java"))
             .andExpect(jsonPath("$.numberOfClassesParsed").value(8))
-            .andExpect(jsonPath("$.numberOfMethodsParsed").value(31));
+            .andExpect(jsonPath("$.numberOfMethodsParsed").value(31))
+            .andExpect(jsonPath("$.numberOfScans").value(5));
     }
 
     @Test
     void getLatestScanStatsWithoutAScan() throws Exception {
         when(scanStatService.getLatestStats(any(), any())).thenReturn(Optional.empty());
+        // Scans that failed or are still running have no stats
+        when(scanStatService.countScans(any(), any())).thenReturn(2);
 
-        // All zero, as for a system without scans
+        // All zero but the scans, as for a system without scans
         mockMvc.perform(get("/api/v1/projects/{id}/stats", UUID.randomUUID()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.scanId").isEmpty())
             .andExpect(jsonPath("$.numberOfModulesScanned").value(0))
             .andExpect(jsonPath("$.languages").isEmpty())
             .andExpect(jsonPath("$.numberOfClassesParsed").value(0))
-            .andExpect(jsonPath("$.numberOfMethodsParsed").value(0));
+            .andExpect(jsonPath("$.numberOfMethodsParsed").value(0))
+            .andExpect(jsonPath("$.numberOfScans").value(2));
     }
 
     @Test
@@ -139,7 +145,8 @@ class ProjectControllerTest {
         when(scanStatService.getLatestStats(any(), any())).thenThrow(new NotFoundException("Project not found"));
 
         mockMvc.perform(get("/api/v1/projects/{id}/stats", UUID.randomUUID()))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -271,7 +278,8 @@ class ProjectControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"branch\": \"main\", \"enhancers\": [\"react\"]}")
         )
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(openApi().isValid(OPENAPI_SPEC));
 
         verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main", java.util.Set.of("react"))));
     }
@@ -292,9 +300,78 @@ class ProjectControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"branch\": \"main\", \"excludes\": [\"*.spec.ts\"]}")
         )
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(openApi().isValid(OPENAPI_SPEC));
 
         verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main", null, List.of("*.spec.ts"))));
+    }
+
+    @Test
+    void createsAScanOfSomeLanguages() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), projectId, Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision(null, "main"), now, now, null
+        );
+
+        when(scanService.create(any(), any(CreateScanCommand.class))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\", \"languages\": [\"JAVA\"]}")
+        )
+        .andExpect(status().isCreated())
+        .andExpect(openApi().isValid(OPENAPI_SPEC));
+
+        verify(scanService).create(
+            any(),
+            eq(new CreateScanCommand(projectId, null, "main", null, null, java.util.Set.of("JAVA")))
+        );
+    }
+
+    @Test
+    void getsAndSetsTheLanguagesAProjectScans() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+
+        when(projectService.getScanExcludes(any(), eq(projectId))).thenReturn(List.of("*.spec.ts"));
+        when(projectService.getScanLanguages(any(), eq(projectId))).thenReturn(java.util.Set.of("JAVA"));
+        when(projectService.updateScanLanguages(any(), eq(projectId), eq(List.of("typescript", "JAVA"))))
+            .thenReturn(java.util.Set.of("TYPESCRIPT", "JAVA"));
+
+        mockMvc.perform(get("/api/v1/projects/{id}/scan-settings", projectId.id()))
+            .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
+            .andExpect(jsonPath("$.languages[0]").value("JAVA"));
+
+        // The patterns it leaves out stay as they are
+        mockMvc.perform(
+            put("/api/v1/projects/{id}/scan-settings", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"languages\": [\"typescript\", \"JAVA\"]}")
+        )
+            .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
+            .andExpect(jsonPath("$.excludes[0]").value("*.spec.ts"))
+            .andExpect(jsonPath("$.languages[0]").value("JAVA"))
+            .andExpect(jsonPath("$.languages[1]").value("TYPESCRIPT"));
+
+        verify(projectService, never()).updateScanExcludes(any(), any(), any());
+    }
+
+    @Test
+    void refusesALanguageWithoutAScanner() throws Exception {
+        when(projectService.updateScanLanguages(any(), any(), any()))
+            .thenThrow(new dev.graphnous.application.exception.ValidationException("No scanner for GO"));
+
+        mockMvc.perform(
+            put("/api/v1/projects/{id}/scan-settings", UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"languages\": [\"GO\"]}")
+        )
+            .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -307,6 +384,7 @@ class ProjectControllerTest {
 
         mockMvc.perform(get("/api/v1/projects/{id}/scan-settings", projectId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.excludes[0]").value("*.spec.ts"));
 
         mockMvc.perform(
@@ -315,6 +393,7 @@ class ProjectControllerTest {
                 .content("{\"excludes\": [\" generated/ \", \"*.spec.ts\"]}")
         )
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.excludes[0]").value("generated/"))
             .andExpect(jsonPath("$.excludes[1]").value("*.spec.ts"));
     }
@@ -329,7 +408,8 @@ class ProjectControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"excludes\": [\"src/{a\"]}")
         )
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -348,7 +428,8 @@ class ProjectControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"branch\": \"main\", \"enhancers\": []}")
         )
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(openApi().isValid(OPENAPI_SPEC));
 
         verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main", java.util.Set.of())));
     }
@@ -487,7 +568,8 @@ class ProjectControllerTest {
                 .file(resultFile("backend.json", "backend"))
                 .param("branch", "main")
         )
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
 
         verify(scanService, never()).upload(any(), any());
     }

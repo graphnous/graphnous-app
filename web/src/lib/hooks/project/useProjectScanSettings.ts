@@ -6,12 +6,14 @@ import { useFetch } from "@/lib/hooks/useFetch";
 
 type ScanSettings = {
     excludes: string[];
+    languages: string[];
 };
 
 /**
  * What a project's scans leave out: the patterns of the files, such as
- * *.spec.ts; null until they are loaded. Nothing while not enabled, such as
- * while the dialog that shows them is closed.
+ * *.spec.ts; and the languages they scan, such as JAVA, none for every
+ * language they find. Null until they are loaded. Nothing while not
+ * enabled, such as while the dialog that shows them is closed.
  */
 export function useProjectScanSettings(projectId: string | null | undefined, enabled = true) {
     const path = projectId ? `/api/projects/${encodeURIComponent(projectId)}/scan-settings` : null;
@@ -22,19 +24,21 @@ export function useProjectScanSettings(projectId: string | null | undefined, ena
     );
 
     /**
-     * Sets what the project's scans leave out from now on. Throws with the
-     * API's message for a pattern that is not well formed.
+     * Sets what the project's scans leave out and which languages they
+     * scan from now on; a setting left out stays as it is. Throws with the
+     * API's message for a pattern that is not well formed, or a language
+     * the server has no scanner for.
      */
-    const saveExcludes = useCallback(
-        async (excludes: string[]): Promise<string[]> => {
+    const saveSettings = useCallback(
+        async (settings: Partial<ScanSettings>): Promise<Partial<ScanSettings>> => {
             if (!path) {
-                return excludes;
+                return settings;
             }
 
             const response = await fetch(path, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ excludes }),
+                body: JSON.stringify(settings),
             });
 
             const body = await response.json().catch(() => null);
@@ -43,20 +47,21 @@ export function useProjectScanSettings(projectId: string | null | undefined, ena
                 throw new Error(
                     typeof body?.message === "string" && body.message
                         ? body.message
-                        : "Failed to save what the project's scans leave out",
+                        : "Failed to save the project's scan settings",
                 );
             }
 
-            return body?.excludes ?? excludes;
+            return body ?? settings;
         },
         [path],
     );
 
     return {
         excludes: data?.excludes ?? null,
+        languages: data?.languages ?? null,
         loading,
         error,
         refresh,
-        saveExcludes,
+        saveSettings,
     };
 }

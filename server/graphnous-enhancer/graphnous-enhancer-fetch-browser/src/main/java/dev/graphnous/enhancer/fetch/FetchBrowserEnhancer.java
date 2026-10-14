@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 /**
  * Finds the HTTP calls made with the fetch API:
  * <pre>
- * (Method)-[:ENHANCE]->(HttpCall {client, url, startLine, startColumn, endLine, endColumn})
+ * (Method)-[:ENHANCE]->(HttpCall {client, url, httpMethod, via, startLine, startColumn, endLine, endColumn})
  * </pre>
  * The {@code ENHANCE} relationship comes with the node's source: the
  * method of a class, or the function of a file, that calls {@code fetch}.
@@ -36,13 +36,19 @@ import java.util.regex.Pattern;
  * <p>
  * The url is the one the call's first argument gives, with the parts only
  * known when it runs as variables in braces, e.g. {@code /api/orders/{id}};
- * see {@link WrittenUrl}. It is left out when the scanner did not record the
- * arguments, or the first is spread. The call is identified by where it is.
+ * see {@link WrittenUrl}. The method is the one of its options. Either is
+ * left out when it is not known, such as when the scanner did not record
+ * the arguments, or the first is spread. The call is identified by where
+ * it is.
+ * <p>
+ * A call of a function that wraps fetch is an HTTP call too, with the url
+ * and method the wrapper requests for its arguments, and the wrapper's
+ * qualified name as {@code via}; see {@link Requests}.
  */
 public class FetchBrowserEnhancer implements Enhancer {
 
     static final String NAME = "fetch-browser";
-    static final String VERSION = "1.0.0";
+    static final String VERSION = "1.1.0";
 
     static final String CLIENT = "fetch";
 
@@ -82,6 +88,7 @@ public class FetchBrowserEnhancer implements Enhancer {
     public Enhancements enhance(final ScanResult scanResult) {
         final var enhancements = new ArrayList<Enhancement>();
         final var targetId = scanResult.getTarget().getPath();
+        final var requests = Requests.of(callables(scanResult));
 
         for (final var module : scanResult.getModules()) {
             final var moduleId = targetId + "|" + module.getPath();
@@ -90,11 +97,11 @@ public class FetchBrowserEnhancer implements Enhancer {
                 final var fileId = moduleId + "|file:" + file.getPath();
 
                 for (final var type : file.getClasses()) {
-                    addClass(enhancements, moduleId, type);
+                    addClass(enhancements, requests, moduleId, type);
                 }
 
                 for (final var function : file.getFunctions()) {
-                    add(enhancements, fileId + "|function:" + function.getQualifiedName(), function);
+                    add(enhancements, requests, fileId + "|function:" + function.getQualifiedName(), function);
                 }
             }
         }
@@ -103,21 +110,46 @@ public class FetchBrowserEnhancer implements Enhancer {
     }
 
     /**
+     * Every function and method of the scan result, of nested classes too.
+     */
+    private static List<Method> callables(final ScanResult scanResult) {
+        final var callables = new ArrayList<Method>();
+
+        for (final var module : scanResult.getModules()) {
+            for (final var file : module.getFiles()) {
+                callables.addAll(file.getFunctions());
+                file.getClasses().forEach(type -> addMethods(callables, type));
+            }
+        }
+
+        return callables;
+    }
+
+    private static void addMethods(
+        final List<Method> callables,
+        final Class type
+    ) {
+        callables.addAll(type.getMethods());
+        type.getClasses().forEach(nested -> addMethods(callables, nested));
+    }
+
+    /**
      * Adds the HTTP calls of the class's methods and of the classes nested
      * in it.
      */
     private static void addClass(
         final List<Enhancement> enhancements,
+        final Requests requests,
         final String moduleId,
         final Class type
     ) {
         final var classId = moduleId + "|class:" + type.getQualifiedName();
 
         for (final var method : type.getMethods()) {
-            add(enhancements, classId + "|method:" + method.getQualifiedName(), method);
+            add(enhancements, requests, classId + "|method:" + method.getQualifiedName(), method);
         }
 
-        type.getClasses().forEach(nested -> addClass(enhancements, moduleId, nested));
+        type.getClasses().forEach(nested -> addClass(enhancements, requests, moduleId, nested));
     }
 
     /**
@@ -125,13 +157,13 @@ public class FetchBrowserEnhancer implements Enhancer {
      */
     private static void add(
         final List<Enhancement> enhancements,
+        final Requests requests,
         final String methodId,
         final Method method
     ) {
         final var nodes = method.getCalls()
             .stream()
-            .filter(FetchBrowserEnhancer::isFetch)
-            .map(call -> httpCall(methodId, call))
+            .flatMap(call -> requests.of(call).map(request -> httpCall(methodId, call, request)).stream())
             .toList();
 
         if (!nodes.isEmpty()) {
@@ -178,15 +210,23 @@ public class FetchBrowserEnhancer implements Enhancer {
      */
     private static Node httpCall(
         final String methodId,
-        final Call call
+        final Call call,
+        final Requests.Request request
     ) {
-        // A null value leaves the property out
         final var metadata = new HashMap<String, Object>();
         metadata.put("client", CLIENT);
 
-        // fetch(...request) does not say what it requests
-        if (!call.getArguments().isEmpty() && !Boolean.TRUE.equals(call.getArguments().getFirst().getSpread())) {
-            metadata.put("url", WrittenUrl.of(call.getArguments().getFirst().getValue()));
+        // Left out when not known
+        if (request.url() != null) {
+            metadata.put("url", request.url());
+        }
+
+        if (request.method() != null) {
+            metadata.put("httpMethod", request.method());
+        }
+
+        if (!isFetch(call)) {
+            metadata.put("via", call.getTarget());
         }
 
         metadata.put("startLine", call.getStartLine());

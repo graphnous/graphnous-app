@@ -157,7 +157,7 @@ public class ProjectScanner {
             final var path = scanPath(checkout.path(), project.path());
 
             step = start(scanId, ScanStepType.PLAN);
-            final var plan = this.repositoryScanner.plan(path, logger);
+            final var plan = this.repositoryScanner.plan(path, languages(scan, logger), logger);
             this.scanSteps.complete(scanId, step);
 
             step = start(scanId, ScanStepType.SCAN);
@@ -206,7 +206,9 @@ public class ProjectScanner {
             storeEnhancements(scanId, enhanced, logger);
 
             complete(current, report.results(), context);
-        } catch (Exception e) {
+        } catch (Exception | Error e) {
+            // Also an Error, such as running out of memory, so the scan
+            // does not stay running until it times out
             fail(current, context, logger, step, e);
         } finally {
             if (checkout != null) {
@@ -266,9 +268,30 @@ public class ProjectScanner {
             storeEnhancements(scanId, enhanced, logger);
 
             complete(scan, results, context);
-        } catch (Exception e) {
+        } catch (Exception | Error e) {
             fail(scan, context, logger, step, e);
         }
+    }
+
+    /**
+     * The languages the scan was created to scan; none for every language.
+     */
+    private static Set<ScanTarget.Language> languages(
+        final Scan scan,
+        final ScanLogger logger
+    ) {
+        if (scan.languages().isEmpty()) {
+            return Set.of();
+        }
+
+        logger.log(
+            ScanLogLevel.INFO,
+            "Scanning only " + String.join(", ", scan.languages().stream().sorted().toList())
+        );
+
+        return scan.languages().stream()
+            .map(ScanTarget.Language::fromValue)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
@@ -335,7 +358,7 @@ public class ProjectScanner {
         final RequestContext context,
         final ScanLogger logger,
         final ScanStepType step,
-        final Exception error
+        final Throwable error
     ) {
         if (currentStatus(scan, context).filter(status -> !status.isEndState()).isEmpty()) {
             return;

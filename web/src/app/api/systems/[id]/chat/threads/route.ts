@@ -1,4 +1,4 @@
-import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
+import { forwardApi, graphnousApi, queryOf } from "@/lib/server/graphnousApi";
 import { type NextRequest } from "next/server";
 
 /**
@@ -7,37 +7,26 @@ import { type NextRequest } from "next/server";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id: systemId } = await params;
-    const query = new URLSearchParams();
+    const query = queryOf(request);
 
-    for (const name of ["page", "size"]) {
-        const value = request.nextUrl.searchParams.get(name);
-
-        if (value !== null) {
-            query.set(name, value);
-        }
-    }
-
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/systems/${encodeURIComponent(systemId)}/chat/threads${query.size ? `?${query}` : ""}`,
-            request.headers.get("authorization"),
-        ),
+    return forwardApi(
+        () => graphnousApi().chat.listSystemChatThreadsRaw({
+            systemId,
+            page: query.integer("page"),
+            size: query.integer("size"),
+        }),
         "list conversations",
     );
 }
 
 /**
- * Starts a conversation about the system; 201 with the new thread.
+ * Starts a conversation about the system.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id: systemId } = await params;
 
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/systems/${encodeURIComponent(systemId)}/chat/threads`,
-            request.headers.get("authorization"),
-            { method: "POST" },
-        ),
+    return forwardApi(
+        () => graphnousApi().chat.createSystemChatThreadRaw({ systemId }),
         "start a conversation",
     );
 }

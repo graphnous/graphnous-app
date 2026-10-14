@@ -17,13 +17,11 @@ const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replac
  * A client that calls the API as the caller: their access token, when they
  * sent one, goes along, as the server checks it when security is on.
  */
-function projectsApi(request: NextRequest): ProjectsApi {
-    const authorization = request.headers.get("authorization");
+function projectsApi(): ProjectsApi {
 
     return new ProjectsApi(
         new Configuration({
             basePath,
-            headers: authorization ? { Authorization: authorization } : undefined,
         }),
     );
 }
@@ -57,7 +55,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id: projectId } = await params;
 
     try {
-        const scans = await projectsApi(request).getProject({
+        const scans = await projectsApi().getProject({
             projectId
         })
 
@@ -77,7 +75,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id: projectId } = await params;
 
     try {
-        await projectsApi(request).deleteProject({ projectId });
+        await projectsApi().deleteProject({ projectId });
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {

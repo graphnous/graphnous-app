@@ -167,29 +167,31 @@ public class ProjectController {
      * @param numberOfClassesParsed  the classes, each counted once per module
      * @param numberOfMethodsParsed  the methods of those classes, and the
      *                               functions declared outside any class
+     * @param numberOfScans          the project's scans, whatever their
+     *                               status
      */
     public record ScanStatsResponse(
         UUID scanId,
         int numberOfModulesScanned,
         Map<String, List<String>> languages,
         int numberOfClassesParsed,
-        int numberOfMethodsParsed
+        int numberOfMethodsParsed,
+        int numberOfScans
     ) {
     }
 
     /**
-     * The stats of the project's latest scan that has any; all zero, as
-     * for a system, when none has, such as before its first scan
-     * completed.
+     * The stats of the project's latest scan that has any, with how many
+     * scans the project has; all zero but that, as for a system, when none
+     * has, such as before its first scan completed.
      */
     @GetMapping("/{id}/stats")
     public ResponseEntity<ScanStatsResponse> getLatestScanStats(
         @PathVariable("id") final UUID projectId
     ) {
-        final var stats = this.scanStatService.getLatestStats(
-            this.contextProvider.get(),
-            new ProjectId(projectId)
-        );
+        final var context = this.contextProvider.get();
+        final var stats = this.scanStatService.getLatestStats(context, new ProjectId(projectId));
+        final var scans = this.scanStatService.countScans(context, new ProjectId(projectId));
 
         return ResponseEntity.ok(
             stats
@@ -198,9 +200,10 @@ public class ProjectController {
                     found.numberOfModulesScanned(),
                     found.languages(),
                     found.numberOfClassesParsed(),
-                    found.numberOfMethodsParsed()
+                    found.numberOfMethodsParsed(),
+                    scans
                 ))
-                .orElseGet(() -> new ScanStatsResponse(null, 0, Map.of(), 0, 0))
+                .orElseGet(() -> new ScanStatsResponse(null, 0, Map.of(), 0, 0, scans))
         );
     }
 
@@ -214,24 +217,33 @@ public class ProjectController {
      * @param excludes  the patterns of the files to leave out of the scan,
      *                  such as *.spec.ts, written as in a .gitignore; the
      *                  project's own when missing, none when empty
+     * @param languages the languages to scan, as GET /scanners lists them,
+     *                  such as JAVA; the project's own when missing, every
+     *                  language the scan finds when empty
      */
     public record StartScanRequest(
         String branch,
         String revision,
         List<String> enhancers,
-        List<String> excludes
+        List<String> excludes,
+        List<String> languages
     ) {
     }
 
     /**
      * Not in the published OpenAPI spec yet, so its model is its own.
      *
-     * @param excludes the patterns of the files the project leaves out of
-     *                 its scans, such as *.spec.ts, written as in a
-     *                 .gitignore; a scan can be created with other ones
+     * @param excludes  the patterns of the files the project leaves out of
+     *                  its scans, such as *.spec.ts, written as in a
+     *                  .gitignore; a scan can be created with other ones
+     * @param languages the languages the project scans, as GET /scanners
+     *                  lists them, such as JAVA; every language its scans
+     *                  find when empty, and a scan can be created with
+     *                  other ones
      */
     public record ScanSettings(
-        List<String> excludes
+        List<String> excludes,
+        List<String> languages
     ) {
     }
 
@@ -239,32 +251,47 @@ public class ProjectController {
     public ResponseEntity<ScanSettings> getScanSettings(
         @PathVariable("id") final UUID id
     ) {
+        final var context = this.contextProvider.get();
+        final var projectId = new ProjectId(id);
+
         return ResponseEntity.ok(new ScanSettings(
-            this.projectService.getScanExcludes(this.contextProvider.get(), new ProjectId(id))
+            this.projectService.getScanExcludes(context, projectId),
+            sorted(this.projectService.getScanLanguages(context, projectId))
         ));
     }
 
     /**
-     * Sets what the project's scans leave out from now on; the scans it
-     * has stay as they are. 400 for a pattern that is not well formed.
+     * Sets what the project's scans leave out and which languages they
+     * scan from now on; a setting that is missing stays as it is, and the
+     * scans it has stay as they are. 400 for a pattern that is not well
+     * formed, or a language there is no scanner for.
      */
     @PutMapping("/{id}/scan-settings")
     public ResponseEntity<ScanSettings> updateScanSettings(
         @PathVariable("id") final UUID id,
         @RequestBody final ScanSettings settings
     ) {
-        return ResponseEntity.ok(new ScanSettings(
-            this.projectService.updateScanExcludes(
-                this.contextProvider.get(),
-                new ProjectId(id),
-                settings.excludes()
-            )
-        ));
+        final var context = this.contextProvider.get();
+        final var projectId = new ProjectId(id);
+
+        final var excludes = settings.excludes() == null
+            ? this.projectService.getScanExcludes(context, projectId)
+            : this.projectService.updateScanExcludes(context, projectId, settings.excludes());
+        final var languages = settings.languages() == null
+            ? this.projectService.getScanLanguages(context, projectId)
+            : this.projectService.updateScanLanguages(context, projectId, settings.languages());
+
+        return ResponseEntity.ok(new ScanSettings(excludes, sorted(languages)));
+    }
+
+    private static List<String> sorted(final Set<String> languages) {
+        return languages.stream().sorted().toList();
     }
 
     /**
-     * 400 when an enhancer it names is not installed, or a pattern of
-     * files to leave out is not well formed.
+     * 400 when an enhancer it names is not installed, a pattern of files
+     * to leave out is not well formed, or there is no scanner for a
+     * language it names.
      */
     @PostMapping("/{id}/scans")
     public ResponseEntity<dev.graphnous.api.v1.generated.scan.Scan> createScan(
@@ -278,7 +305,8 @@ public class ProjectController {
                 createScanRequest.revision(),
                 createScanRequest.branch(),
                 createScanRequest.enhancers() == null ? null : Set.copyOf(createScanRequest.enhancers()),
-                createScanRequest.excludes()
+                createScanRequest.excludes(),
+                createScanRequest.languages() == null ? null : Set.copyOf(createScanRequest.languages())
             )
         );
         // Scans run in the background; their steps show how they go

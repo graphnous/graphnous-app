@@ -1,5 +1,8 @@
 package dev.graphnous.api.scan.v1;
 
+import com.atlassian.oai.validator.OpenApiInteractionValidator;
+import com.atlassian.oai.validator.report.LevelResolver;
+import com.atlassian.oai.validator.report.ValidationReport;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.exception.ValidationException;
@@ -16,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.Map;
 
+import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -27,6 +31,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class ScanGraphControllerTest {
+
+    private static final String OPENAPI_SPEC =
+            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
+
+    /**
+     * Checks only the response, for requests that are invalid on purpose.
+     */
+    private static final OpenApiInteractionValidator RESPONSE_VALIDATOR =
+        OpenApiInteractionValidator.createForSpecificationUrl(OPENAPI_SPEC)
+            .withLevelResolver(
+                LevelResolver.create()
+                    .withLevel("validation.request", ValidationReport.Level.IGNORE)
+                    .build()
+            )
+            .build();
 
     @Autowired
     private MockMvc mockMvc;
@@ -59,6 +78,7 @@ class ScanGraphControllerTest {
 
         mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.scanId").value(scan))
             .andExpect(jsonPath("$.focus").value(scan))
             .andExpect(jsonPath("$.depth").value(2))
@@ -85,8 +105,10 @@ class ScanGraphControllerTest {
             )
         );
 
-        mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("layers", "result,spring@1.0.0"))
+        // Only the response: the validator does not read an array query parameter of OpenAPI 3.1
+        mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("layers", "result", "spring@1.0.0"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR))
             .andExpect(jsonPath("$.layers.length()").value(3))
             .andExpect(jsonPath("$.layers[1].id").value("spring@1.0.0"))
             .andExpect(jsonPath("$.layers[1].name").value("spring 1.0.0"));
@@ -104,6 +126,7 @@ class ScanGraphControllerTest {
                 .queryParam("focus", focus)
                 .queryParam("depth", "3"))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.focus").value(focus))
             .andExpect(jsonPath("$.truncated").value(true));
     }
@@ -114,7 +137,8 @@ class ScanGraphControllerTest {
             .thenThrow(new NotFoundException("Not in the graph"));
 
         mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("focus", "missing"))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -123,13 +147,15 @@ class ScanGraphControllerTest {
             .thenThrow(new ValidationException("depth must be between 0 and 5"));
 
         mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("depth", "9"))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
     void answersBadRequestForADepthThatIsNotANumber() throws Exception {
         mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("depth", "deep"))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
@@ -151,6 +177,7 @@ class ScanGraphControllerTest {
 
         mockMvc.perform(get("/api/v1/scans/{base}/compare/{head}", scanId.id(), head.id()))
             .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
             .andExpect(jsonPath("$.base").value(scanId.id().toString()))
             .andExpect(jsonPath("$.head").value(head.id().toString()))
             .andExpect(jsonPath("$.summary[0].type").value("Class"))
@@ -171,12 +198,14 @@ class ScanGraphControllerTest {
         when(scanGraphService.compare(any(), any(), any())).thenThrow(new NotFoundException("Scan not found"));
 
         mockMvc.perform(get("/api/v1/scans/{base}/compare/{head}", scanId.id(), Scan.ScanId.generate().id()))
-            .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 
     @Test
     void answersBadRequestForAScanIdThatIsNotOne() throws Exception {
         mockMvc.perform(get("/api/v1/scans/{base}/compare/{head}", scanId.id(), "latest"))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            .andExpect(openApi().isValid(RESPONSE_VALIDATOR));
     }
 }

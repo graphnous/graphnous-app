@@ -48,6 +48,8 @@ public class ScanService {
 
     private final EnhancerRegistry enhancerRegistry;
 
+    private final ScanLanguages scanLanguages;
+
     private static final Logger log = LoggerFactory.getLogger(ScanService.class);
 
 
@@ -61,7 +63,8 @@ public class ScanService {
         final SystemService systemService,
         final AuthorizationService authorizationService,
         final EntitlementService entitlementService,
-        final EnhancerRegistry enhancerRegistry
+        final EnhancerRegistry enhancerRegistry,
+        final ScanLanguages scanLanguages
     ) {
         this.eventPublisher = eventPublisher;
 
@@ -77,6 +80,8 @@ public class ScanService {
         this.systemService = systemService;
 
         this.enhancerRegistry = enhancerRegistry;
+
+        this.scanLanguages = scanLanguages;
     }
 
     public Page<Scan> getScans(
@@ -191,17 +196,20 @@ public class ScanService {
      * Creates a scan and starts it in the background, with the enhancers
      * the command chose.
      *
-     * @throws ValidationException when an enhancer it chose is not installed
+     * @throws ValidationException when an enhancer it chose is not
+     *                             installed, or there is no scanner for a
+     *                             language it chose
      */
     public Scan create(
         RequestContext context,
         CreateScanCommand command
     ) {
         log.info(
-            "Creating scan organizationId={} projectId={} enhancers={}",
+            "Creating scan organizationId={} projectId={} enhancers={} languages={}",
             context.organization().id(),
             command.projectId().id(),
-            command.enhancers() == null ? "all" : command.enhancers()
+            command.enhancers() == null ? "all" : command.enhancers(),
+            command.languages() == null ? "project's" : command.languages()
         );
 
         requireInstalled(command.enhancers());
@@ -212,7 +220,8 @@ public class ScanService {
             command.projectId(),
             Scan.SourceRevision.requested(blankToNull(command.revision()), command.branch()),
             command.enhancers(),
-            command.excludes()
+            command.excludes(),
+            command.languages()
         );
 
         this.eventPublisher.publish(
@@ -270,7 +279,9 @@ public class ScanService {
             // Every installed enhancer runs on uploaded results
             null,
             // Without the files the project leaves out of its scans
-            null
+            null,
+            // Whatever languages were scanned elsewhere
+            Set.of()
         );
 
         for (final var step : List.of(ScanStepType.CHECKOUT, ScanStepType.PLAN, ScanStepType.SCAN)) {
@@ -300,7 +311,8 @@ public class ScanService {
         final Project.ProjectId projectId,
         final Scan.SourceRevision revision,
         final Set<String> enhancers,
-        final List<String> excludes
+        final List<String> excludes,
+        final Set<String> languages
     ) {
         this.authorizationService.authorize(context, Permission.SCAN_CREATE);
         this.entitlementService.require(context.organization(), Entitlement.SCANS);
@@ -313,6 +325,12 @@ public class ScanService {
         final var excluded = excludes == null
             ? ScanExcludes.normalize(this.projectService.getScanExcludes(context, projectId))
             : ScanExcludes.normalize(excludes);
+
+        // The languages the scan was asked to scan, or else the ones its
+        // project scans
+        final var scanned = languages == null
+            ? this.projectService.getScanLanguages(context, projectId)
+            : this.scanLanguages.normalize(languages);
 
         // Before the limit is checked, so old scans make way for new ones
         this.scanRetention.makeRoomFor(projectId);
@@ -333,7 +351,8 @@ public class ScanService {
                 Instant.now(),
                 null,
                 enhancers,
-                excluded
+                excluded,
+                scanned
             )
         );
 

@@ -5,7 +5,8 @@ import {
 } from "@copilotkit/runtime/v2";
 import { Observable } from "rxjs";
 
-import { graphnousFetch } from "@/lib/server/graphnousApi";
+import { ResponseError } from "@/generated/api";
+import { graphnousApi } from "@/lib/server/graphnousApi";
 
 /**
  * Runs the assistant as the in-memory runner does, and brings back
@@ -21,9 +22,7 @@ export class GraphnousAgentRunner extends InMemoryAgentRunner {
         }
 
         return new Observable<BaseEvent>((subscriber) => {
-            const authorization = request.headers?.authorization ?? request.headers?.Authorization;
-
-            savedMessages(request.threadId, authorization)
+            savedMessages(request.threadId)
                 .then((messages) => {
                     if (messages.length > 0) {
                         const runId = `restore-${request.threadId}`;
@@ -49,14 +48,17 @@ export class GraphnousAgentRunner extends InMemoryAgentRunner {
  * The messages the server kept of the thread; none for a thread it does not
  * have, or that is not the caller's.
  */
-async function savedMessages(threadId: string, authorization: string | undefined): Promise<Message[]> {
-    const response = await graphnousFetch(`/api/v1/chat/threads/${encodeURIComponent(threadId)}`, authorization);
+async function savedMessages(threadId: string): Promise<Message[]> {
+    try {
+        const thread = await graphnousApi().chat.getChatThread({ threadId });
 
-    if (!response.ok) {
-        return [];
+        return Array.isArray(thread.messages) ? (thread.messages as Message[]) : [];
+    } catch (error) {
+        // The API answers 404 for a thread it does not have, or that is not the caller's
+        if (error instanceof ResponseError) {
+            return [];
+        }
+
+        throw error;
     }
-
-    const thread: { messages?: Message[] } = await response.json();
-
-    return Array.isArray(thread.messages) ? thread.messages : [];
 }

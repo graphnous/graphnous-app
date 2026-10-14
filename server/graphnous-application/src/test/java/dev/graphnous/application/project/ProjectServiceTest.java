@@ -2,6 +2,8 @@ package dev.graphnous.application.project;
 
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
+import dev.graphnous.application.exception.ValidationException;
+import dev.graphnous.application.scan.ScanLanguages;
 import dev.graphnous.application.context.OrganizationContext;
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.context.UserContext;
@@ -23,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -213,6 +216,43 @@ class ProjectServiceTest {
         verify(projectDeleter, never()).deleteProject(any(), any());
     }
 
+    @Test
+    void keepsTheLanguagesAProjectScans() {
+        final var project = project(Instant.now());
+
+        when(projectRepository.findById(project.id())).thenReturn(project);
+
+        final var languages = service().updateScanLanguages(context, project.id(), List.of("typescript ", "JAVA", ""));
+
+        assertThat(languages).containsExactlyInAnyOrder("JAVA", "TYPESCRIPT");
+        verify(authorizationService).authorize(context, Permission.PROJECT_UPDATE);
+        verify(projectRepository).saveScanLanguages(project.id(), Set.of("JAVA", "TYPESCRIPT"));
+    }
+
+    @Test
+    void doesNotKeepALanguageWithoutAScanner() {
+        final var project = project(Instant.now());
+
+        when(projectRepository.findById(project.id())).thenReturn(project);
+
+        assertThrows(
+            ValidationException.class,
+            () -> service().updateScanLanguages(context, project.id(), List.of("GO"))
+        );
+
+        verify(projectRepository, never()).saveScanLanguages(any(), any());
+    }
+
+    @Test
+    void scansNoLanguageThereIsNoLongerAScannerFor() {
+        final var project = project(Instant.now());
+
+        when(projectRepository.findById(project.id())).thenReturn(project);
+        when(projectRepository.findScanLanguages(project.id())).thenReturn(Set.of("JAVA", "PYTHON"));
+
+        assertThat(service().getScanLanguages(context, project.id())).containsExactly("JAVA");
+    }
+
     private Project project(final Instant createdAt) {
         return new Project(
             Project.ProjectId.generate(),
@@ -227,6 +267,13 @@ class ProjectServiceTest {
     }
 
     private ProjectService service() {
-        return new ProjectService(projectRepository, authorizationService, entitlementService, systemService, projectDeleter);
+        return new ProjectService(
+            projectRepository,
+            authorizationService,
+            entitlementService,
+            systemService,
+            projectDeleter,
+            new ScanLanguages(List.of("JAVA", "TYPESCRIPT"))
+        );
     }
 }

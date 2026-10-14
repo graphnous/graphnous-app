@@ -41,6 +41,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.UUID;
 
@@ -134,7 +135,36 @@ class ProjectScannerTest {
         lenient().when(projectService.getProject(context, project.id())).thenReturn(project);
         lenient().when(sourceCheckout.checkout(eq(scan.id()), anyString(), any(), any()))
             .thenReturn(new SourceCheckout.CheckedOut(Path.of("/checkouts/scan"), COMMIT));
-        lenient().when(repositoryScanner.plan(any(), any())).thenReturn(plan);
+        lenient().when(repositoryScanner.plan(any(), any(), any())).thenReturn(plan);
+    }
+
+    @Test
+    void plansOnlyTheLanguagesTheScanWasCreatedFor() {
+        final var javaOnly = new Scan(
+            scan.id(), project.id(), Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision("abc123", "main"), Instant.now(), Instant.now(), null,
+            null, null, Set.of("JAVA")
+        );
+
+        when(scanService.getScan(context, scan.id())).thenReturn(javaOnly, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), eq(ORGANIZATION), any(), eq(plan), any()))
+            .thenReturn(new ScanReport(List.of(), List.of()));
+
+        start();
+
+        verify(repositoryScanner).plan(any(), eq(Set.of(ScanTarget.Language.JAVA)), any());
+        verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Scanning only JAVA");
+    }
+
+    @Test
+    void plansEveryLanguageWhenTheScanNamesNone() {
+        when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), eq(ORGANIZATION), any(), eq(plan), any()))
+            .thenReturn(new ScanReport(List.of(), List.of()));
+
+        start();
+
+        verify(repositoryScanner).plan(any(), eq(Set.of()), any());
     }
 
     @Test
@@ -161,7 +191,7 @@ class ProjectScannerTest {
     @Test
     void recordsTheCommitItCheckedOutBeforeScanning() {
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.plan(any(), any())).thenThrow(new IllegalStateException("Unreadable pom.xml"));
+        when(repositoryScanner.plan(any(), any(), any())).thenThrow(new IllegalStateException("Unreadable pom.xml"));
 
         start();
 
@@ -169,7 +199,7 @@ class ProjectScannerTest {
         final var order = inOrder(sourceCheckout, scanService, repositoryScanner);
         order.verify(sourceCheckout).checkout(eq(scan.id()), anyString(), eq(scan.revision()), any());
         order.verify(scanService).recordRevision(context, scan.id(), COMMIT);
-        order.verify(repositoryScanner).plan(any(), any());
+        order.verify(repositoryScanner).plan(any(), any(), any());
         verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Scanning revision " + COMMIT);
     }
 
@@ -201,7 +231,7 @@ class ProjectScannerTest {
         assertThat(steps.step(scan.id(), CHECKOUT).error()).isEqualTo("Repository not found");
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(FAILED, SKIPPED, SKIPPED, SKIPPED, SKIPPED, SKIPPED);
-        verify(repositoryScanner, never()).plan(any(), any());
+        verify(repositoryScanner, never()).plan(any(), any(), any());
         verify(scanService, never()).recordRevision(any(), any(), any());
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
         verify(scanNotifier).scanFailed(scan, "Repository not found");
@@ -211,7 +241,7 @@ class ProjectScannerTest {
     @Test
     void failsThePlanStepWhenPlanningFails() {
         when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
-        when(repositoryScanner.plan(any(), any())).thenThrow(new IllegalStateException("Unreadable pom.xml"));
+        when(repositoryScanner.plan(any(), any(), any())).thenThrow(new IllegalStateException("Unreadable pom.xml"));
 
         start();
 
@@ -239,6 +269,21 @@ class ProjectScannerTest {
             .containsExactly(COMPLETED, COMPLETED, FAILED, SKIPPED, SKIPPED, SKIPPED);
         verify(scanResultRepository, never()).save(any(), any());
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
+    }
+
+    @Test
+    void failsTheScanWhenTheServerRunsOutOfMemory() {
+        when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any()))
+            .thenThrow(new OutOfMemoryError("Java heap space"));
+
+        start();
+
+        // Not left running until it times out
+        assertThat(steps.step(scan.id(), SCAN).error()).isEqualTo("Java heap space");
+        verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
+        // Its checkout is removed all the same
+        verify(sourceCheckout).remove(any(), any());
     }
 
     @Test
@@ -505,7 +550,7 @@ class ProjectScannerTest {
 
         verify(scanResultRepository).save(scan.id(), List.of(result));
         verify(sourceCheckout, never()).checkout(any(), any(), any(), any());
-        verify(repositoryScanner, never()).plan(any(), any());
+        verify(repositoryScanner, never()).plan(any(), any(), any());
         verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Storing 1 uploaded scan result(s)");
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(SKIPPED, SKIPPED, SKIPPED, COMPLETED, COMPLETED, SKIPPED);

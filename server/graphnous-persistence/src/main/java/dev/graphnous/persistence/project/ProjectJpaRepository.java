@@ -45,6 +45,23 @@ public interface ProjectJpaRepository extends JpaRepository<ProjectEntity, UUID>
         @Param("excludes") final String excludes
     );
 
+    /**
+     * The languages the project scans, as JSON; not part of the entity,
+     * so saving a project leaves them alone.
+     */
+    @Query(value = "SELECT scan_languages FROM projects WHERE id = :id", nativeQuery = true)
+    String findScanLanguages(
+        @Param("id") final UUID id
+    );
+
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE projects SET scan_languages = :languages WHERE id = :id", nativeQuery = true)
+    int updateScanLanguages(
+        @Param("id") final UUID id,
+        @Param("languages") final String languages
+    );
+
     @Query("SELECT p.id FROM ProjectEntity p WHERE p.systemId = :systemId")
     List<UUID> findIdsBySystemId(
         @Param("systemId") final UUID systemId

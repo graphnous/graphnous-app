@@ -3,6 +3,7 @@ package dev.graphnous.persistence.scan.result;
 import dev.graphnous.application.enhancer.EnhancementRepository;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.enhancer.Enhancements;
+import dev.graphnous.persistence.scan.links.HttpLinkRepositoryImpl;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.TransactionContext;
 import org.springframework.stereotype.Repository;
@@ -149,6 +150,11 @@ public class EnhancementRepositoryImpl implements EnhancementRepository {
                         WHERE enhancement.name IN $names
                         DETACH DELETE enhancement
                         """.formatted(ENHANCEMENT), Map.of("scanId", id, "names", names)).consume();
+                    // Its HTTP links went with the nodes: found again when next read
+                    tx.run("""
+                        MATCH (scan:Scan {id: $scanId})
+                        REMOVE scan.%s
+                        """.formatted(HttpLinkRepositoryImpl.LINKED_WITH), Map.of("scanId", id)).consume();
                 }
 
                 write(tx, id, List.copyOf(enhancers.values()), """

@@ -3,6 +3,7 @@ package dev.graphnous.application.enhancer;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.RequestContext;
+import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.exception.ConflictException;
 import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.project.scanner.ScanExecutor;
@@ -55,6 +56,7 @@ public class ScanEnhancementService {
     private final ScanSteps scanSteps;
     private final ScanLogService scanLogService;
     private final ScanExecutor scanExecutor;
+    private final EventPublisher eventPublisher;
 
     /**
      * The scans being enhanced again by this server, so one is not enhanced
@@ -72,7 +74,8 @@ public class ScanEnhancementService {
         final EnhancementRepository enhancementRepository,
         final ScanSteps scanSteps,
         final ScanLogService scanLogService,
-        final ScanExecutor scanExecutor
+        final ScanExecutor scanExecutor,
+        final EventPublisher eventPublisher
     ) {
         this.scanService = scanService;
         this.authorizationService = authorizationService;
@@ -87,6 +90,7 @@ public class ScanEnhancementService {
         this.scanSteps = scanSteps;
         this.scanLogService = scanLogService;
         this.scanExecutor = scanExecutor;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -211,7 +215,11 @@ public class ScanEnhancementService {
             );
 
             scanSteps.complete(scanId, ScanStepType.ENHANCE_RESULTS);
-        } catch (final RuntimeException e) {
+
+            eventPublisher.publish(new ScanEnhancedEvent(scanId));
+        } catch (final RuntimeException | Error e) {
+            // Also an Error, such as running out of memory, so the step
+            // does not stay running
             log.warn("Enhancing scan again failed scanId={} step={}", scanId.id(), step, e);
 
             logQuietly(

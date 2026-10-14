@@ -1,5 +1,6 @@
 package dev.graphnous.api.configuration;
 
+import dev.graphnous.application.project.ProjectRepository;
 import dev.graphnous.api.event.SpringEventPublisher;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.entitlement.EntitlementService;
@@ -11,6 +12,7 @@ import dev.graphnous.application.scan.ScanDeleter;
 import dev.graphnous.application.scan.ScanRecovery;
 import dev.graphnous.application.scan.ScanRepository;
 import dev.graphnous.application.scan.ScanRetention;
+import dev.graphnous.application.scan.ScanLanguages;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanStepRepository;
 import dev.graphnous.application.scan.classes.ScanClassRepository;
@@ -166,19 +168,25 @@ public class ScanConfiguration {
     @Bean
     HttpLinkService httpLinkService(
         final ScanService scanService,
+        final ScanRepository scanRepository,
+        final ProjectRepository projectRepository,
         final HttpLinkRepository httpLinkRepository
     ) {
-        return new HttpLinkService(scanService, httpLinkRepository);
+        return new HttpLinkService(scanService, scanRepository, projectRepository, httpLinkRepository);
     }
 
     @Bean
     ScanStatService scanStatService(
         final ScanStatRepository scanStatRepository,
+        final ScanRepository scanRepository,
+        final ProjectRepository projectRepository,
         final ProjectService projectService,
         final SystemService systemService,
         final AuthorizationService authorizationService
     ) {
-        return new ScanStatService(scanStatRepository, projectService, systemService, authorizationService);
+        return new ScanStatService(
+            scanStatRepository, scanRepository, projectRepository, projectService, systemService, authorizationService
+        );
     }
 
     @Bean
@@ -192,7 +200,8 @@ public class ScanConfiguration {
         final SystemService systemService,
         final AuthorizationService authorizationService,
         final EntitlementService entitlementService,
-        final EnhancerRegistry enhancerRegistry
+        final EnhancerRegistry enhancerRegistry,
+        final ScanLanguages scanLanguages
     ) {
         return new ScanService(
             eventPublisher,
@@ -204,7 +213,8 @@ public class ScanConfiguration {
             systemService,
             authorizationService,
             entitlementService,
-            enhancerRegistry
+            enhancerRegistry,
+            scanLanguages
         );
     }
 

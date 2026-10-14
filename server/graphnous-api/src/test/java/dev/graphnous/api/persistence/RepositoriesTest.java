@@ -300,6 +300,24 @@ class RepositoriesTest {
     }
 
     @Test
+    void countsTheScansOfTheProjectsOfASystem() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var frontend = project(shop, "frontend");
+        project(shop, "docs");
+        final var other = project(system("Blog"), "blog");
+
+        scan(backend, Scan.ScanStatus.COMPLETED);
+        scan(backend, Scan.ScanStatus.FAILED);
+        scan(frontend, Scan.ScanStatus.RUNNING);
+        scan(other, Scan.ScanStatus.COMPLETED);
+
+        // Whatever their status, and of no other system
+        assertThat(scanRepository.countInSystem(shop.id())).isEqualTo(3);
+        assertThat(projectRepository.count(shop.id())).isEqualTo(3);
+    }
+
+    @Test
     void keepsWhatAProjectsScansLeaveOut() {
         final var shop = system("Shop");
         final var backend = project(shop, "backend");
@@ -339,6 +357,48 @@ class RepositoriesTest {
         scanRepository.save(withStatus(scanRepository.findById(excluding.id()), Scan.ScanStatus.QUEUED));
 
         assertThat(scanRepository.findById(excluding.id()).excludes()).containsExactly("*.spec.ts", "generated/");
+    }
+
+    @Test
+    void keepsTheLanguagesAProjectScans() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var frontend = project(shop, "frontend");
+
+        assertThat(projectRepository.findScanLanguages(backend.id())).isEmpty();
+
+        projectRepository.saveScanLanguages(backend.id(), java.util.Set.of("TYPESCRIPT", "JAVA"));
+
+        assertThat(projectRepository.findScanLanguages(backend.id())).containsExactlyInAnyOrder("JAVA", "TYPESCRIPT");
+        assertThat(projectRepository.findScanLanguages(frontend.id())).isEmpty();
+
+        // Saving the project leaves them alone
+        projectRepository.save(projectRepository.findById(backend.id()));
+
+        assertThat(projectRepository.findScanLanguages(backend.id())).containsExactlyInAnyOrder("JAVA", "TYPESCRIPT");
+
+        projectRepository.saveScanLanguages(backend.id(), java.util.Set.of());
+
+        assertThat(projectRepository.findScanLanguages(backend.id())).isEmpty();
+    }
+
+    @Test
+    void keepsTheLanguagesAScanScanned() {
+        final var backend = project(system("Shop"), "backend");
+        final var at = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        final var javaOnly = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision("main", "main"), at, at, null, null, null, java.util.Set.of("JAVA")
+        ));
+        final var everything = scan(backend, Scan.ScanStatus.PENDING);
+
+        assertThat(scanRepository.findById(javaOnly.id()).languages()).containsExactly("JAVA");
+        assertThat(scanRepository.findById(everything.id()).languages()).isEmpty();
+
+        scanRepository.save(withStatus(scanRepository.findById(javaOnly.id()), Scan.ScanStatus.QUEUED));
+
+        assertThat(scanRepository.findById(javaOnly.id()).languages()).containsExactly("JAVA");
     }
 
     @Test

@@ -70,6 +70,10 @@ graphnous:
       image: ghcr.io/graphnous/graphnous-java-scanner:0.3.1
       command:
         - java
+        # Resolving calls into the project's libraries takes a lot of
+        # memory: the JVM's default quarter of the container's is too
+        # little for a project of a few hundred classes
+        - -XX:MaxRAMPercentage=75
         - -jar
         - /opt/graphnous/java-scanner.jar
         - --path

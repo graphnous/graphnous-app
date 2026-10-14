@@ -9,15 +9,19 @@ import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.organization.OrganizationId;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
@@ -157,29 +161,61 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleException(
         final Exception exception,
-        final HttpServletRequest request
+        final HttpServletRequest request,
+        final HttpServletResponse response
     ) {
+        // A client that went away, such as a page that stopped following
+        // a scan's logs, is no error, and has nothing to be told
+        if (isDisconnect(exception)) {
+            log.debug("Client went away method={} path={}", request.getMethod(), request.getRequestURI());
+
+            return null;
+        }
+
         this.report(exception, request);
 
         // Spring MVC's own errors, such as an unknown path or an unsupported
         // method, keep their status instead of becoming a server error
-        if (exception instanceof ErrorResponse errorResponse) {
-            final var status = HttpStatus.valueOf(errorResponse.getStatusCode().value());
+        final var status = exception instanceof ErrorResponse errorResponse
+            ? HttpStatus.valueOf(errorResponse.getStatusCode().value())
+            : HttpStatus.INTERNAL_SERVER_ERROR;
 
-            return ResponseEntity
-                .status(status)
-                .body(new ApiError(
-                    status.name(),
-                    status.getReasonPhrase()
-                ));
+        // An event stream, such as a scan's logs, cannot carry an ApiError
+        if (isEventStream(request, response)) {
+            return ResponseEntity.status(status).build();
         }
 
         return ResponseEntity
-            .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ApiError(
-                "INTERNAL_ERROR",
-                "An unexpected error occurred"
-            ));
+            .status(status)
+            .body(exception instanceof ErrorResponse
+                ? new ApiError(status.name(), status.getReasonPhrase())
+                : new ApiError("INTERNAL_ERROR", "An unexpected error occurred"));
+    }
+
+    /**
+     * Whether the error is of the client having gone away while the
+     * response was written, such as Tomcat's ClientAbortException.
+     */
+    private static boolean isDisconnect(final Throwable exception) {
+        for (var error = exception; error != null; error = error.getCause()) {
+            if (error instanceof AsyncRequestNotUsableException
+                || error.getClass().getSimpleName().equals("ClientAbortException")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isEventStream(
+        final HttpServletRequest request,
+        final HttpServletResponse response
+    ) {
+        final var contentType = response.getContentType();
+        final var accept = request.getHeader(HttpHeaders.ACCEPT);
+
+        return (contentType != null && contentType.startsWith(MediaType.TEXT_EVENT_STREAM_VALUE))
+            || (accept != null && accept.contains(MediaType.TEXT_EVENT_STREAM_VALUE));
     }
 
     /**

@@ -7,6 +7,9 @@ import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.enhancer.Enhancement;
+import dev.graphnous.enhancer.Enhancements;
+import dev.graphnous.enhancer.Node;
 import dev.graphnous.enhancer.angular.AngularEnhancer;
 import dev.graphnous.persistence.scan.graph.ScanGraphRepositoryImpl;
 import dev.graphnous.persistence.scan.result.EnhancementRepositoryImpl;
@@ -316,6 +319,81 @@ class ScanUsageRepositoryImplTest {
 
     private static String id(final Scan.ScanId scan, final String qualifiedName) {
         return scan.id() + "|.|.|class:" + ORDERS + qualifiedName;
+    }
+
+    @Test
+    void findsWhatCallsAnEndpointOverHttpFromAnotherScan() throws IOException {
+        final var list = "class:" + ORDERS + "order.service:OrderService|method:" + ORDERS + "order.service:OrderService.list";
+        final var refresh = "class:" + ORDERS + "invoice.service:InvoiceService|method:" + ORDERS + "invoice.service:InvoiceService.refresh";
+
+        // The order service's list serves GET /api/orders
+        new EnhancementRepositoryImpl(driver).save(scanId, List.of(new Enhancements("spring", "1.0.0", List.of(
+            new Enhancement(
+                List.of(new Node(".|." + "|" + list + "|endpoint", ".|.|" + list, List.of("Endpoint"),
+                    Map.of("httpMethod", "GET", "url", "/api/orders"))),
+                List.of()
+            )
+        ))));
+
+        // Another project, whose invoice service requests it, and whose
+        // order list calls the invoice service
+        final ScanResult web;
+
+        try (final var json = ScanUsageRepositoryImplTest.class.getResourceAsStream("/scan-result-angular.json")) {
+            web = new ObjectMapper().readValue(json, ScanResult.class);
+        }
+
+        method(web, ORDERS + "order-list.component:OrderListComponent.ngOnInit")
+            .getCalls().add(call(ORDERS + "invoice.service:InvoiceService.refresh", Call.Kind.METHOD, 31));
+
+        final var webScan = new Scan.ScanId(UUID.randomUUID());
+
+        try (final var session = driver.session()) {
+            session.run("CREATE (:Scan {id: $id})", Map.of("id", webScan.id().toString())).consume();
+        }
+
+        new ScanResultRepositoryImpl(driver).save(webScan, List.of(web));
+        new EnhancementRepositoryImpl(driver).save(webScan, List.of(new Enhancements("fetch-browser", "1.1.0", List.of(
+            new Enhancement(
+                List.of(new Node(".|.|" + refresh + "|httpCall:12:5", ".|.|" + refresh, List.of("HttpCall"),
+                    Map.of("client", "fetch", "httpMethod", "GET", "url", "{API_URL}/api/orders", "startLine", 12))),
+                List.of()
+            )
+        ))));
+
+        try (final var session = driver.session()) {
+            session.run("""
+                MATCH (call:HttpCall {scanId: $web}), (endpoint:Endpoint {scanId: $api})
+                MERGE (call)-[:REQUESTS {match: 'SUFFIX'}]->(endpoint)
+                """, Map.of("web", webScan.id().toString(), "api", scanId.id().toString())).consume();
+        }
+
+        final var found = repository.findUsages(scanId, scanId.id() + "|.|.|" + list, 2, 100).orElseThrow();
+
+        assertThat(found.usages())
+            .filteredOn(usage -> usage.relationship().equals("REQUESTS"))
+            .singleElement()
+            .satisfies(usage -> {
+                assertThat(usage.user().name()).isEqualTo("refresh");
+                assertThat(usage.owner()).isEqualTo("InvoiceService");
+                assertThat(usage.line()).isEqualTo(12);
+                assertThat(usage.depth()).isEqualTo(1);
+                assertThat(usage.scanId()).isEqualTo(webScan);
+                assertThat(usage.request()).isEqualTo(
+                    new ScanUsages.Request("GET", "{API_URL}/api/orders", "GET", "/api/orders")
+                );
+            });
+
+        // And on, in the other project's scan: what calls the invoice service
+        assertThat(found.usages())
+            .filteredOn(usage -> usage.depth() == 2 && webScan.equals(usage.scanId()))
+            .extracting(ScanUsages.Usage::relationship, usage -> usage.user().name(), ScanUsages.Usage::line)
+            .contains(tuple("CALLS", "ngOnInit", 31));
+
+        // Its own usages stay in its own scan
+        assertThat(found.usages())
+            .filteredOn(usage -> !usage.relationship().equals("REQUESTS") && usage.depth() == 1)
+            .allSatisfy(usage -> assertThat(usage.scanId()).isEqualTo(scanId));
     }
 
     @Test

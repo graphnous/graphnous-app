@@ -162,12 +162,18 @@ public class DockerSandbox implements ScanSandbox {
                     .exec();
             }
 
-            final var exitCode = Containers.runAndForwardOutput(docker, containerId, scanProcessListener);
+            final Containers.Exit exit;
 
-            if (exitCode != 0) {
+            try {
+                exit = Containers.run(docker, containerId, scanProcessListener);
+            } catch (final Containers.RemovedException e) {
                 throw new IllegalStateException(
-                    "Scanner failed with exit code " + exitCode
+                    "Scanner's container was removed while it ran, from outside the scan", e
                 );
+            }
+
+            if (exit.oomKilled() || exit.code() != 0) {
+                throw new IllegalStateException(failure(exit));
             }
 
             return readResult(containerId, output);
@@ -189,6 +195,23 @@ public class DockerSandbox implements ScanSandbox {
                 Containers.remove(docker, containerId);
             }
         }
+    }
+
+    /**
+     * Why the scanner failed, as far as its exit code says.
+     */
+    static String failure(final Containers.Exit exit) {
+        if (exit.oomKilled()) {
+            return "Scanner ran out of memory: Docker stopped its container (exit code " + exit.code() + ")."
+                + " Give Docker more memory, or the scanner less, such as with -XX:MaxRAMPercentage for a Java scanner";
+        }
+
+        return switch (exit.code()) {
+            case 137 -> "Scanner was killed (exit code 137): its container was stopped from outside the scan,"
+                + " or the system ran out of memory";
+            case 143 -> "Scanner was stopped (exit code 143): its container was stopped from outside the scan";
+            default -> "Scanner failed with exit code " + exit.code();
+        };
     }
 
     private static List<Mount> mounts(

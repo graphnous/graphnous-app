@@ -1,30 +1,20 @@
-import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
+import { forwardApi, graphnousApi } from "@/lib/server/graphnousApi";
 import { type NextRequest } from "next/server";
 
 /**
- * A conversation with its messages.
+ * The conversation with its messages.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+    const { id: threadId } = await params;
 
-    return forward(
-        () => graphnousFetch(`/api/v1/chat/threads/${encodeURIComponent(id)}`, request.headers.get("authorization")),
-        "get conversation",
-    );
+    return forwardApi(() => graphnousApi().chat.getChatThreadRaw({ threadId }), "get conversation");
 }
 
 /**
- * Deletes a conversation; 204 when it is gone.
+ * Deletes the conversation.
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+    const { id: threadId } = await params;
 
-    return forward(
-        () => graphnousFetch(
-            `/api/v1/chat/threads/${encodeURIComponent(id)}`,
-            request.headers.get("authorization"),
-            { method: "DELETE" },
-        ),
-        "delete conversation",
-    );
+    return forwardApi(() => graphnousApi().chat.deleteChatThreadRaw({ threadId }), "delete conversation");
 }

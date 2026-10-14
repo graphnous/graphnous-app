@@ -23,7 +23,9 @@ import java.util.regex.Pattern;
  * variables is of no endpoint. The call's scheme and host, query and
  * fragment are left out. A call that starts with a variable, such as
  * {@code {API_URL}/orders}, has a base that may hold the start of the
- * path, so it is also of an endpoint whose path ends with the call's.
+ * path, so it is also of an endpoint whose path ends with the call's. A
+ * variable right after the text of the call's last segment, as in
+ * {@code /orders{query}}, is taken for its query: that segment is its text.
  * <p>
  * The methods must be the same, unless the call's is not known or the
  * endpoint takes any. Of the endpoints of one scan, a call is of those
@@ -32,6 +34,13 @@ import java.util.regex.Pattern;
  * {@code /orders/latest} rather than of {@code /orders/{id}}.
  */
 public final class HttpLinkMatcher {
+
+    /**
+     * The version of how calls and endpoints are matched, kept with the
+     * links stored from it; raise it with any change to the matching, so
+     * the stored links are found again.
+     */
+    public static final String VERSION = "2";
 
     static final String ANY_METHOD = "ANY";
 
@@ -210,6 +219,11 @@ public final class HttpLinkMatcher {
                 hasBase = true;
             }
 
+            if (!parts.isEmpty()) {
+                parts = new ArrayList<>(parts);
+                parts.set(parts.size() - 1, withoutQueryVariable(parts.getLast()));
+            }
+
             final var segments = parts.stream()
                 .map(part -> part.contains("{") ? new Segment(Kind.VARIABLE, part) : new Segment(Kind.TEXT, part))
                 .toList();
@@ -217,6 +231,37 @@ public final class HttpLinkMatcher {
             return segments.stream().anyMatch(segment -> segment.kind() == Kind.TEXT)
                 ? new CallPath(segments, hasBase)
                 : null;
+        }
+
+        /**
+         * The text of a segment that variables follow, e.g. {@code orders}
+         * for {@code orders{query}}; the segment itself otherwise.
+         */
+        private static String withoutQueryVariable(final String part) {
+            final var brace = part.indexOf('{');
+
+            if (brace <= 0 || !part.endsWith("}")) {
+                return part;
+            }
+
+            // Only variables after the text
+            var i = brace;
+
+            while (i < part.length()) {
+                if (part.charAt(i) != '{') {
+                    return part;
+                }
+
+                var depth = 0;
+
+                do {
+                    final var c = part.charAt(i);
+                    depth += c == '{' ? 1 : c == '}' ? -1 : 0;
+                    i++;
+                } while (depth > 0 && i < part.length());
+            }
+
+            return part.substring(0, brace);
         }
 
         private static boolean isVariable(final String part) {

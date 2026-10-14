@@ -236,6 +236,10 @@ public class SystemController {
      *                                repository
      * @param numberOfClassesParsed   the classes of those projects
      * @param numberOfMethodsParsed   the methods of those projects
+     * @param numberOfProjects        the projects of the system, scanned
+     *                                or not
+     * @param numberOfScans           the scans of those projects, whatever
+     *                                their status
      */
     public record SystemStatsResponse(
         UUID systemId,
@@ -243,14 +247,16 @@ public class SystemController {
         int numberOfModulesScanned,
         Map<String, List<String>> languages,
         int numberOfClassesParsed,
-        int numberOfMethodsParsed
+        int numberOfMethodsParsed,
+        int numberOfProjects,
+        int numberOfScans
     ) {
     }
 
     /**
      * The stats of the system: those of the latest scan that has any of
-     * each of its projects, added up. All zero before any of its projects
-     * completed a scan.
+     * each of its projects, added up, with how many projects it has and
+     * how many scans they have.
      */
     @GetMapping("/{id}/stats")
     public ResponseEntity<SystemStatsResponse> getStats(
@@ -268,7 +274,9 @@ public class SystemController {
                 stats.numberOfModulesScanned(),
                 stats.languages(),
                 stats.numberOfClassesParsed(),
-                stats.numberOfMethodsParsed()
+                stats.numberOfMethodsParsed(),
+                stats.numberOfProjects(),
+                stats.numberOfScans()
             )
         );
     }
@@ -512,8 +520,10 @@ public class SystemController {
 
     /**
      * How the system's projects are linked over HTTP: which HTTP calls
-     * request which endpoints, as far as their urls and methods say. Found
-     * anew each time from what enhancers added to the scans.
+     * request which endpoints, as far as their urls and methods say, from
+     * what enhancers added to the scans. The links of the latest completed
+     * scans are the ones stored in the graph; those of other scans are
+     * found anew each time.
      *
      * @param scans the scans to link, such as the ones a graph shows; the
      *              latest completed scan of each project when missing

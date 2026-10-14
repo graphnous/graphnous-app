@@ -14,6 +14,8 @@ import java.util.UUID;
  *                  runs every installed enhancer, and empty for none
  * @param excludes  the patterns of the files left out of its results, such
  *                  as {@code *.spec.ts}; none when every file is kept
+ * @param languages the languages it scans, such as {@code JAVA}; none when
+ *                  it scans every language it finds
  */
 public record Scan(
     ScanId id,
@@ -24,12 +26,31 @@ public record Scan(
     Instant updatedAt,
     Instant startedAt,
     Set<String> enhancers,
-    List<String> excludes
+    List<String> excludes,
+    Set<String> languages
 ) {
 
     public Scan {
         enhancers = enhancers == null ? null : Set.copyOf(enhancers);
         excludes = excludes == null ? List.of() : List.copyOf(excludes);
+        languages = languages == null ? Set.of() : Set.copyOf(languages);
+    }
+
+    /**
+     * A scan of every language it finds.
+     */
+    public Scan(
+        final ScanId id,
+        final Project.ProjectId projectId,
+        final ScanStatus status,
+        final SourceRevision revision,
+        final Instant createdAt,
+        final Instant updatedAt,
+        final Instant startedAt,
+        final Set<String> enhancers,
+        final List<String> excludes
+    ) {
+        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, enhancers, excludes, null);
     }
 
     /**
@@ -45,7 +66,7 @@ public record Scan(
         final Instant startedAt,
         final Set<String> enhancers
     ) {
-        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, enhancers, null);
+        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, enhancers, null, null);
     }
 
     /**
@@ -60,7 +81,7 @@ public record Scan(
         final Instant updatedAt,
         final Instant startedAt
     ) {
-        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, null, null);
+        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, null, null, null);
     }
 
     /**
@@ -75,7 +96,7 @@ public record Scan(
             ? at
             : startedAt;
 
-        return new Scan(id, projectId, newStatus, revision, createdAt, at, started, enhancers, excludes);
+        return new Scan(id, projectId, newStatus, revision, createdAt, at, started, enhancers, excludes, languages);
     }
 
     /**
@@ -92,7 +113,8 @@ public record Scan(
             updatedAt,
             startedAt,
             enhancers,
-            excludes
+            excludes,
+            languages
         );
     }
 

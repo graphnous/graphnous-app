@@ -60,20 +60,42 @@ const RELATIONSHIPS: Record<ScanUsageRelationship, { label: string; tone: BadgeT
     EXTENDS: { label: "extends", tone: "info" },
     IMPLEMENTS: { label: "implements", tone: "info" },
     OVERRIDES: { label: "overrides", tone: "warning" },
+    REQUESTS: { label: "requests over HTTP", tone: "warning" },
 };
 
 /**
- * The usages by the file they are in, in the order they came: by file and
- * line.
+ * The usages by the file they are in, of the scan they are in, in the
+ * order they came: by file and line. Over HTTP, a file can be of the scan
+ * of another project, which can have a file of the same path.
  */
-export function byFile(usages: ScanUsage[]): { file: string | null; usages: ScanUsage[] }[] {
-    const files = new Map<string | null, ScanUsage[]>();
+export function byFile(usages: ScanUsage[]): { scanId: string; projectId: string | null; file: string | null; usages: ScanUsage[] }[] {
+    const files = new Map<string, { scanId: string; projectId: string | null; file: string | null; usages: ScanUsage[] }>();
 
     for (const usage of usages) {
-        files.set(usage.file, [...(files.get(usage.file) ?? []), usage]);
+        const key = `${usage.scanId}|${usage.file ?? ""}`;
+        const entry = files.get(key) ?? { scanId: usage.scanId, projectId: usage.projectId, file: usage.file, usages: [] };
+
+        entry.usages.push(usage);
+        files.set(key, entry);
     }
 
-    return [...files.entries()].map(([file, ofFile]) => ({ file, usages: ofFile }));
+    return [...files.values()];
+}
+
+/**
+ * How an HTTP call reads: what it requests, and the endpoint that serves it.
+ */
+function describeRequest(usage: ScanUsage): string | null {
+    const { request } = usage;
+
+    if (!request) {
+        return null;
+    }
+
+    const call = `${request.callMethod ?? "any method"} ${request.callUrl ?? "?"}`;
+    const endpoint = `${request.endpointMethod ?? ""} ${request.endpointUrl ?? "?"}`.trim();
+
+    return `${call} → ${endpoint}`;
 }
 
 type Subject = {
@@ -84,6 +106,10 @@ type Subject = {
 type UsagesProps = {
     scanId: string;
     subject: Subject;
+    /**
+     * The projects of the system, to name the one a usage over HTTP is in.
+     */
+    projects: Project[];
 };
 
 /**
@@ -97,7 +123,7 @@ const ANY = "";
  * places that render a component pass its props, the places can be
  * narrowed to those that do not pass one.
  */
-function Usages({ scanId, subject }: UsagesProps) {
+function Usages({ scanId, subject, projects }: UsagesProps) {
     const [depth, setDepth] = useState(1);
     const [missing, setMissing] = useState(ANY);
 
@@ -189,15 +215,23 @@ function Usages({ scanId, subject }: UsagesProps) {
                         <EmptyState
                             icon={TargetIcon}
                             title="Nothing in the scan uses it"
-                            description="No method, function or class of the scan calls, creates, reads, writes, names, extends or overrides it. Scans stored before usages were kept have none: scan the project again to see them."
+                            description="No method, function or class of the scan calls, creates, reads, writes, names, extends or overrides it, and nothing requests an endpoint it serves over HTTP. Scans stored before usages were kept have none: scan the project again to see them."
                         />
                     )}
 
                     <ul className="space-y-4" aria-label="Usages by file">
-                        {files.map(({ file, usages: ofFile }) => (
-                            <li key={file ?? ""} className="rounded-card border border-border">
+                        {files.map(({ scanId: fileScanId, projectId, file, usages: ofFile }) => (
+                            <li key={`${fileScanId}|${file ?? ""}`} className="rounded-card border border-border">
                                 <div className="flex items-baseline justify-between gap-3 border-b border-border bg-surface px-4 py-2">
-                                    <span className="break-all font-mono text-sm font-medium">{file ?? "Unknown file"}</span>
+                                    <span className="break-all font-mono text-sm font-medium">
+                                        {/* Over HTTP, the project it is in, when another */}
+                                        {fileScanId !== scanId && (
+                                            <Badge tone="info" className="mr-2 font-sans">
+                                                {projects.find((project) => project.id === projectId)?.name ?? "Another project"}
+                                            </Badge>
+                                        )}
+                                        {file ?? "Unknown file"}
+                                    </span>
                                     <Text as="span" size="xs" tone="muted" className="whitespace-nowrap">
                                         {ofFile.length} place(s)
                                     </Text>
@@ -229,6 +263,12 @@ function Usages({ scanId, subject }: UsagesProps) {
                                             )}
                                             {without !== ANY && passes(usage, without) === "unknown" && (
                                                 <Badge tone="neutral">may pass it: spreads</Badge>
+                                            )}
+                                            {/* What it requests over HTTP, and the endpoint */}
+                                            {usage.request && (
+                                                <span className="w-full break-all pl-[4.25rem] font-mono text-xs text-foreground-muted">
+                                                    {describeRequest(usage)}
+                                                </span>
                                             )}
                                             {/* What the call passes, when the scan says */}
                                             {usage.arguments && (
@@ -442,7 +482,7 @@ export function ImpactAnalysis({ projects, initial }: ImpactAnalysisProps) {
                     <div className="min-w-0 flex-1">
                         {subject ? (
                             // Starts at what uses it itself for another subject
-                            <Usages key={subject.id} scanId={scanId} subject={subject} />
+                            <Usages key={subject.id} scanId={scanId} subject={subject} projects={projects} />
                         ) : (
                             <EmptyState
                                 icon={TargetIcon}

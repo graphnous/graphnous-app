@@ -16,6 +16,11 @@ export type CreateScanRequest = {
      * *.spec.ts; the project's own when missing, none when empty.
      */
     excludes?: string[];
+    /**
+     * The languages to scan, such as JAVA; the project's own when missing,
+     * every language the scan finds when empty.
+     */
+    languages?: string[];
 };
 
 export function useCreateScan({ projectId }: { projectId: string }) {

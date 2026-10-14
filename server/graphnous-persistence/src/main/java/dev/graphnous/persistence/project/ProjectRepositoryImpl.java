@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -49,6 +50,27 @@ public class ProjectRepositoryImpl implements ProjectRepository {
         this.jpaRepository.updateScanExcludes(
             id.id(),
             excludes == null || excludes.isEmpty() ? null : StringListConverter.write(excludes)
+        );
+    }
+
+    @Override
+    public Set<String> findScanLanguages(final Project.ProjectId id) {
+        final var languages = StringListConverter.read(this.jpaRepository.findScanLanguages(id.id()));
+
+        return languages == null ? Set.of() : Set.copyOf(languages);
+    }
+
+    @Override
+    public void saveScanLanguages(
+        final Project.ProjectId id,
+        final Set<String> languages
+    ) {
+        // Nothing rather than an empty list, as for a project that never had any
+        this.jpaRepository.updateScanLanguages(
+            id.id(),
+            languages == null || languages.isEmpty()
+                ? null
+                : StringListConverter.write(languages.stream().sorted().toList())
         );
     }
 

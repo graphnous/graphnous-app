@@ -111,6 +111,34 @@ A schema change, a change in both scanners, and here.
   arguments, is now built and installed, and the Angular enhancer (`1.1.0`)
   gives its HTTP calls a `url`; both read it from the argument as written.
   That is what the HTTP links between projects match on.
+- **Calls through a wrapper, and their methods.** `fetch-browser` (`1.1.0`)
+  also takes a call of a function that wraps fetch for an HTTP call, such
+  as the web app's `graphnousFetch(path, ...)` and `useFetch(path)`, with
+  the url and method the wrapper requests for its arguments. It reads the
+  method from the options as written, GET without one. A url given only
+  when a condition holds (``id ? `/x/${id}` : null``) is that url, and a
+  variable right after the last segment's text (`/scans${search}`) is
+  taken for the query. On this repository that took the links found from
+  15, all from the browser into Next.js routes and half of them to the
+  wrong method, to 68, 24 of them from Next.js routes into the Spring API.
+- **Links stored in the graph.** The links between the latest completed
+  scans of a system are stored as `(HttpCall)-[:REQUESTS]->(Endpoint)`,
+  with how they matched (`PATH` or `SUFFIX`), the version of the matching,
+  and whether they cross projects. A scan's links are found again when it
+  completes or is enhanced again, against the latest scan of each other
+  project; and when they are read and were stored by an earlier version of
+  the matching, or not at all, as for scans from before. Links of other
+  scans, such as earlier ones chosen to compare, are found when asked for.
+- **Impact analysis across HTTP.** Besides what calls a method, Impact
+  Analysis lists what requests an endpoint it serves, over the stored
+  links: `(target)-[:ENHANCE]->(Endpoint)<-[:REQUESTS]-(HttpCall)<-[:ENHANCE]-(user)`,
+  as `REQUESTS` usages with the call's and the endpoint's method and url.
+  The user can be in the scan of another project of the system, named on
+  the page, and following further goes on in that scan: from a Spring
+  method to the Next.js route that calls it, to the browser code that
+  requests that route. Only between the latest scans, whose links are
+  stored; and only calls the scan sees, so not those of a generated
+  OpenAPI client.
 
 Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 `customerId`", and each call site of a Java method shows what it passes.

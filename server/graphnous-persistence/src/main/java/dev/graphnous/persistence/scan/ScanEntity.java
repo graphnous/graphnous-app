@@ -56,6 +56,21 @@ public class ScanEntity {
     @Column(name = "excludes", updatable = false, columnDefinition = "TEXT")
     private List<String> excludes;
 
+    /**
+     * The languages the scan scans; null for every language it finds.
+     */
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "languages", updatable = false, columnDefinition = "TEXT")
+    private List<String> languages;
+
+    public void setLanguages(final List<String> languages) {
+        this.languages = languages;
+    }
+
+    public List<String> getLanguages() {
+        return this.languages;
+    }
+
     public void setExcludes(final List<String> excludes) {
         this.excludes = excludes;
     }
