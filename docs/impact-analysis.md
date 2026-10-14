@@ -1,8 +1,9 @@
 # Impact analysis
 
 What it takes for Graphnous to answer "if I change this, what else do I have
-to change?". Written on 2026-10-12. Step 1 of the plan is built; steps 2 and 3
-are not.
+to change?". Written on 2026-10-12, updated on 2026-10-14. Steps 1 and 2 of
+the plan are built, and step 3 is built with the schema and the scanners
+(Java `0.3.1`, TypeScript `0.1.1`) it needs.
 
 ## The goal
 
@@ -24,20 +25,19 @@ dependencies, plus what enhancers add.
 | Case | Needs | Recorded by a scanner | Stored in the graph |
 |---|---|---|---|
 | React component: where it is used | every `<OrderList />` site, with file and line | Yes, by the TypeScript scanner (JSX is recorded as a call) | No |
-| React component: which props each use passes | the attributes at each JSX site | No | No |
-| Java entity: where it is instantiated | every `new Order(...)` site | Not found, see below | No |
-| Java method: who calls it | every call site | Not found, see below | No |
+| React component: which props each use passes | the attributes at each JSX site | Yes, by the TypeScript scanner from 0.1.1 | Yes |
+| Java entity: where it is instantiated | every `new Order(...)` site | Yes, by the Java scanner from 0.3.0 | Yes |
+| Java method: who calls it | every call site | Yes, by the Java scanner from 0.3.0 | Yes |
 
 - **TypeScript.** Each function and method in a scan result lists its calls,
   constructor calls, field reads and writes, and type uses. Each has the
   target's qualified name, a line number, and whether the scanner resolved it.
   The server drops all of this when it builds the graph.
-- **Java.** The Java scanner checkout (`graphnous-java-scanner`) has no code
-  that records calls or `new` expressions. Whether the published `0.2.0` image
-  the server runs matches that checkout has not been confirmed.
-- **Arguments and props.** No scanner records them and the scan-result schema
-  has no place for them. This is the same gap that blocks the HTTP links
-  between projects.
+- **Java.** The Java scanner records calls, constructor calls, field accesses
+  and type uses from `0.3.0`, the image the server runs. `0.2.0` and earlier
+  did not.
+- **Arguments and props.** Recorded from Java scanner `0.3.1` and
+  TypeScript scanner `0.1.1` (step 3), the images the server runs.
 
 ## Plan
 
@@ -65,20 +65,61 @@ Then build the Impact Analysis page, which is empty today:
 Result: for a TypeScript or React project, "where is this component used" and
 "who calls this function", down to the file and line to edit.
 
-### Step 2: make the Java scanner record calls
+### Step 2: make the Java scanner record calls (built)
 
-In the Java scanner repository. Once it emits method calls and constructor
-calls, the Java entity and Java method cases work with no further server
-change, because step 1 already stores them.
+The Java scanner does so from `0.3.0`. Step 1 stored most of what it records
+as it was; three shapes that only Java has needed a change here, in
+`ScanResultGraph`, found by scanning this server with `0.3.0` on 2026-10-14:
 
-### Step 3: record arguments and props
+- **Record accessors.** A record has `id()` for its component `id` without
+  declaring it, so a call of it had no method to point at. The components of
+  a record are now fields of it (`kind` `RECORD_COMPONENT`), and such a call
+  is a `READS` of the component. An accessor the record declares itself is a
+  method, and is called.
+- **Constructors a class does not declare.** `new Order(id)` on a record
+  names `com.example.Order.Order(java.util.UUID)`; the class was looked up
+  after the last dot, which is in the parameters. They are now left off first.
+- **Enum constants.** They were not in the graph, so reading `Status.OPEN`
+  was dropped. They are now fields of their enum (`kind` `ENUM_CONSTANT`).
 
-A schema change and a change in both scanners: the arguments of each call and
-the attributes of each JSX element.
+On this server's own code that took the usages stored from 5,255 calls, 762
+instantiations and 4,481 reads to 5,255 calls, 1,296 instantiations and 7,974
+reads. What is still dropped, besides calls into libraries: uses of code the
+build generates, which the scanner resolves but does not scan, and `values()`
+of an enum, which no source declares.
+
+### Step 3: record arguments and props (built)
+
+A schema change, a change in both scanners, and here.
+
+- **Schema** (`graphnous-schemas`). A call has `arguments`: one per argument,
+  in the order written, each the expression as written on one line, cut off
+  at 200 characters, with the `name` it is passed under when it is passed by
+  name, and whether it is `spread`. They are source, not values.
+- **TypeScript scanner.** Records them for calls and `new`, and the
+  attributes of a rendered component as named arguments: `customerId={id}`
+  is `id` under `customerId`, `disabled` is `true`, `{...props}` is spread.
+- **Java scanner.** Records them for calls, `new`, `this(...)` and
+  `super(...)`.
+- **Here.** A `CALLS` or `INSTANTIATES` relationship keeps what the call
+  passes (`arguments`, `argumentNames`, `argumentSpreads`), the usages
+  endpoint returns it per usage, and Impact Analysis shows it under each
+  place. Where calls pass arguments by name, the places can be narrowed to
+  those that do not pass one; a place that spreads something stays, marked,
+  as it may pass it.
+- **Urls of HTTP calls.** The `fetch-browser` enhancer, which waited for
+  arguments, is now built and installed, and the Angular enhancer (`1.1.0`)
+  gives its HTTP calls a `url`; both read it from the argument as written.
+  That is what the HTTP links between projects match on.
 
 Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
-`customerId`". It also unblocks the HTTP links between projects, the
-`fetch-browser` enhancer, and URLs on Angular HTTP calls.
+`customerId`", and each call site of a Java method shows what it passes.
+
+#### Scans made before step 3
+
+A scan made with an earlier scanner has no arguments: it shows usages as
+before, and nothing about what they pass. It needs scanning again, not
+storing again, as the results it kept do not have them.
 
 ## What step 1 built
 
@@ -111,8 +152,13 @@ Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 - **Page.** Impact Analysis: choose a project and scan, search a class, method
   or function, and see its usages grouped by file.
 
-Not built from the outline: re-storing existing scans from their kept
-results.
+- **Storing existing scans again.** Enhancing a scan again can store the
+  results it kept again first (`{"restore": true}` on
+  `POST /api/v1/scans/{id}/enhancements`, "Store the results again first" in
+  the Enhance again dialog), as the server stores them now: with usages, for
+  a scan stored before they were. It runs as the scan's store step, replaces
+  the graph of the scan at once, and removes what every enhancer added, so
+  the enhancers chosen run on the new graph.
 
 ## What each step delivers
 
@@ -120,12 +166,14 @@ results.
 |---|---|
 | Step 1 | usage sites for TypeScript and React: which files to change, not which props each passes |
 | Step 2 | callers and instantiation sites for Java |
-| Step 3 | the props and arguments at each site, so a new required parameter shows the call sites that lack it |
+| Step 3 | the props and arguments at each site, the places that do not pass a prop, and the urls of fetch and Angular HTTP calls |
 
 ## Caveats
 
-- **Existing scans need a rescan** to get usages. Only scans stored since
-  2026-10-12 kept their raw results, and those could be re-stored instead.
+- **Existing scans need storing again** to get usages: enhance them again
+  with "Store the results again first". Only scans stored since 2026-10-12
+  kept their results; older ones need a rescan. Java scans made with a
+  scanner before `0.3.0` kept results without usages, and need a rescan too.
 - **Graphs get bigger.** Calls are the most numerous relationship in a
   codebase. They should stay out of the default graph view and show only in
   impact analysis, or as a layer that is ticked on.

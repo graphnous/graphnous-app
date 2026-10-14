@@ -192,7 +192,9 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
                     MATCH (source:Method {id: row.sourceId})
                     MATCH (target:%2$s {id: row.targetId})
                     CREATE (source)-[usage:%1$s]->(target)
-                    SET usage.line = row.line, usage.reference = row.reference, usage.kind = row.kind
+                    SET usage.line = row.line, usage.reference = row.reference, usage.kind = row.kind,
+                        usage.arguments = row.arguments, usage.argumentNames = row.argumentNames,
+                        usage.argumentSpreads = row.argumentSpreads
                     """.formatted(type, ScanResultGraph.USAGES.get(type))));
 
                 deleteUnusedDependencies(tx, previousDependencies);

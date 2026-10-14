@@ -52,7 +52,12 @@ class ScanUsageControllerTest {
                 21,
                 list,
                 "Orders",
-                1
+                1,
+                List.of(
+                    new ScanUsages.Argument(null, "page", false),
+                    new ScanUsages.Argument("size", "20", false),
+                    new ScanUsages.Argument(null, "filters", true)
+                )
             )),
             true
         ));
@@ -69,6 +74,11 @@ class ScanUsageControllerTest {
             .andExpect(jsonPath("$.usages[0].target.id").value("list"))
             .andExpect(jsonPath("$.usages[0].targetOwner").value("Orders"))
             .andExpect(jsonPath("$.usages[0].depth").value(1))
+            .andExpect(jsonPath("$.usages[0].arguments.length()").value(3))
+            .andExpect(jsonPath("$.usages[0].arguments[0].name").doesNotExist())
+            .andExpect(jsonPath("$.usages[0].arguments[0].value").value("page"))
+            .andExpect(jsonPath("$.usages[0].arguments[1].name").value("size"))
+            .andExpect(jsonPath("$.usages[0].arguments[2].spread").value(true))
             .andExpect(jsonPath("$.truncated").value(true));
     }
 

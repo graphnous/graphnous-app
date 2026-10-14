@@ -2,8 +2,9 @@ import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
 import { type NextRequest } from "next/server";
 
 /**
- * Enhances a completed scan again, in the background: { enhancers? }, the
- * names of the enhancers to run: all of them without, none when empty. 202 with the scan;
+ * Enhances a completed scan again, in the background: { enhancers?, restore? },
+ * the names of the enhancers to run: all of them without, none when empty;
+ * and whether to store the results the scan kept again first. 202 with the scan;
  * 409 when the scan is not completed, is already being enhanced or kept no
  * results to enhance.
  */

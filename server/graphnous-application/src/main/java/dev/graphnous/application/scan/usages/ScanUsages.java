@@ -27,6 +27,22 @@ public final class ScanUsages {
     }
 
     /**
+     * One thing a call passes, as written where it is called.
+     *
+     * @param name   the name it is passed under, such as the attribute of
+     *               a rendered component; null when passed by position
+     * @param value  the expression passed, as written
+     * @param spread whether it is spread, as {@code ...ids} or
+     *               {@code {...props}}, so what it passes is not known
+     */
+    public record Argument(
+        String name,
+        String value,
+        boolean spread
+    ) {
+    }
+
+    /**
      * One place that uses what was asked about, or one of its members.
      *
      * @param relationship how it uses it: CALLS, INSTANTIATES, READS,
@@ -50,6 +66,10 @@ public final class ScanUsages {
      *                     function
      * @param depth        1 for what uses it itself; 2 for what calls
      *                     that, and so on
+     * @param arguments    what a call or an instantiation passes, in the
+     *                     order written, empty when it passes nothing;
+     *                     null for another relationship, and when the
+     *                     scan did not record the arguments of calls
      */
     public record Usage(
         String relationship,
@@ -59,8 +79,13 @@ public final class ScanUsages {
         Integer line,
         Node target,
         String targetOwner,
-        int depth
+        int depth,
+        List<Argument> arguments
     ) {
+
+        public Usage {
+            arguments = arguments == null ? null : List.copyOf(arguments);
+        }
     }
 
     /**

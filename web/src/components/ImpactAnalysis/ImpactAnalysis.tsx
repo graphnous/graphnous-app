@@ -27,6 +27,7 @@ import { useScanCode } from "@/lib/hooks/scan/code/useScanCode";
 import { useGetScan } from "@/lib/hooks/scan/useGetScan";
 import { useListScans } from "@/lib/hooks/scan/useListScans";
 import { useScanUsages } from "@/lib/hooks/scan/usages/useScanUsages";
+import { argumentNames, passes, writtenArgument } from "@/lib/impact";
 import type { Project, ScanClass, ScanMethod, ScanUsage, ScanUsageRelationship } from "@/types";
 
 /**
@@ -86,15 +87,38 @@ type UsagesProps = {
 };
 
 /**
- * Where the subject is used, a file at a time, with the line and how.
+ * Every place, whatever it passes.
+ */
+const ANY = "";
+
+/**
+ * Where the subject is used, a file at a time, with the line and how, and
+ * for a call what it passes. Where calls pass arguments by name, as the
+ * places that render a component pass its props, the places can be
+ * narrowed to those that do not pass one.
  */
 function Usages({ scanId, subject }: UsagesProps) {
     const [depth, setDepth] = useState(1);
+    const [missing, setMissing] = useState(ANY);
 
-    const { subject: found, usages, truncated, loading, error } = useScanUsages({ scanId, nodeId: subject.id, depth });
+    const { subject: found, usages: all, truncated, loading, error } = useScanUsages({ scanId, nodeId: subject.id, depth });
 
     // As the scan calls it once it is loaded: for a component, the function it is
     const name = found?.name ?? subject.name;
+
+    const names = argumentNames(all);
+
+    // A name the usages no longer pass, such as after following further, narrows nothing
+    const without = names.includes(missing) ? missing : ANY;
+
+    // Those that spread something may pass it, so they stay to be looked at
+    const usages = without === ANY
+        ? all
+        : all.filter((usage) => {
+            const passed = passes(usage, without);
+
+            return passed === false || passed === "unknown";
+        });
 
     const files = byFile(usages);
 
@@ -105,19 +129,38 @@ function Usages({ scanId, subject }: UsagesProps) {
                 description={
                     loading
                         ? "Looking for what uses it…"
-                        : `${usages.length.toLocaleString()}${truncated ? "+" : ""} place(s) in ${files.length.toLocaleString()} file(s)`
+                        : without === ANY
+                            ? `${usages.length.toLocaleString()}${truncated ? "+" : ""} place(s) in ${files.length.toLocaleString()} file(s)`
+                            : `${usages.length.toLocaleString()} of ${all.length.toLocaleString()}${truncated ? "+" : ""} place(s) do not pass ${without}`
                 }
             />
             <CardBody>
                 <div className="space-y-4">
-                    <div className="w-64">
-                        <Field label="Follow">
-                            <Select
-                                options={DEPTHS}
-                                value={String(depth)}
-                                onChange={(event) => setDepth(Number(event.target.value))}
-                            />
-                        </Field>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="w-64">
+                            <Field label="Follow">
+                                <Select
+                                    options={DEPTHS}
+                                    value={String(depth)}
+                                    onChange={(event) => setDepth(Number(event.target.value))}
+                                />
+                            </Field>
+                        </div>
+
+                        {names.length > 0 && (
+                            <div className="w-64">
+                                <Field label="Places that do not pass">
+                                    <Select
+                                        options={[
+                                            { value: ANY, label: "Show every place" },
+                                            ...names.map((argument) => ({ value: argument, label: argument })),
+                                        ]}
+                                        value={without}
+                                        onChange={(event) => setMissing(event.target.value)}
+                                    />
+                                </Field>
+                            </div>
+                        )}
                     </div>
 
                     {error && (
@@ -134,7 +177,15 @@ function Usages({ scanId, subject }: UsagesProps) {
 
                     {loading && usages.length === 0 && <Spinner size="sm" label="Looking for what uses it" />}
 
-                    {!loading && !error && usages.length === 0 && (
+                    {!loading && !error && all.length > 0 && usages.length === 0 && (
+                        <EmptyState
+                            icon={TargetIcon}
+                            title={`Every place passes ${without}`}
+                            description="No call of it leaves it out."
+                        />
+                    )}
+
+                    {!loading && !error && all.length === 0 && (
                         <EmptyState
                             icon={TargetIcon}
                             title="Nothing in the scan uses it"
@@ -175,6 +226,17 @@ function Usages({ scanId, subject }: UsagesProps) {
                                                 <Text as="span" size="xs" tone="muted">
                                                     {usage.depth - 1} step(s) away
                                                 </Text>
+                                            )}
+                                            {without !== ANY && passes(usage, without) === "unknown" && (
+                                                <Badge tone="neutral">may pass it: spreads</Badge>
+                                            )}
+                                            {/* What the call passes, when the scan says */}
+                                            {usage.arguments && (
+                                                <span className="w-full break-all pl-[4.25rem] font-mono text-xs text-foreground-muted">
+                                                    {usage.arguments.length === 0
+                                                        ? "passes nothing"
+                                                        : usage.arguments.map(writtenArgument).join(", ")}
+                                                </span>
                                             )}
                                         </li>
                                     ))}

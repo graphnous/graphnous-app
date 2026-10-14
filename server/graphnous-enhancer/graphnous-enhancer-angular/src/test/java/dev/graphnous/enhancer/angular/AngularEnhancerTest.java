@@ -2,6 +2,7 @@ package dev.graphnous.enhancer.angular;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.graphnous.core.model.Annotation;
+import dev.graphnous.core.model.Argument;
 import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.File;
@@ -52,7 +53,7 @@ class AngularEnhancerTest {
     void enhancesTypeScript() {
         assertThat(enhancer.forLanguage()).isEqualTo(ScanTarget.Language.TYPESCRIPT);
         assertThat(enhancements.name()).isEqualTo("angular");
-        assertThat(enhancements.version()).isEqualTo("1.0.0");
+        assertThat(enhancements.version()).isEqualTo("1.1.0");
     }
 
     @Test
@@ -184,6 +185,54 @@ class AngularEnhancerTest {
         ));
 
         assertThat(result.enhancements()).isEmpty();
+    }
+
+    @Test
+    void takesTheUrlOfAnHttpCallFromItsArguments() {
+        final var client = new Parameter();
+        client.setName("http");
+        client.setType(typeRef("HttpClient"));
+
+        final var get = unresolved("http.get");
+        get.setArguments(List.of(argument("`/api/orders/${id}`", false)));
+
+        // The method comes first
+        final var request = unresolved("http.request");
+        request.setArguments(List.of(argument("\"DELETE\"", false), argument("\"/api/orders\"", false)));
+
+        // Any number of arguments, so which is the url is not known
+        final var spread = unresolved("http.post");
+        spread.setArguments(List.of(argument("parameters", true)));
+
+        final var load = new Method();
+        load.setName("load");
+        load.setQualifiedName("src/orders:load");
+        load.setKind(Method.Kind.FUNCTION);
+        load.setParameters(List.of(client));
+        load.setCalls(List.of(get, request, spread, unresolved("http.put")));
+
+        final var loader = type("src/orders:OrderLoader");
+        loader.setMethods(List.of(load));
+
+        final var result = enhancer.enhance(result(file("src/orders.ts", List.of("@angular/common/http"), loader)));
+
+        assertThat(result.enhancements())
+            .flatExtracting(Enhancement::nodes)
+            .extracting(node -> node.metadata().get("httpMethod"), node -> node.metadata().get("url"))
+            .containsExactly(
+                tuple("GET", "/api/orders/{id}"),
+                tuple("REQUEST", "/api/orders"),
+                tuple("POST", null),
+                tuple("PUT", null)
+            );
+    }
+
+    private static Argument argument(final String value, final boolean spread) {
+        final var argument = new Argument();
+        argument.setValue(value);
+        argument.setSpread(spread);
+
+        return argument;
     }
 
     @Test

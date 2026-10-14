@@ -8,10 +8,12 @@ import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultArchive;
+import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.enhancer.Enhancer;
 import dev.graphnous.enhancer.EnhancerProvider;
 import dev.graphnous.enhancer.EnhancerRegistry;
 import dev.graphnous.enhancer.angular.AngularEnhancer;
+import dev.graphnous.enhancer.fetch.FetchBrowserEnhancer;
 import dev.graphnous.enhancer.nextjs.NextJsEnhancer;
 import dev.graphnous.enhancer.react.ReactEnhancer;
 import dev.graphnous.enhancer.spring.SpringEnhancer;
@@ -43,6 +45,11 @@ public class EnhancerConfiguration {
         return new NextJsEnhancer();
     }
 
+    @Bean
+    public FetchBrowserEnhancer fetchBrowserEnhancer() {
+        return new FetchBrowserEnhancer();
+    }
+
     /**
      * Every {@link Enhancer} bean.
      */
@@ -61,6 +68,7 @@ public class EnhancerConfiguration {
         final ScanService scanService,
         final AuthorizationService authorizationService,
         final ScanResultArchive scanResultArchive,
+        final ScanResultRepository scanResultRepository,
         final EnhancerRegistry enhancerRegistry,
         final EnhancerProvider enhancerProvider,
         final EnhancementRepository enhancementRepository,
@@ -72,6 +80,7 @@ public class EnhancerConfiguration {
             scanService,
             authorizationService,
             scanResultArchive,
+            scanResultRepository,
             enhancerRegistry,
             enhancerProvider,
             enhancementRepository,

@@ -25,6 +25,7 @@ import java.util.UUID;
 
 import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -94,7 +95,7 @@ class ScanControllerTest {
     void enhanceScanWithEveryEnhancer() throws Exception {
         final var scan = completedScan();
 
-        when(scanEnhancementService.enhance(any(), eq(scan.id()), isNull())).thenReturn(scan);
+        when(scanEnhancementService.enhance(any(), eq(scan.id()), isNull(), eq(false))).thenReturn(scan);
 
         mockMvc.perform(post("/api/v1/scans/{id}/enhancements", scan.id().id()))
             .andExpect(status().isAccepted())
@@ -106,7 +107,7 @@ class ScanControllerTest {
     void enhanceScanWithTheEnhancersAskedFor() throws Exception {
         final var scan = completedScan();
 
-        when(scanEnhancementService.enhance(any(), eq(scan.id()), eq(Set.of("react", "nextjs")))).thenReturn(scan);
+        when(scanEnhancementService.enhance(any(), eq(scan.id()), eq(Set.of("react", "nextjs")), eq(false))).thenReturn(scan);
 
         mockMvc.perform(
             post("/api/v1/scans/{id}/enhancements", scan.id().id())
@@ -120,7 +121,7 @@ class ScanControllerTest {
     void enhanceScanWithNoEnhancers() throws Exception {
         final var scan = completedScan();
 
-        when(scanEnhancementService.enhance(any(), eq(scan.id()), eq(Set.of()))).thenReturn(scan);
+        when(scanEnhancementService.enhance(any(), eq(scan.id()), eq(Set.of()), eq(false))).thenReturn(scan);
 
         mockMvc.perform(
             post("/api/v1/scans/{id}/enhancements", scan.id().id())
@@ -130,12 +131,26 @@ class ScanControllerTest {
             .andExpect(status().isAccepted());
 
         // Not every enhancer, as without a choice
-        verify(scanEnhancementService).enhance(any(), eq(scan.id()), eq(Set.of()));
+        verify(scanEnhancementService).enhance(any(), eq(scan.id()), eq(Set.of()), eq(false));
+    }
+
+    @Test
+    void enhanceScanAfterStoringItsResultsAgain() throws Exception {
+        final var scan = completedScan();
+
+        when(scanEnhancementService.enhance(any(), eq(scan.id()), isNull(), eq(true))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/scans/{id}/enhancements", scan.id().id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"restore\": true}")
+        )
+            .andExpect(status().isAccepted());
     }
 
     @Test
     void enhanceScanThatCannotBeEnhanced() throws Exception {
-        when(scanEnhancementService.enhance(any(), any(), any()))
+        when(scanEnhancementService.enhance(any(), any(), any(), anyBoolean()))
             .thenThrow(new ConflictException("Scan kept no results to enhance"));
 
         mockMvc.perform(post("/api/v1/scans/{id}/enhancements", UUID.randomUUID()))

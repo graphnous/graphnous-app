@@ -1,11 +1,12 @@
-package dev.graphnous.enhancer.fetch;
+package dev.graphnous.enhancer;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * The url a fetch call requests, from its first argument as written: the
+ * The url an HTTP call requests, from the argument that gives it as
+ * written in TypeScript or JavaScript, as a scan result keeps it: the
  * text of its strings, with what is only known when it runs written as a
  * variable in braces, as in Spring urls. For example
  * <ul>
@@ -18,7 +19,7 @@ import java.util.regex.Pattern;
  * A variable is named by its expression as written, without the encoding
  * around it, so {@code ${encodeURIComponent(id)}} is {@code {id}}.
  */
-final class FetchUrl {
+public final class WrittenUrl {
 
     /**
      * Calls that only encode or convert the value they are given.
@@ -27,10 +28,10 @@ final class FetchUrl {
         "(?:encodeURIComponent|encodeURI|String)\\((.*)\\)"
     );
 
-    private FetchUrl() {
+    private WrittenUrl() {
     }
 
-    static String of(final String argument) {
+    public static String of(final String argument) {
         final var url = new StringBuilder();
 
         for (final var part : split(argument.strip())) {

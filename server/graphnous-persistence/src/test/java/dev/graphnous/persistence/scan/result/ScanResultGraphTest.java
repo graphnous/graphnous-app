@@ -1,12 +1,18 @@
 package dev.graphnous.persistence.scan.result;
 
+import dev.graphnous.core.model.Argument;
+import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Class;
+import dev.graphnous.core.model.EnumConstant;
+import dev.graphnous.core.model.FieldAccess;
 import dev.graphnous.core.model.File;
 import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.Module;
 import dev.graphnous.core.model.Parameter;
+import dev.graphnous.core.model.RecordComponent;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget;
+import dev.graphnous.core.model.TypeRef;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -240,6 +246,150 @@ class ScanResultGraphTest {
         assertThat(ScanResultGraph.rawType("java.util.Map<java.lang.String, java.util.List<Order>>"))
             .isEqualTo("java.util.Map");
         assertThat(ScanResultGraph.rawType("com.example.Order")).isEqualTo("com.example.Order");
+    }
+
+    @Test
+    void storesEnumConstantsAndRecordComponentsAsFields() {
+        final var java = ScanResultGraph.of("scan", List.of(javaOrders()));
+
+        assertThat(java.fields())
+            .extracting(row -> row.get("qualifiedName"), row -> row.get("type"), row -> row.get("kind"))
+            .containsExactlyInAnyOrder(
+                tuple("com.example.Status.OPEN", "com.example.Status", "ENUM_CONSTANT"),
+                tuple("com.example.Order.id", "java.util.UUID", "RECORD_COMPONENT")
+            );
+    }
+
+    @Test
+    void readsTheComponentWhereTheAccessorOfARecordIsCalled() {
+        final var usages = ScanResultGraph.of("scan", List.of(javaOrders())).usages();
+
+        // Order declares no id(), so there is no method to call
+        assertThat(usages).doesNotContainKey("CALLS");
+        assertThat(usages.get("READS"))
+            .extracting(row -> row.get("targetId"), row -> row.get("line"))
+            .containsExactlyInAnyOrder(
+                tuple("scan|.|.|class:com.example.Order|field:id", 12),
+                tuple("scan|.|.|class:com.example.Status|field:OPEN", 13)
+            );
+    }
+
+    @Test
+    void instantiatesTheClassOfAConstructorItDoesNotDeclare() {
+        // The parameters have dots of their own, after the name of the class
+        assertThat(ScanResultGraph.of("scan", List.of(javaOrders())).usages().get("INSTANTIATES"))
+            .extracting(row -> row.get("targetId"), row -> row.get("line"))
+            .containsExactly(tuple("scan|.|.|class:com.example.Order", 11));
+    }
+
+    @Test
+    void keepsWhatCallsPassWhenTheScannerRecordedIt() {
+        // No call of it passes anything, so the scanner may not record arguments
+        assertThat(ScanResultGraph.of("scan", List.of(javaOrders(false))).usages().get("INSTANTIATES"))
+            .allSatisfy(row -> assertThat(row).doesNotContainKeys("arguments", "argumentNames", "argumentSpreads"));
+
+        assertThat(ScanResultGraph.of("scan", List.of(javaOrders(true))).usages().get("INSTANTIATES"))
+            .singleElement()
+            .satisfies(row -> assertThat(row)
+                .containsEntry("arguments", List.of("id", "rest"))
+                .containsEntry("argumentNames", List.of("id", ""))
+                .containsEntry("argumentSpreads", List.of(false, true)));
+    }
+
+    private static ScanResult javaOrders() {
+        return javaOrders(false);
+    }
+
+    /**
+     * A record, an enum and a class that uses both, as the Java scanner
+     * lists them.
+     *
+     * @param withArguments whether the scanner recorded what calls pass
+     */
+    private static ScanResult javaOrders(final boolean withArguments) {
+        final var uuid = new TypeRef();
+        uuid.setName("java.util.UUID");
+
+        final var id = new RecordComponent();
+        id.setName("id");
+        id.setType(uuid);
+
+        final var order = new Class();
+        order.setName("Order");
+        order.setQualifiedName("com.example.Order");
+        order.setKind(Class.Kind.RECORD);
+        order.getRecordComponents().add(id);
+
+        final var open = new EnumConstant();
+        open.setName("OPEN");
+        open.setQualifiedName("com.example.Status.OPEN");
+
+        final var status = new Class();
+        status.setName("Status");
+        status.setQualifiedName("com.example.Status");
+        status.setKind(Class.Kind.ENUM);
+        status.getEnumConstants().add(open);
+
+        final var create = new Call();
+        create.setTarget("com.example.Order.Order(java.util.UUID)");
+        create.setKind(Call.Kind.CONSTRUCTOR);
+        create.setStartLine(11);
+        create.setResolved(true);
+
+        if (withArguments) {
+            final var named = new Argument();
+            named.setName("id");
+            named.setValue("id");
+
+            final var rest = new Argument();
+            rest.setValue("rest");
+            rest.setSpread(true);
+
+            create.getArguments().addAll(List.of(named, rest));
+        }
+
+        final var accessor = new Call();
+        accessor.setTarget("com.example.Order.id()");
+        accessor.setKind(Call.Kind.METHOD);
+        accessor.setStartLine(12);
+        accessor.setResolved(true);
+
+        final var constant = new FieldAccess();
+        constant.setTarget("com.example.Status.OPEN");
+        constant.setAccess(FieldAccess.Access.READ);
+        constant.setStartLine(13);
+        constant.setResolved(true);
+
+        final var place = new Method();
+        place.setName("place");
+        place.setQualifiedName("com.example.Orders.place()");
+        place.setKind(Method.Kind.METHOD);
+        place.getCalls().addAll(List.of(create, accessor));
+        place.getFieldAccesses().add(constant);
+
+        final var orders = new Class();
+        orders.setName("Orders");
+        orders.setQualifiedName("com.example.Orders");
+        orders.setKind(Class.Kind.CLASS);
+        orders.getMethods().add(place);
+
+        final var file = new File();
+        file.setPath("src/main/java/com/example/Orders.java");
+        file.getClasses().addAll(List.of(order, status, orders));
+
+        final var module = new Module();
+        module.setPath(".");
+        module.getFiles().add(file);
+
+        final var target = new ScanTarget();
+        target.setPath(".");
+        target.setLanguage(ScanTarget.Language.JAVA);
+
+        final var result = new ScanResult();
+        result.setTarget(target);
+        result.getModules().add(module);
+
+        return result;
     }
 
     private static Map<String, Object> annotation(

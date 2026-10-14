@@ -18,8 +18,10 @@ export function useEnhanceScan() {
         /**
          * @param enhancers the names of the enhancers to run; all of them
          *                  when missing, none when empty
+         * @param restore   whether to store the results the scan kept again
+         *                  first, as the server stores them now
          */
-        async (scanId: string, enhancers?: string[]): Promise<Scan> => {
+        async (scanId: string, enhancers?: string[], restore?: boolean): Promise<Scan> => {
             setLoading(true);
             setError(null);
 
@@ -27,7 +29,10 @@ export function useEnhanceScan() {
                 const response = await fetch(`/api/scans/${encodeURIComponent(scanId)}/enhancements`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(enhancers ? { enhancers } : {}),
+                    body: JSON.stringify({
+                        ...(enhancers ? { enhancers } : {}),
+                        ...(restore ? { restore: true } : {}),
+                    }),
                 });
 
                 if (!response.ok) {

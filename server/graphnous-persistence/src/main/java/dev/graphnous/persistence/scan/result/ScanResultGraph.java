@@ -3,8 +3,10 @@ package dev.graphnous.persistence.scan.result;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.graphnous.core.model.Annotation;
+import dev.graphnous.core.model.Argument;
 import dev.graphnous.core.model.Call;
 import dev.graphnous.core.model.Class;
+import dev.graphnous.core.model.EnumConstant;
 import dev.graphnous.core.model.Field;
 import dev.graphnous.core.model.FieldAccess;
 import dev.graphnous.core.model.File;
@@ -12,14 +14,18 @@ import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.Module;
 import dev.graphnous.core.model.Package;
 import dev.graphnous.core.model.Parameter;
+import dev.graphnous.core.model.RecordComponent;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.TypeRef;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * The scan results flattened into rows per node and relationship type, so
@@ -48,6 +54,14 @@ import java.util.Map;
  * {@code USES} to a class it names as a type. Only what the scanner
  * resolved to something the scan has itself is kept: a call into a library
  * has nothing to point at.
+ * <p>
+ * A {@code CALLS} or {@code INSTANTIATES} relationship has what the call
+ * passes, when the scanner recorded the arguments of calls: each as
+ * written in {@code arguments}, the name each is passed under in
+ * {@code argumentNames}, empty for one passed by position, and whether
+ * each is spread in {@code argumentSpreads}; all three are as long as each
+ * other, and empty for a call that passes nothing. A scan whose scanner
+ * did not record arguments has none of them.
  */
 record ScanResultGraph(
     List<Map<String, Object>> targets,
@@ -161,6 +175,24 @@ record ScanResultGraph(
         private final Map<String, String> constructorClasses = new HashMap<>();
 
         /**
+         * The ids of the fields of classes added so far.
+         */
+        private final Set<String> declaredFields = new HashSet<>();
+
+        /**
+         * The ids of the fields that are record components, by the target
+         * and qualified name of the accessor a record has for each, as
+         * {@code com.example.Order.id()}.
+         */
+        private final Map<String, String> accessorFields = new HashMap<>();
+
+        /**
+         * Whether the scanner of the result being added recorded what its
+         * calls pass.
+         */
+        private boolean argumentsRecorded;
+
+        /**
          * What the bodies use, to resolve once everything has an id: what
          * is used may be declared after what uses it.
          */
@@ -195,7 +227,29 @@ record ScanResultGraph(
                 "buildSystemVersion", target.getBuildSystemVersion()
             ));
 
+            // Every call lists its arguments, or none does: a result
+            // read into the model cannot tell a call without arguments
+            // from one whose arguments were not recorded
+            argumentsRecorded = result.getModules().stream()
+                .flatMap(module -> module.getFiles().stream())
+                .flatMap(file -> Stream.concat(
+                    file.getFunctions().stream(),
+                    file.getClasses().stream().flatMap(Builder::methods)
+                ))
+                .flatMap(method -> method.getCalls().stream())
+                .anyMatch(call -> !call.getArguments().isEmpty());
+
             result.getModules().forEach(module -> addModule(targetId, module));
+        }
+
+        /**
+         * The methods of the class and of the classes nested in it.
+         */
+        private static Stream<Method> methods(final Class type) {
+            return Stream.concat(
+                type.getMethods().stream(),
+                type.getClasses().stream().flatMap(Builder::methods)
+            );
         }
 
         private void addModule(final String targetId, final Module module) {
@@ -321,6 +375,8 @@ record ScanResultGraph(
 
             type.getMethods().forEach(method -> addMethod(classId, method));
             type.getFields().forEach(field -> addField(classId, field));
+            type.getEnumConstants().forEach(constant -> addEnumConstant(classId, type, constant));
+            type.getRecordComponents().forEach(component -> addRecordComponent(classId, type, component));
 
             return classId;
         }
@@ -378,6 +434,18 @@ record ScanResultGraph(
 
                 final var properties = row("line", call.getStartLine());
 
+                if (argumentsRecorded) {
+                    final var arguments = call.getArguments();
+
+                    properties.put("arguments", arguments.stream().map(Argument::getValue).toList());
+                    properties.put("argumentNames", arguments.stream()
+                        .map(argument -> argument.getName() == null ? "" : argument.getName())
+                        .toList());
+                    properties.put("argumentSpreads", arguments.stream()
+                        .map(argument -> Boolean.TRUE.equals(argument.getSpread()))
+                        .toList());
+                }
+
                 if (call.getKind() == Call.Kind.CONSTRUCTOR) {
                     pending.add(new PendingUsage("INSTANTIATES", methodId, key(call.getTarget()), properties));
                 } else {
@@ -426,6 +494,20 @@ record ScanResultGraph(
             final var usages = new LinkedHashMap<String, List<Map<String, Object>>>();
 
             for (final var usage : pending) {
+                if (usage.type().equals("CALLS")
+                    && !methodIds.containsKey(usage.key())
+                    && accessorFields.containsKey(usage.key())) {
+                    // The accessor of a record component that the record
+                    // does not declare: calling it reads the component
+                    usages.computeIfAbsent("READS", type -> new ArrayList<>()).add(row(
+                        "line", usage.properties().get("line"),
+                        "sourceId", usage.sourceId(),
+                        "targetId", accessorFields.get(usage.key())
+                    ));
+
+                    continue;
+                }
+
                 final var targetId = switch (usage.type()) {
                     case "CALLS" -> methodIds.get(usage.key());
                     case "INSTANTIATES" -> instantiated(usage.key());
@@ -450,7 +532,9 @@ record ScanResultGraph(
         /**
          * The class a constructor call instantiates: that of the
          * constructor it names, or the class it names itself, also when
-         * that has no constructor of its own, as {@code Order.constructor}.
+         * that has no constructor of its own, as {@code Order.constructor}
+         * or, for the constructor a record gets from its components,
+         * {@code com.example.Order.Order(java.util.UUID)}.
          */
         private String instantiated(final String key) {
             final var constructor = methodIds.get(key);
@@ -463,9 +547,12 @@ record ScanResultGraph(
                 return classIds.get(key);
             }
 
-            final var member = key.lastIndexOf('.');
+            // Without the parameters, whose types have dots of their own
+            final var parameters = key.indexOf('(');
+            final var name = parameters < 0 ? key : key.substring(0, parameters);
+            final var member = name.lastIndexOf('.');
 
-            return member < 0 ? null : classIds.get(key.substring(0, member));
+            return member < 0 ? null : classIds.get(name.substring(0, member));
         }
 
         /**
@@ -505,14 +592,75 @@ record ScanResultGraph(
         }
 
         private void addField(final String classId, final Field field) {
+            addField(classId, field, null);
+        }
+
+        /**
+         * @param kind what the field is when not declared as one, or null
+         * @return the id of the field, or null when the class already has
+         *         one of its name
+         */
+        private String addField(final String classId, final Field field, final String kind) {
             final var fieldId = classId + "|field:" + field.getName();
+
+            if (!declaredFields.add(fieldId) && kind != null) {
+                return null;
+            }
+
             final var row = field(fieldId, field);
 
             row.put("classId", classId);
+
+            if (kind != null) {
+                row.put("kind", kind);
+            }
+
             fields.add(row);
 
             if (field.getQualifiedName() != null) {
                 fieldIds.putIfAbsent(key(field.getQualifiedName()), fieldId);
+            }
+
+            return fieldId;
+        }
+
+        /**
+         * Adds the constant of an enum as a field of it, of its own type,
+         * which is what reading it accesses.
+         */
+        private void addEnumConstant(final String classId, final Class type, final EnumConstant constant) {
+            final var field = new Field();
+            field.setName(constant.getName());
+            field.setQualifiedName(constant.getQualifiedName() == null
+                ? type.getQualifiedName() + "." + constant.getName()
+                : constant.getQualifiedName());
+
+            final var ownType = new TypeRef();
+            ownType.setName(type.getQualifiedName());
+            field.setType(ownType);
+            field.setAnnotations(constant.getAnnotations());
+
+            addField(classId, field, "ENUM_CONSTANT");
+        }
+
+        /**
+         * Adds the component of a record as a field of it. A record has an
+         * accessor for each, {@code id()} for {@code id}, which the scan
+         * lists as a method only when the record declares it itself.
+         */
+        private void addRecordComponent(final String classId, final Class type, final RecordComponent component) {
+            final var qualifiedName = type.getQualifiedName() + "." + component.getName();
+
+            final var field = new Field();
+            field.setName(component.getName());
+            field.setQualifiedName(qualifiedName);
+            field.setType(component.getType());
+            field.setAnnotations(component.getAnnotations());
+
+            final var fieldId = addField(classId, field, "RECORD_COMPONENT");
+
+            if (fieldId != null) {
+                accessorFields.putIfAbsent(key(qualifiedName + "()"), fieldId);
             }
         }
 

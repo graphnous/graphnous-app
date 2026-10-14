@@ -23,6 +23,7 @@
         <module>graphnous-enhancer-angular</module>
         <module>graphnous-enhancer-react</module>
         <module>graphnous-enhancer-nextjs</module>
+        <module>graphnous-enhancer-fetch-browser</module>
     </modules>
 
     <properties>
@@ -66,6 +67,11 @@
             <dependency>
                 <groupId>dev.graphnous</groupId>
                 <artifactId>graphnous-enhancer-nextjs</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.graphnous</groupId>
+                <artifactId>graphnous-enhancer-fetch-browser</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
