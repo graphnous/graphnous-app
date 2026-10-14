@@ -22,4 +22,16 @@ public interface EnhancementRepository {
      */
     void save(Scan.ScanId scanId, List<Enhancements> enhancements);
 
+    /**
+     * Saves the enhancements as {@link #save} does, after removing what the
+     * enhancers of the same names added to the scan before, in any version:
+     * their record and the nodes they added. Both happen together, so a
+     * failure leaves what was there. Relationships an enhancer added
+     * between nodes of the scan result itself are kept.
+     *
+     * @throws IllegalArgumentException when a label or relationship type is
+     *                                  not a valid name
+     */
+    void replace(Scan.ScanId scanId, List<Enhancements> enhancements);
+
 }

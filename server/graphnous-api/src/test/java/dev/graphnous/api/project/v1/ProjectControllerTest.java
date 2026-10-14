@@ -7,6 +7,7 @@ import com.jayway.jsonpath.JsonPath;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.exception.ConflictException;
 import dev.graphnous.application.exception.EntitlementException;
+import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.pagination.Sort;
@@ -16,8 +17,10 @@ import dev.graphnous.application.project.UpdateProjectCommand;
 import dev.graphnous.application.scan.CreateScanCommand;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.UploadScanCommand;
+import dev.graphnous.application.scan.stats.ScanStatService;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.domain.scan.stats.ScanStats;
 import dev.graphnous.domain.system.System;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -31,6 +34,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static com.atlassian.oai.validator.mockmvc.OpenApiValidationMatchers.openApi;
@@ -83,6 +88,59 @@ class ProjectControllerTest {
 
     @MockitoBean
     private RequestContextProvider contextProvider;
+
+    @MockitoBean
+    private ScanStatService scanStatService;
+
+    // Not in the published OpenAPI spec yet, so not validated against it
+
+    @Test
+    void getLatestScanStats() throws Exception {
+        final var projectId = new Project.ProjectId(UUID.randomUUID());
+        final var scanId = Scan.ScanId.generate();
+
+        when(scanStatService.getLatestStats(any(), eq(projectId))).thenReturn(Optional.of(
+            new ScanStats(
+                ScanStats.ScanStatId.generate(),
+                scanId,
+                projectId,
+                2,
+                Map.of("JAVA", List.of("backend/src/main/java/com/example/Order.java")),
+                8,
+                31
+            )
+        ));
+
+        mockMvc.perform(get("/api/v1/projects/{id}/stats", projectId.id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.scanId").value(scanId.id().toString()))
+            .andExpect(jsonPath("$.numberOfModulesScanned").value(2))
+            .andExpect(jsonPath("$.languages.JAVA[0]").value("backend/src/main/java/com/example/Order.java"))
+            .andExpect(jsonPath("$.numberOfClassesParsed").value(8))
+            .andExpect(jsonPath("$.numberOfMethodsParsed").value(31));
+    }
+
+    @Test
+    void getLatestScanStatsWithoutAScan() throws Exception {
+        when(scanStatService.getLatestStats(any(), any())).thenReturn(Optional.empty());
+
+        // All zero, as for a system without scans
+        mockMvc.perform(get("/api/v1/projects/{id}/stats", UUID.randomUUID()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.scanId").isEmpty())
+            .andExpect(jsonPath("$.numberOfModulesScanned").value(0))
+            .andExpect(jsonPath("$.languages").isEmpty())
+            .andExpect(jsonPath("$.numberOfClassesParsed").value(0))
+            .andExpect(jsonPath("$.numberOfMethodsParsed").value(0));
+    }
+
+    @Test
+    void getLatestScanStatsOfAnUnknownProject() throws Exception {
+        when(scanStatService.getLatestStats(any(), any())).thenThrow(new NotFoundException("Project not found"));
+
+        mockMvc.perform(get("/api/v1/projects/{id}/stats", UUID.randomUUID()))
+            .andExpect(status().isNotFound());
+    }
 
     @Test
     void getScansNewestFirst() throws Exception {
@@ -193,6 +251,106 @@ class ProjectControllerTest {
         .andExpect(openApi().isValid(OPENAPI_SPEC));
 
         verify(scanService).create(any(), eq(new CreateScanCommand(projectId, "abc123", "main")));
+    }
+
+    // Choosing enhancers is not in the published OpenAPI spec yet
+
+    @Test
+    void createsAScanWithTheEnhancersChosen() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), projectId, Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision(null, "main"), now, now, null
+        );
+
+        when(scanService.create(any(), any(CreateScanCommand.class))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\", \"enhancers\": [\"react\"]}")
+        )
+        .andExpect(status().isCreated());
+
+        verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main", java.util.Set.of("react"))));
+    }
+
+    @Test
+    void createsAScanThatLeavesFilesOut() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), projectId, Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision(null, "main"), now, now, null
+        );
+
+        when(scanService.create(any(), any(CreateScanCommand.class))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\", \"excludes\": [\"*.spec.ts\"]}")
+        )
+        .andExpect(status().isCreated());
+
+        verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main", null, List.of("*.spec.ts"))));
+    }
+
+    @Test
+    void getsAndSetsWhatAProjectsScansLeaveOut() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+
+        when(projectService.getScanExcludes(any(), eq(projectId))).thenReturn(List.of("*.spec.ts"));
+        when(projectService.updateScanExcludes(any(), eq(projectId), eq(List.of(" generated/ ", "*.spec.ts"))))
+            .thenReturn(List.of("generated/", "*.spec.ts"));
+
+        mockMvc.perform(get("/api/v1/projects/{id}/scan-settings", projectId.id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.excludes[0]").value("*.spec.ts"));
+
+        mockMvc.perform(
+            put("/api/v1/projects/{id}/scan-settings", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"excludes\": [\" generated/ \", \"*.spec.ts\"]}")
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.excludes[0]").value("generated/"))
+            .andExpect(jsonPath("$.excludes[1]").value("*.spec.ts"));
+    }
+
+    @Test
+    void refusesAPatternThatIsNotWellFormed() throws Exception {
+        when(projectService.updateScanExcludes(any(), any(), any()))
+            .thenThrow(new dev.graphnous.application.exception.ValidationException("Pattern src/{a does not close its brace"));
+
+        mockMvc.perform(
+            put("/api/v1/projects/{id}/scan-settings", UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"excludes\": [\"src/{a\"]}")
+        )
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createsAScanWithoutEnhancers() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), projectId, Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision(null, "main"), now, now, null
+        );
+
+        when(scanService.create(any(), any(CreateScanCommand.class))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\", \"enhancers\": []}")
+        )
+        .andExpect(status().isCreated());
+
+        verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main", java.util.Set.of())));
     }
 
     @Test

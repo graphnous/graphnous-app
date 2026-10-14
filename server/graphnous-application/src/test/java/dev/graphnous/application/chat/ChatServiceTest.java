@@ -1,5 +1,6 @@
 package dev.graphnous.application.chat;
 
+import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.OrganizationContext;
@@ -43,6 +44,9 @@ class ChatServiceTest {
 
     @Mock
     private SystemService systemService;
+
+    @Mock
+    private ProjectService projectService;
 
     private final RequestContext context = context(UUID.randomUUID());
 
@@ -142,6 +146,6 @@ class ChatServiceTest {
     }
 
     private ChatService service() {
-        return new ChatService(chatThreadRepository, authorizationService, systemService, Clock.fixed(NOW, ZoneOffset.UTC));
+        return new ChatService(chatThreadRepository, authorizationService, systemService, projectService, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 }

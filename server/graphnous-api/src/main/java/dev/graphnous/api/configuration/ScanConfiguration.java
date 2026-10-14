@@ -21,6 +21,8 @@ import dev.graphnous.application.scan.files.ScanFileRepository;
 import dev.graphnous.application.scan.files.ScanFileService;
 import dev.graphnous.application.scan.graph.ScanGraphRepository;
 import dev.graphnous.application.scan.graph.ScanGraphService;
+import dev.graphnous.application.scan.links.HttpLinkRepository;
+import dev.graphnous.application.scan.links.HttpLinkService;
 import dev.graphnous.application.scan.methods.ScanMethodRepository;
 import dev.graphnous.application.scan.methods.ScanMethodService;
 import dev.graphnous.application.scan.modules.ScanModuleRepository;
@@ -30,11 +32,15 @@ import dev.graphnous.application.scan.packages.ScanPackageService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.log.ScanLogService;
+import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.application.scan.stats.ScanStatRepository;
 import dev.graphnous.application.scan.stats.ScanStatService;
+import dev.graphnous.application.scan.usages.ScanUsageRepository;
+import dev.graphnous.application.scan.usages.ScanUsageService;
 import dev.graphnous.application.system.SystemRepository;
 import dev.graphnous.application.system.SystemService;
+import dev.graphnous.enhancer.EnhancerRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -77,6 +83,7 @@ public class ScanConfiguration {
         final ScanRepository scanRepository,
         final ScanLogRepository scanLogRepository,
         final ScanResultRepository scanResultRepository,
+        final ScanResultArchive scanResultArchive,
         final ScanStepRepository scanStepRepository,
         final ScanStatRepository scanStatRepository,
         final NotificationRepository notificationRepository
@@ -85,6 +92,7 @@ public class ScanConfiguration {
             scanRepository,
             scanLogRepository,
             scanResultRepository,
+            scanResultArchive,
             scanStepRepository,
             scanStatRepository,
             notificationRepository
@@ -148,8 +156,29 @@ public class ScanConfiguration {
     }
 
     @Bean
-    ScanStatService scanStatService(final ScanStatRepository scanStatRepository) {
-        return new ScanStatService(scanStatRepository);
+    ScanUsageService scanUsageService(
+        final ScanService scanService,
+        final ScanUsageRepository scanUsageRepository
+    ) {
+        return new ScanUsageService(scanService, scanUsageRepository);
+    }
+
+    @Bean
+    HttpLinkService httpLinkService(
+        final ScanService scanService,
+        final HttpLinkRepository httpLinkRepository
+    ) {
+        return new HttpLinkService(scanService, httpLinkRepository);
+    }
+
+    @Bean
+    ScanStatService scanStatService(
+        final ScanStatRepository scanStatRepository,
+        final ProjectService projectService,
+        final SystemService systemService,
+        final AuthorizationService authorizationService
+    ) {
+        return new ScanStatService(scanStatRepository, projectService, systemService, authorizationService);
     }
 
     @Bean
@@ -160,8 +189,10 @@ public class ScanConfiguration {
         final ScanSteps scanSteps,
         final ScanRetention scanRetention,
         final ProjectService projectService,
+        final SystemService systemService,
         final AuthorizationService authorizationService,
-        final EntitlementService entitlementService
+        final EntitlementService entitlementService,
+        final EnhancerRegistry enhancerRegistry
     ) {
         return new ScanService(
             eventPublisher,
@@ -170,8 +201,10 @@ public class ScanConfiguration {
             scanSteps,
             scanRetention,
             projectService,
+            systemService,
             authorizationService,
-            entitlementService
+            entitlementService,
+            enhancerRegistry
         );
     }
 

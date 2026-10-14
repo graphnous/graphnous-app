@@ -3,6 +3,7 @@ package dev.graphnous.application.scan;
 import dev.graphnous.application.exception.ConflictException;
 import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.scan.log.ScanLogRepository;
+import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.application.scan.stats.ScanStatRepository;
 import dev.graphnous.domain.project.Project;
@@ -10,8 +11,8 @@ import dev.graphnous.domain.scan.Scan;
 
 /**
  * Deletes scans with everything that belongs to them: their results in the
- * graph, their logs, their steps, their stats, their notifications and the
- * scans themselves.
+ * graph and as the scanners produced them, their logs, their steps, their
+ * stats, their notifications and the scans themselves.
  * <p>
  * The stores do not share a transaction, so the scan itself goes last: a
  * delete that fails halfway can be repeated, as the scan is still found.
@@ -21,6 +22,7 @@ public class ScanDeleter {
     private final ScanRepository scanRepository;
     private final ScanLogRepository scanLogRepository;
     private final ScanResultRepository scanResultRepository;
+    private final ScanResultArchive scanResultArchive;
     private final ScanStepRepository scanStepRepository;
     private final ScanStatRepository scanStatRepository;
     private final NotificationRepository notificationRepository;
@@ -29,6 +31,7 @@ public class ScanDeleter {
         final ScanRepository scanRepository,
         final ScanLogRepository scanLogRepository,
         final ScanResultRepository scanResultRepository,
+        final ScanResultArchive scanResultArchive,
         final ScanStepRepository scanStepRepository,
         final ScanStatRepository scanStatRepository,
         final NotificationRepository notificationRepository
@@ -36,6 +39,7 @@ public class ScanDeleter {
         this.scanRepository = scanRepository;
         this.scanLogRepository = scanLogRepository;
         this.scanResultRepository = scanResultRepository;
+        this.scanResultArchive = scanResultArchive;
         this.scanStepRepository = scanStepRepository;
         this.scanStatRepository = scanStatRepository;
         this.notificationRepository = notificationRepository;
@@ -61,6 +65,7 @@ public class ScanDeleter {
 
     public void deleteScan(final Scan.ScanId scanId) {
         scanResultRepository.delete(scanId);
+        scanResultArchive.delete(scanId);
         scanLogRepository.deleteByScanId(scanId);
         scanStepRepository.deleteByScanId(scanId);
         scanStatRepository.deleteByScanId(scanId);

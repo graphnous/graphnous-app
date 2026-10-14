@@ -46,6 +46,25 @@ class ScanStepsTest {
     }
 
     @Test
+    void runsAFinishedStepAgain() {
+        steps.create(scanId);
+        steps.start(scanId, ENHANCE_RESULTS);
+        steps.fail(scanId, ENHANCE_RESULTS, "Neo4j unavailable");
+
+        steps.restart(scanId, ENHANCE_RESULTS);
+
+        final var step = repository.step(scanId, ENHANCE_RESULTS);
+
+        assertThat(step.status()).isEqualTo(RUNNING);
+        assertThat(step.startedAt()).isEqualTo(NOW);
+        assertThat(step.finishedAt()).isNull();
+        assertThat(step.error()).isNull();
+
+        steps.complete(scanId, ENHANCE_RESULTS);
+        assertThat(repository.step(scanId, ENHANCE_RESULTS).status()).isEqualTo(COMPLETED);
+    }
+
+    @Test
     void recordsARunningAndCompletedStep() {
         steps.create(scanId);
 

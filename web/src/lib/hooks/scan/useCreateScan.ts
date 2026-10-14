@@ -6,6 +6,16 @@ import type { Project, Scan, System } from "@/types";
 export type CreateScanRequest = {
     branch?: string;
     revision?: string;
+    /**
+     * The names of the enhancers to run on the scan's results; every
+     * installed one when missing, none when empty.
+     */
+    enhancers?: string[];
+    /**
+     * The patterns of the files to leave out of the scan, such as
+     * *.spec.ts; the project's own when missing, none when empty.
+     */
+    excludes?: string[];
 };
 
 export function useCreateScan({ projectId }: { projectId: string }) {
@@ -27,7 +37,7 @@ export function useCreateScan({ projectId }: { projectId: string }) {
                 });
 
                 if (!response.ok) {
-                    throw new Error("Failed to create scan");
+                    throw new Error(await message(response));
                 }
 
                 return await response.json();
@@ -51,4 +61,22 @@ export function useCreateScan({ projectId }: { projectId: string }) {
         loading,
         error,
     };
+}
+
+/**
+ * The API's message from an error response, such as an enhancer that is
+ * not installed, or a general one.
+ */
+async function message(response: Response): Promise<string> {
+    try {
+        const body = await response.json();
+
+        if (typeof body?.message === "string" && body.message) {
+            return body.message;
+        }
+    } catch {
+        // Not JSON; the general message will do
+    }
+
+    return "Failed to create scan";
 }

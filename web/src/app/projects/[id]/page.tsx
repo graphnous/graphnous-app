@@ -23,11 +23,17 @@ import { useParams, useRouter } from "next/navigation";
 
 import { useSystemStore } from "@/lib/store/systemStore";
 import { useGetProject } from "@/lib/hooks/project/useGetProject";
+import { useProjectStats } from "@/lib/hooks/project/useProjectStats";
 import { useListScans } from "@/lib/hooks/scan/useListScans";
+import { useDependencies } from "@/lib/hooks/scan/dependencies/useDependencies";
+import { ScanTimeline } from "@/components/ScanTimeline/ScanTimeline";
 import { ScansTable } from "@/components/ScansTable/ScansTable";
 import { CreateScanModal, CreateScanModalRef } from "@/components/CreateScanModal/CreateScanModal";
 import { Scan } from "@/types";
 import { StatsCard } from "@/components/StatsCard/StatsCard";
+import { LanguagesChart } from "@/components/LanguagesChart/LanguagesChart";
+import { breadcrumbs } from "@/lib/breadcrumbs";
+import { ProjectCode } from "@/components/ProjectCode/ProjectCode";
 import { ProjectDependencies } from "@/components/ProjectDependencies/ProjectDependencies";
 import { ProjectGraph } from "@/components/ProjectGraph/ProjectGraph";
 import { LatestScanChanges, ProjectScanComparison } from "@/components/ScanComparison/ScanComparison";
@@ -51,8 +57,30 @@ export default function ProjectPage() {
         refresh: refreshScans,
     } = useListScans(id);
 
+    const {
+        stats,
+        loading: statsLoading,
+        error: statsError,
+    } = useProjectStats(id);
+
+    // The stats have no dependencies; only the count of the same scan's is needed
+    const {
+        page: dependenciesPage,
+        loading: dependenciesLoading,
+    } = useDependencies({ scanId: stats?.scanId, size: 1 });
+
     const createScanModalRef = useRef<CreateScanModalRef>(null);
 
+    const languages = Object.entries(stats?.languages ?? {})
+        .map(([language, files]) => ({ language, files: files.length }));
+
+    const numberOfFiles = languages.reduce((total, { files }) => total + files, 0);
+
+    /**
+     * The stat as shown: a dash while loading, or without a scan with stats.
+     */
+    const stat = (value: number | undefined, loading = statsLoading) =>
+        loading || value === undefined ? "–" : value.toLocaleString();
 
     if (projectLoading) {
         return (
@@ -89,19 +117,11 @@ export default function ProjectPage() {
             <Stack gap={8}>
                 <PageHeader
                     title={project.name}
-                    breadcrumbs={[
-                        {
-                            label: selectedSystem?.name ?? "",
-                            href: "/",
-                        },
-                        {
-                            label: "Projects",
-                            href: "/projects",
-                        },
-                        {
-                            label: project.name,
-                        },
-                    ]}
+                    breadcrumbs={breadcrumbs(
+                        selectedSystem,
+                        { label: "Projects", href: "/projects" },
+                        { label: project.name },
+                    )}
                     actions={
                         <Button
                             icon={PlayIcon}
@@ -119,6 +139,7 @@ export default function ProjectPage() {
                         <Tab value={"overview"}>Overview</Tab>
                         <Tab value={"code"}>Code</Tab>
                         <Tab value={"graph"}>Graph</Tab>
+                        <Tab value={"history"}>History</Tab>
                         <Tab value={"compare"}>Compare</Tab>
                         <Tab value={"dependencies"}>Dependencies</Tab>
                         <Tab value={"impact"}>Impact</Tab>
@@ -135,16 +156,25 @@ export default function ProjectPage() {
                             </Card>
                         </section>
                         <section className="flex gap-4 flex-row mb-8">
-                            <StatsCard className="flex-1" title="Files" stat="2800" />
-                            <StatsCard className="flex-1" title="Classes" stat="2800" />
-                            <StatsCard className="flex-1" title="Methods" stat="2800" />
-                            <StatsCard className="flex-1" title="Dependencies" stat="2800" />
+                            <StatsCard className="flex-1" title="Files" stat={stat(stats ? numberOfFiles : undefined)} />
+                            <StatsCard className="flex-1" title="Classes" stat={stat(stats?.numberOfClassesParsed)} />
+                            <StatsCard className="flex-1" title="Methods" stat={stat(stats?.numberOfMethodsParsed)} />
+                            <StatsCard
+                                className="flex-1"
+                                title="Dependencies"
+                                stat={stat(stats ? dependenciesPage.totalElements : undefined, statsLoading || dependenciesLoading)}
+                            />
                         </section>
+                        {statsError && (
+                            <Text className="mb-8">{statsError.message}</Text>
+                        )}
                         <section className="flex gap-4 flex-row mb-8">
                             <Card className="flex-1">
                                 <CardHeader title="Languages" description="Composition of this project" />
                                 <CardBody>
-                                    None
+                                    <LanguagesChart
+                                        languages={Object.fromEntries(languages.map(({ language, files }) => [language, files]))}
+                                    />
                                 </CardBody>
                             </Card>
                             <Card className="flex-1">
@@ -156,10 +186,13 @@ export default function ProjectPage() {
                         </section>
                     </TabPanel>
                     <TabPanel value={"code"}>
-                        Code
+                        <ProjectCode scans={scansPage.content} />
                     </TabPanel>
                     <TabPanel value={"graph"}>
                         <ProjectGraph scans={scansPage.content} />
+                    </TabPanel>
+                    <TabPanel value={"history"}>
+                        <ScanTimeline scans={scansPage.content} />
                     </TabPanel>
                     <TabPanel value={"compare"}>
                         <ProjectScanComparison scans={scansPage.content} />

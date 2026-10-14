@@ -53,8 +53,9 @@ public class AiConfiguration {
     ChatService chatService(
         final ChatThreadRepository chatThreadRepository,
         final AuthorizationService authorizationService,
-        final SystemService systemService
+        final SystemService systemService,
+        final ProjectService projectService
     ) {
-        return new ChatService(chatThreadRepository, authorizationService, systemService, Clock.systemUTC());
+        return new ChatService(chatThreadRepository, authorizationService, systemService, projectService, Clock.systemUTC());
     }
 }

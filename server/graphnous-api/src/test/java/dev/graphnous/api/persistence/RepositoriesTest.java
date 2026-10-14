@@ -10,7 +10,10 @@ import dev.graphnous.application.project.ProjectRepository;
 import dev.graphnous.application.scan.ScanRepository;
 import dev.graphnous.application.scan.ScanStepRepository;
 import dev.graphnous.application.scan.log.ScanLogRepository;
+import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.stats.ScanStatRepository;
+import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.application.system.SystemRepository;
 import dev.graphnous.domain.chat.ChatThread;
 import dev.graphnous.domain.notification.Notification;
@@ -95,6 +98,9 @@ class RepositoriesTest {
 
     @Autowired
     private ScanStatRepository scanStatRepository;
+
+    @Autowired
+    private ScanResultArchive scanResultArchive;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -248,6 +254,117 @@ class RepositoriesTest {
 
         assertThat(scanRepository.hasActiveScans(idle.id())).isFalse();
         assertThat(scanRepository.hasActiveScans(busy.id())).isTrue();
+    }
+
+    @Test
+    void pagesTheScansOfEveryProjectOfASystem() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var frontend = project(shop, "frontend");
+        final var other = project(system("Blog"), "backend");
+
+        final var first = scan(backend, Scan.ScanStatus.COMPLETED, Instant.now().minusSeconds(120));
+        final var second = scan(frontend, Scan.ScanStatus.RUNNING, Instant.now().minusSeconds(60));
+        final var third = scan(backend, Scan.ScanStatus.FAILED, Instant.now());
+        scan(other, Scan.ScanStatus.COMPLETED);
+
+        final var page = scanRepository.findAllInSystem(shop.id(), query(0, 2, "createdAt", Sort.Direction.DESC));
+
+        assertThat(page.content()).extracting(Scan::id).containsExactly(third.id(), second.id());
+        assertThat(page.totalElements()).isEqualTo(3);
+        assertThat(page.totalPages()).isEqualTo(2);
+        assertThat(scanRepository.findAllInSystem(shop.id(), query(1, 2, "createdAt", Sort.Direction.DESC)).content())
+            .extracting(Scan::id).containsExactly(first.id());
+    }
+
+    @Test
+    void findsTheLatestCompletedScanOfEachProjectOfASystem() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var frontend = project(shop, "frontend");
+        // Without a completed scan
+        final var docs = project(shop, "docs");
+        final var other = project(system("Warehouse"), "stock");
+
+        scan(backend, Scan.ScanStatus.COMPLETED, Instant.now().minusSeconds(120));
+        final var ofBackend = scan(backend, Scan.ScanStatus.COMPLETED, Instant.now().minusSeconds(60));
+        // Newer, but not completed
+        scan(backend, Scan.ScanStatus.FAILED, Instant.now());
+        final var ofFrontend = scan(frontend, Scan.ScanStatus.COMPLETED);
+        scan(docs, Scan.ScanStatus.RUNNING);
+        scan(other, Scan.ScanStatus.COMPLETED);
+
+        assertThat(scanRepository.findLatestCompletedInSystem(shop.id()))
+            .extracting(Scan::id)
+            .containsExactlyInAnyOrder(ofBackend.id(), ofFrontend.id());
+    }
+
+    @Test
+    void keepsWhatAProjectsScansLeaveOut() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var frontend = project(shop, "frontend");
+
+        assertThat(projectRepository.findScanExcludes(backend.id())).isEmpty();
+
+        projectRepository.saveScanExcludes(backend.id(), List.of("*.spec.ts", "generated/"));
+
+        assertThat(projectRepository.findScanExcludes(backend.id())).containsExactly("*.spec.ts", "generated/");
+        assertThat(projectRepository.findScanExcludes(frontend.id())).isEmpty();
+
+        // Saving the project leaves them alone
+        projectRepository.save(projectRepository.findById(backend.id()));
+
+        assertThat(projectRepository.findScanExcludes(backend.id())).containsExactly("*.spec.ts", "generated/");
+
+        projectRepository.saveScanExcludes(backend.id(), List.of());
+
+        assertThat(projectRepository.findScanExcludes(backend.id())).isEmpty();
+    }
+
+    @Test
+    void keepsWhatAScanLeftOut() {
+        final var backend = project(system("Shop"), "backend");
+        final var at = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        final var excluding = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision("main", "main"), at, at, null, null, List.of("*.spec.ts", "generated/")
+        ));
+        final var everything = scan(backend, Scan.ScanStatus.PENDING);
+
+        assertThat(scanRepository.findById(excluding.id()).excludes()).containsExactly("*.spec.ts", "generated/");
+        assertThat(scanRepository.findById(everything.id()).excludes()).isEmpty();
+
+        scanRepository.save(withStatus(scanRepository.findById(excluding.id()), Scan.ScanStatus.QUEUED));
+
+        assertThat(scanRepository.findById(excluding.id()).excludes()).containsExactly("*.spec.ts", "generated/");
+    }
+
+    @Test
+    void keepsTheEnhancersChosenForAScan() {
+        final var backend = project(system("Shop"), "backend");
+        final var at = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        final var chosen = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision("main", "main"), at, at, null, java.util.Set.of("spring", "react")
+        ));
+        final var none = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision("main", "main"), at, at, null, java.util.Set.of()
+        ));
+        final var every = scan(backend, Scan.ScanStatus.PENDING);
+
+        assertThat(scanRepository.findById(chosen.id()).enhancers()).containsExactlyInAnyOrder("spring", "react");
+        // Choosing none is not the same as not choosing
+        assertThat(scanRepository.findById(none.id()).enhancers()).isEmpty();
+        assertThat(scanRepository.findById(every.id()).enhancers()).isNull();
+
+        // Kept when the scan moves on
+        scanRepository.save(withStatus(scanRepository.findById(chosen.id()), Scan.ScanStatus.QUEUED));
+
+        assertThat(scanRepository.findById(chosen.id()).enhancers()).containsExactlyInAnyOrder("spring", "react");
     }
 
     @Test
@@ -464,6 +581,45 @@ class RepositoriesTest {
         assertThat(scanStepRepository.findByScanId(other.id())).hasSize(1);
     }
 
+    // Scan result archive
+
+    @Test
+    void keepsTheResultsOfAScanAsTheyWere() {
+        final var backend = project(system("Shop"), "backend");
+        final var scan = scan(backend, Scan.ScanStatus.COMPLETED);
+        final var other = scan(backend, Scan.ScanStatus.COMPLETED);
+
+        assertThat(scanResultArchive.exists(scan.id())).isFalse();
+        assertThat(scanResultArchive.load(scan.id())).isEmpty();
+
+        scanResultArchive.save(scan.id(), List.of(scanResult("backend"), scanResult("frontend")));
+        scanResultArchive.save(other.id(), List.of(scanResult("docs")));
+        // Again, which replaces what was kept
+        scanResultArchive.save(scan.id(), List.of(scanResult("backend"), scanResult("frontend")));
+
+        assertThat(scanResultArchive.exists(scan.id())).isTrue();
+        assertThat(scanResultArchive.load(scan.id()))
+            .extracting(result -> result.getTarget().getPath())
+            .containsExactly("backend", "frontend");
+        assertThat(scanResultArchive.load(scan.id()).getFirst()).isEqualTo(scanResult("backend"));
+
+        scanResultArchive.delete(scan.id());
+
+        assertThat(scanResultArchive.exists(scan.id())).isFalse();
+        assertThat(scanResultArchive.exists(other.id())).isTrue();
+    }
+
+    private static ScanResult scanResult(final String path) {
+        final var target = new ScanTarget();
+        target.setPath(path);
+        target.setLanguage(ScanTarget.Language.JAVA);
+
+        final var result = new ScanResult();
+        result.setTarget(target);
+
+        return result;
+    }
+
     // Scan stats
 
     @Test
@@ -490,6 +646,57 @@ class RepositoriesTest {
 
         assertThat(scanStatRepository.findByScanId(scan.id()))
             .contains(new ScanStats(id, scan.id(), backend.id(), 2, LANGUAGES, 8, 31));
+    }
+
+    @Test
+    void findsTheStatsOfTheLatestScanWithAny() {
+        final var backend = project(system("Shop"), "backend");
+        final var frontend = project(system("Shop"), "frontend");
+
+        final var older = scan(backend, Scan.ScanStatus.COMPLETED, Instant.now().minusSeconds(120));
+        final var latest = scan(backend, Scan.ScanStatus.COMPLETED, Instant.now().minusSeconds(60));
+        // Newer, but without stats yet
+        scan(backend, Scan.ScanStatus.RUNNING, Instant.now());
+        final var ofOtherProject = scan(frontend, Scan.ScanStatus.COMPLETED, Instant.now());
+
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), older.id(), backend.id(), 1, Map.of("JAVA", List.of("Order.java")), 1, 1));
+        final var stats = scanStatRepository.save(
+            new ScanStats(ScanStats.ScanStatId.generate(), latest.id(), backend.id(), 2, LANGUAGES, 8, 31)
+        );
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), ofOtherProject.id(), frontend.id(), 1, Map.of("JAVA", List.of("Order.java")), 1, 1));
+
+        assertThat(scanStatRepository.findLatestByProjectId(backend.id())).contains(stats);
+        assertThat(scanStatRepository.findLatestByProjectId(project(system("Shop"), "docs").id())).isEmpty();
+    }
+
+    @Test
+    void findsTheLatestStatsOfEachProjectOfASystem() {
+        final var shop = system("Shop");
+        final var backend = project(shop, "backend");
+        final var frontend = project(shop, "frontend");
+        // Without a scan
+        project(shop, "docs");
+        final var ofOtherSystem = project(system("Warehouse"), "stock");
+
+        final var older = scan(backend, Scan.ScanStatus.COMPLETED, Instant.now().minusSeconds(120));
+        final var latest = scan(backend, Scan.ScanStatus.COMPLETED, Instant.now().minusSeconds(60));
+        // Newer, but without stats yet
+        scan(backend, Scan.ScanStatus.RUNNING, Instant.now());
+        final var ofFrontend = scan(frontend, Scan.ScanStatus.COMPLETED, Instant.now());
+        final var elsewhere = scan(ofOtherSystem, Scan.ScanStatus.COMPLETED, Instant.now());
+
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), older.id(), backend.id(), 1, Map.of("JAVA", List.of("Order.java")), 1, 1));
+        final var ofBackend = scanStatRepository.save(
+            new ScanStats(ScanStats.ScanStatId.generate(), latest.id(), backend.id(), 2, LANGUAGES, 8, 31)
+        );
+        final var ofFrontendStats = scanStatRepository.save(
+            new ScanStats(ScanStats.ScanStatId.generate(), ofFrontend.id(), frontend.id(), 1, Map.of("TYPESCRIPT", List.of("app.ts")), 1, 1)
+        );
+        scanStatRepository.save(new ScanStats(ScanStats.ScanStatId.generate(), elsewhere.id(), ofOtherSystem.id(), 1, Map.of("JAVA", List.of("Stock.java")), 1, 1));
+
+        assertThat(scanStatRepository.findLatestBySystemId(shop.id()))
+            .containsExactlyInAnyOrder(ofBackend, ofFrontendStats);
+        assertThat(scanStatRepository.findLatestBySystemId(system("Empty").id())).isEmpty();
     }
 
     @Test

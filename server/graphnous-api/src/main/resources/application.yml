@@ -3,14 +3,15 @@ server:
 
 spring:
   neo4j:
-    uri: ${NEO4J_URI:bolt://localhost:6687}
+    uri: ${NEO4J_URI:bolt://localhost:8687}
     authentication:
       username: ${NEO4J_USERNAME:neo4j}
       password: ${NEO4J_PASSWORD:changeme}
   datasource:
-    url: jdbc:h2:mem:graphnous;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
+    # Defaults to the PostgreSQL of docker-compose.neo4j.yml, published on 8432
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:8432}/${POSTGRES_DB:graphnous}
+    username: ${POSTGRES_USER:graphnous}
+    password: ${POSTGRES_PASSWORD:graphnous}
 
   servlet:
     multipart:
@@ -19,7 +20,8 @@ spring:
       max-request-size: ${GRAPHNOUS_UPLOAD_MAX_REQUEST_SIZE:500MB}
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # The schema is Flyway's (db/migration)
+      ddl-auto: validate
     show-sql: false
 graphnous:
   security:
@@ -47,9 +49,9 @@ graphnous:
     # must have the volume mounted at path; use type host with a directory
     # on the Docker host when running the server directly on it.
     workspace:
-      type: volume
-      volume: graphnous-checkouts
-      path: /checkouts
+      type: ${GRAPHNOUS_WORKSPACE_TYPE:host}
+      volume: ${GRAPHNOUS_WORKSPACE_VOLUME:graphnous-checkouts}
+      path: ${GRAPHNOUS_WORKSPACE_PATH:${user.home}/graphnous-checkouts}
     git-image: alpine/git:2.54.0
   ai:
     openai:

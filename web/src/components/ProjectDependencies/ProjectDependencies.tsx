@@ -149,20 +149,28 @@ export type ProjectDependenciesProps = {
      * completed ones, the newest at first.
      */
     scans: Scan[];
+    /**
+     * The scan to show the dependencies of, and only that one: without
+     * choosing another, such as on the page of the scan itself. The other
+     * scans are what it is compared with.
+     */
+    scanId?: string;
 };
 
 /**
  * The libraries a project's scan found its modules depend on, searchable
  * and sortable, with what changed since the scan before it.
  */
-export function ProjectDependencies({ scans }: ProjectDependenciesProps) {
+export function ProjectDependencies({ scans, scanId: onlyScanId }: ProjectDependenciesProps) {
     const completed = completedScans(scans);
 
     const [chosenScanId, setChosenScanId] = useState<string | null>(null);
-    const scanId = chosenScanId ?? completed[0]?.id ?? null;
+    const scanId = onlyScanId ?? chosenScanId ?? completed[0]?.id ?? null;
 
-    // The completed scan before the chosen one, to compare with
-    const previousId = completed[completed.findIndex((scan) => scan.id === scanId) + 1]?.id ?? null;
+    // The completed scan before the chosen one, to compare with; none for
+    // a scan that is not among them
+    const index = completed.findIndex((scan) => scan.id === scanId);
+    const previousId = index < 0 ? null : completed[index + 1]?.id ?? null;
 
     const [query, setQuery] = useState("");
     const [sort, setSort] = useState<Sort<ScanDependencySort>>({ field: "name", direction: "asc" });
@@ -204,18 +212,20 @@ export function ProjectDependencies({ scans }: ProjectDependenciesProps) {
                         }}
                     />
                 </div>
-                <div className="ml-auto w-72">
-                    <Field label="Scan">
-                        <ScanSelector
-                            scans={scans}
-                            value={scanId}
-                            onScanChange={(scan) => {
-                                setChosenScanId(scan.id);
-                                setPageNumber(0);
-                            }}
-                        />
-                    </Field>
-                </div>
+                {!onlyScanId && (
+                    <div className="ml-auto w-72">
+                        <Field label="Scan">
+                            <ScanSelector
+                                scans={scans}
+                                value={scanId}
+                                onScanChange={(scan) => {
+                                    setChosenScanId(scan.id);
+                                    setPageNumber(0);
+                                }}
+                            />
+                        </Field>
+                    </div>
+                )}
             </div>
 
             {error && (

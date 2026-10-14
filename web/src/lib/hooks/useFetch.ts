@@ -11,6 +11,14 @@ type Loaded<T> = {
     error: Error | null;
 };
 
+export type UseFetchOptions = {
+    /**
+     * A 404 is no data rather than an error, for something that may not
+     * exist yet.
+     */
+    notFoundAsEmpty?: boolean;
+};
+
 /**
  * Loads JSON from the path, and again when it changes; no path, nothing.
  * A response for a path that is no longer asked for is ignored. refresh
@@ -19,7 +27,7 @@ type Loaded<T> = {
  *
  * @param failure what to say when the request fails
  */
-export function useFetch<T>(path: string | null, failure: string) {
+export function useFetch<T>(path: string | null, failure: string, { notFoundAsEmpty = false }: UseFetchOptions = {}) {
     const [loaded, setLoaded] = useState<Loaded<T> | null>(null);
 
     // The refreshes still running
@@ -46,7 +54,7 @@ export function useFetch<T>(path: string | null, failure: string) {
 
         let current = true;
 
-        fetchJson<T>(path, failure).then(
+        fetchJson<T>(path, failure, notFoundAsEmpty).then(
             (data) => current && setLoaded({ path, data, error: null }),
             (error: unknown) => current && setLoaded(failed(error)),
         );
@@ -54,7 +62,7 @@ export function useFetch<T>(path: string | null, failure: string) {
         return () => {
             current = false;
         };
-    }, [path, failure, failed]);
+    }, [path, failure, notFoundAsEmpty, failed]);
 
     const refresh = useCallback(async () => {
         if (!path) {
@@ -64,7 +72,7 @@ export function useFetch<T>(path: string | null, failure: string) {
         setRefreshing((count) => count + 1);
 
         try {
-            const data = await fetchJson<T>(path, failure);
+            const data = await fetchJson<T>(path, failure, notFoundAsEmpty);
 
             if (latest.current === path) {
                 setLoaded({ path, data, error: null });
@@ -76,7 +84,7 @@ export function useFetch<T>(path: string | null, failure: string) {
         } finally {
             setRefreshing((count) => count - 1);
         }
-    }, [path, failure, failed]);
+    }, [path, failure, notFoundAsEmpty, failed]);
 
     const current = path !== null && loaded?.path === path ? loaded : null;
 
@@ -88,8 +96,12 @@ export function useFetch<T>(path: string | null, failure: string) {
     };
 }
 
-async function fetchJson<T>(path: string, failure: string): Promise<T> {
+async function fetchJson<T>(path: string, failure: string, notFoundAsEmpty: boolean): Promise<T | null> {
     const response = await fetch(path);
+
+    if (notFoundAsEmpty && response.status === 404) {
+        return null;
+    }
 
     if (!response.ok) {
         throw new Error(failure);

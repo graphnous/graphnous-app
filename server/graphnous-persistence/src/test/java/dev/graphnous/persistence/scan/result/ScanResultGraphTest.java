@@ -2,7 +2,9 @@ package dev.graphnous.persistence.scan.result;
 
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.File;
+import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.Module;
+import dev.graphnous.core.model.Parameter;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget;
 import org.junit.jupiter.api.Test;
@@ -102,6 +104,38 @@ class ScanResultGraphTest {
         assertThat(shop.methodAnnotations())
             .extracting(row -> row.get("id"), row -> row.get("ownerId"))
             .containsExactly(tuple(orders + "|function:app.orders.total|annotation:0", orders + "|function:app.orders.total"));
+    }
+
+    @Test
+    void storesTheUnknownTypeOfAParameterAsEmptySoTheTypesStayInLine() {
+        // An untyped TypeScript parameter has no type, and Neo4j cannot store null in a list
+        final var untyped = new Parameter();
+        untyped.setName("order");
+
+        final var function = new Method();
+        function.setName("total");
+        function.setQualifiedName("orders.total");
+        function.getParameters().add(untyped);
+
+        final var file = new File();
+        file.setPath("src/orders.ts");
+        file.getFunctions().add(function);
+
+        final var module = new Module();
+        module.setPath(".");
+        module.getFiles().add(file);
+
+        final var target = new ScanTarget();
+        target.setPath("web");
+        target.setLanguage(ScanTarget.Language.TYPESCRIPT);
+
+        final var result = new ScanResult();
+        result.setTarget(target);
+        result.getModules().add(module);
+
+        assertThat(ScanResultGraph.of("scan", List.of(result)).functions().getFirst())
+            .containsEntry("parameterNames", List.of("order"))
+            .containsEntry("parameterTypes", List.of(""));
     }
 
     @Test

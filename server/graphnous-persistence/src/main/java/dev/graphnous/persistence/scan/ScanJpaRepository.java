@@ -23,6 +23,33 @@ public interface ScanJpaRepository extends JpaRepository<ScanEntity, UUID> {
     );
 
 
+    @Query("""
+        SELECT s FROM ScanEntity s
+        WHERE s.projectId IN (SELECT p.id FROM ProjectEntity p WHERE p.systemId = :systemId)
+        """)
+    Page<ScanEntity> findAllBySystemId(
+        @Param("systemId") final UUID systemId,
+        final Pageable pageable
+    );
+
+    /**
+     * The most recently created scan with the status of each project of the
+     * system.
+     */
+    @Query("""
+        SELECT s FROM ScanEntity s
+        WHERE s.status = :status
+          AND s.projectId IN (SELECT p.id FROM ProjectEntity p WHERE p.systemId = :systemId)
+          AND s.createdAt = (
+            SELECT MAX(other.createdAt) FROM ScanEntity other
+            WHERE other.projectId = s.projectId AND other.status = :status
+          )
+        """)
+    List<ScanEntity> findLatestBySystemIdAndStatus(
+        @Param("systemId") final UUID systemId,
+        @Param("status") final Scan.ScanStatus status
+    );
+
     List<ScanEntity> findAllByStatusIn(
         final Collection<Scan.ScanStatus> statuses
     );

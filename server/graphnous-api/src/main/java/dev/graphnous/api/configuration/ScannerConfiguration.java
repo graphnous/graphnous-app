@@ -20,6 +20,7 @@ import dev.graphnous.application.project.scanner.SourceCheckout;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
+import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.application.ssh.SshKeyRetriever;
 import dev.graphnous.enhancer.EnhancerProvider;
@@ -57,6 +58,7 @@ public class ScannerConfiguration {
         final SourceCheckout sourceCheckout,
         final RepositoryScanner repositoryScanner,
         final ScanResultRepository scanResultRepository,
+        final ScanResultArchive scanResultArchive,
         final EnhancerProvider enhancerProvider,
         final EnhancementRepository enhancementRepository,
         final ScanSteps scanSteps,
@@ -71,6 +73,7 @@ public class ScannerConfiguration {
             sourceCheckout,
             repositoryScanner,
             scanResultRepository,
+            scanResultArchive,
             enhancerProvider,
             enhancementRepository,
             scanSteps,

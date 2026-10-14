@@ -4,6 +4,7 @@ import dev.graphnous.application.chat.ChatThreadRepository;
 import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.domain.chat.ChatThread;
+import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.system.System;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -37,18 +38,37 @@ public class ChatThreadRepositoryImpl implements ChatThreadRepository {
         final UUID userId,
         final PageQuery pageQuery
     ) {
+        final var pageable = pageable(pageQuery);
+
+        // A parameter equal to null matches no row, so null is asked for apart
+        return page(userId == null
+            ? this.jpaRepository.findAllBySystemIdAndUserIdIsNullAndProjectIdIsNull(systemId.id(), pageable)
+            : this.jpaRepository.findAllBySystemIdAndUserIdAndProjectIdIsNull(systemId.id(), userId, pageable));
+    }
+
+    @Override
+    public Page<ChatThread> findAllOfProject(
+        final Project.ProjectId projectId,
+        final UUID userId,
+        final PageQuery pageQuery
+    ) {
+        final var pageable = pageable(pageQuery);
+
+        return page(userId == null
+            ? this.jpaRepository.findAllByProjectIdAndUserIdIsNull(projectId.id(), pageable)
+            : this.jpaRepository.findAllByProjectIdAndUserId(projectId.id(), userId, pageable));
+    }
+
+    private static PageRequest pageable(final PageQuery pageQuery) {
         final var sort = switch (pageQuery.sort().direction()) {
             case ASC -> Sort.by(pageQuery.sort().property()).ascending();
             case DESC -> Sort.by(pageQuery.sort().property()).descending();
         };
 
-        final var pageable = PageRequest.of(pageQuery.page(), pageQuery.size(), sort);
+        return PageRequest.of(pageQuery.page(), pageQuery.size(), sort);
+    }
 
-        // A parameter equal to null matches no row, so null is asked for apart
-        final var result = userId == null
-            ? this.jpaRepository.findAllBySystemIdAndUserIdIsNull(systemId.id(), pageable)
-            : this.jpaRepository.findAllBySystemIdAndUserId(systemId.id(), userId, pageable);
-
+    private static Page<ChatThread> page(final org.springframework.data.domain.Page<ChatThreadEntity> result) {
         return new Page<>(
             result.stream().map(ChatThreadRepositoryImpl::toDomain).toList(),
             result.getNumber(),
@@ -64,6 +84,11 @@ public class ChatThreadRepositoryImpl implements ChatThreadRepository {
     }
 
     @Override
+    public void deleteByProjectId(final Project.ProjectId projectId) {
+        this.jpaRepository.deleteByProjectId(projectId.id());
+    }
+
+    @Override
     public void deleteBySystemId(final System.SystemId systemId) {
         this.jpaRepository.deleteBySystemId(systemId.id());
     }
@@ -74,6 +99,7 @@ public class ChatThreadRepositoryImpl implements ChatThreadRepository {
         entity.setId(thread.id().id());
         entity.setSystemId(thread.systemId().id());
         entity.setUserId(thread.userId());
+        entity.setProjectId(thread.projectId() == null ? null : thread.projectId().id());
         entity.setTitle(thread.title());
         entity.setMessages(thread.messages());
         entity.setCreatedAt(thread.createdAt());
@@ -90,7 +116,8 @@ public class ChatThreadRepositoryImpl implements ChatThreadRepository {
             entity.getTitle(),
             entity.getMessages(),
             entity.getCreatedAt(),
-            entity.getUpdatedAt()
+            entity.getUpdatedAt(),
+            entity.getProjectId() == null ? null : new Project.ProjectId(entity.getProjectId())
         );
     }
 }

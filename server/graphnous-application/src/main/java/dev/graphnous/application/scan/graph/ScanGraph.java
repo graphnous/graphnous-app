@@ -139,14 +139,60 @@ public final class ScanGraph {
      *                  none was asked for
      * @param truncated whether there were more nodes within reach than it
      *                  holds; the nearest are kept
+     * @param layers    every layer of the scan's graph, whether shown or
+     *                  not: what the scan found, then what each enhancer
+     *                  added
      */
     public record Neighbourhood(
         String focus,
         int depth,
         List<Node> nodes,
         List<Edge> edges,
-        boolean truncated
+        boolean truncated,
+        List<Layer> layers
     ) {
+
+        /**
+         * A neighbourhood whose layers are not known.
+         */
+        public Neighbourhood(
+            final String focus,
+            final int depth,
+            final List<Node> nodes,
+            final List<Edge> edges,
+            final boolean truncated
+        ) {
+            this(focus, depth, nodes, edges, truncated, List.of());
+        }
+    }
+
+    /**
+     * A part of a scan's graph that shows or hides as one: what the scan
+     * itself found, or what one enhancer added to it.
+     *
+     * @param id   {@link #RESULT} for what the scan found; the enhancer's
+     *             name, an {@code @} and its version for what it added,
+     *             such as {@code spring@1.0.0}; {@link #USAGES} for what
+     *             the bodies of methods use
+     * @param name what to call it, such as {@code spring 1.0.0}
+     */
+    public record Layer(
+        String id,
+        String name
+    ) {
+
+        /**
+         * The id of the layer of what the scan itself found.
+         */
+        public static final String RESULT = "result";
+
+        /**
+         * The id of the layer of what the bodies of methods and functions
+         * use: what they call, create, read, write and name. Unlike the
+         * others it adds relationships, not nodes, and very many of them,
+         * so it only shows when it is asked for by name.
+         */
+        public static final String USAGES = "usages";
     }
 
     /**

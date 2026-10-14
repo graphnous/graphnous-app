@@ -14,6 +14,7 @@ import dev.graphnous.application.scan.ScanCompletedEvent;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
+import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget;
@@ -84,6 +85,9 @@ class ProjectScannerTest {
 
     @Mock
     private ScanResultRepository scanResultRepository;
+
+    @Mock
+    private ScanResultArchive scanResultArchive;
 
     @Mock
     private EnhancerProvider enhancerProvider;
@@ -326,6 +330,71 @@ class ProjectScannerTest {
     }
 
     @Test
+    void leavesTheFilesOutBeforeAnythingIsEnhancedOrStored() {
+        final var result = scanResult();
+        final var module = new dev.graphnous.core.model.Module();
+        module.setPath(".");
+
+        for (final var path : List.of("src/Order.java", "src/OrderTest.java")) {
+            final var file = new dev.graphnous.core.model.File();
+            file.setPath(path);
+            module.getFiles().add(file);
+        }
+
+        result.getModules().add(module);
+
+        final var excluding = new Scan(
+            scan.id(), project.id(), Scan.ScanStatus.PENDING, scan.revision(),
+            scan.createdAt(), scan.updatedAt(), null, null, List.of("*Test.java")
+        );
+
+        when(scanService.getScan(context, scan.id())).thenReturn(excluding, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
+        when(enhancerProvider.enhanceScan(any())).thenAnswer(call -> {
+            // Already without the test when the enhancers see it
+            assertThat(call.<ScanResult>getArgument(0).getModules().getFirst().getFiles()).hasSize(1);
+
+            return List.of();
+        });
+
+        start();
+
+        assertThat(module.getFiles()).extracting(dev.graphnous.core.model.File::getPath).containsExactly("src/Order.java");
+        verify(scanLogService).log(scan.id(), ScanLogLevel.INFO, "Left out 1 file(s) matching *Test.java");
+        verify(scanResultRepository).save(scan.id(), List.of(result));
+        verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+    }
+
+    @Test
+    void keepsTheResultsToEnhanceAgainLater() {
+        final var result = scanResult();
+
+        when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
+
+        start();
+
+        final var order = inOrder(scanResultRepository, scanResultArchive);
+        order.verify(scanResultRepository).save(scan.id(), List.of(result));
+        order.verify(scanResultArchive).save(scan.id(), List.of(result));
+    }
+
+    @Test
+    void completesAScanWhoseResultsCouldNotBeKept() {
+        final var result = scanResult();
+
+        when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
+        doThrow(new IllegalStateException("Disk full")).when(scanResultArchive).save(any(), any());
+
+        start();
+
+        verify(scanLogService).log(scan.id(), ScanLogLevel.WARN, "Failed to keep the results to enhance again later: Disk full");
+        assertThat(steps.step(scan.id(), STORE).status()).isEqualTo(COMPLETED);
+        verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+    }
+
+    @Test
     void storesTheEnhancementsAfterTheResults() {
         final var result = scanResult();
         final var enhancement = enhancement();
@@ -346,6 +415,29 @@ class ProjectScannerTest {
         // Nothing enhances the scan as a whole yet
         assertThat(steps.step(scan.id(), ENHANCE_SCAN).status()).isEqualTo(SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
+    }
+
+    @Test
+    void runsOnlyTheEnhancersChosenForTheScan() {
+        final var result = scanResult();
+        final var spring = org.mockito.Mockito.mock(dev.graphnous.enhancer.Enhancer.class);
+        final var react = org.mockito.Mockito.mock(dev.graphnous.enhancer.Enhancer.class);
+
+        when(spring.name()).thenReturn("spring");
+        when(react.name()).thenReturn("react");
+
+        when(scanService.getScan(context, scan.id())).thenReturn(scan, scan(Scan.ScanStatus.RUNNING));
+        when(repositoryScanner.scan(eq(scan.id()), any(), any(), any(), any())).thenReturn(new ScanReport(List.of(result), List.of()));
+
+        final var chosen = ArgumentCaptor.forClass(java.util.function.Predicate.class);
+        when(enhancerProvider.enhanceScan(eq(result), chosen.capture())).thenReturn(List.of(enhancement()));
+
+        scanner().startScan(new StartScanCommand(scan.id(), java.util.Set.of("spring")), context);
+
+        assertThat(chosen.getValue().test(spring)).isTrue();
+        assertThat(chosen.getValue().test(react)).isFalse();
+        verify(enhancerProvider, never()).enhanceScan(result);
+        verify(enhancementRepository).save(scan.id(), List.of(enhancement()));
     }
 
     @Test
@@ -494,6 +586,7 @@ class ProjectScannerTest {
             sourceCheckout,
             repositoryScanner,
             scanResultRepository,
+            scanResultArchive,
             enhancerProvider,
             enhancementRepository,
             new ScanSteps(steps, Clock.systemUTC()),

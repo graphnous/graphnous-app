@@ -99,6 +99,18 @@ class ScanGraphServiceTest {
     }
 
     @Test
+    void showsOnlyTheLayersAskedFor() {
+        when(scanGraphRepository.findNeighbourhood(any(), any(), anyInt(), anyInt(), any()))
+            .thenReturn(Optional.of(new ScanGraph.Neighbourhood("scan", 2, List.of(), List.of(), false)));
+
+        service().getNeighbourhood(context, scanId, null, null, List.of(" result ", "", "spring@1.0.0"));
+
+        verify(scanGraphRepository).findNeighbourhood(
+            scanId, null, ScanGraphService.DEFAULT_SCAN_DEPTH, ScanGraphService.MAX_NODES, java.util.Set.of("result", "spring@1.0.0")
+        );
+    }
+
+    @Test
     void showsTheTargetsAndModulesOfTheScanByDefault() {
         when(scanGraphRepository.findNeighbourhood(any(), any(), anyInt(), anyInt()))
             .thenReturn(Optional.of(new ScanGraph.Neighbourhood("scan", 2, List.of(), List.of(), false)));

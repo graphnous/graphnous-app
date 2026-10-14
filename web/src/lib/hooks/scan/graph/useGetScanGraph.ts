@@ -16,6 +16,11 @@ export type UseGetScanGraphOptions = {
      * around the scan, 1 around a node.
      */
     depth?: number | null;
+    /**
+     * The ids of the layers to show, such as only what one enhancer added;
+     * every layer when missing, only the focus when empty.
+     */
+    layers?: string[] | null;
 };
 
 /**
@@ -29,17 +34,17 @@ type Loaded = {
 
 /**
  * The part of a scan's graph around a node, loaded again when the scan,
- * focus or depth change. While the next one loads, the last one stays, so
+ * focus, depth or layers change. While the next one loads, the last one stays, so
  * a graph being explored does not blink out; a request that answers after
  * a newer one was made is ignored.
  */
-export function useGetScanGraph({ scanId, focus, depth }: UseGetScanGraphOptions) {
+export function useGetScanGraph({ scanId, focus, depth, layers }: UseGetScanGraphOptions) {
     const [loaded, setLoaded] = useState<Loaded>({ request: null, graph: null, error: null });
 
     // Counts refreshes, so refreshing makes a request of its own
     const [refreshes, setRefreshes] = useState(0);
 
-    const path = scanId ? graphPath(scanId, focus, depth) : null;
+    const path = scanId ? graphPath(scanId, focus, depth, layers) : null;
     const request = path ? `${path}#${refreshes}` : null;
 
     useEffect(() => {
@@ -74,7 +79,12 @@ export function useGetScanGraph({ scanId, focus, depth }: UseGetScanGraphOptions
     };
 }
 
-function graphPath(scanId: string, focus?: string | null, depth?: number | null): string {
+export function graphPath(
+    scanId: string,
+    focus?: string | null,
+    depth?: number | null,
+    layers?: string[] | null,
+): string {
     const query = new URLSearchParams();
 
     if (focus) {
@@ -85,12 +95,17 @@ function graphPath(scanId: string, focus?: string | null, depth?: number | null)
         query.set("depth", String(depth));
     }
 
+    if (layers) {
+        // In one order, so the same layers are the same request
+        query.set("layers", [...layers].sort().join(","));
+    }
+
     const search = query.size > 0 ? `?${query}` : "";
 
     return `/api/scans/${encodeURIComponent(scanId)}/graph${search}`;
 }
 
-async function fetchGraph(path: string): Promise<ScanGraph> {
+export async function fetchGraph(path: string): Promise<ScanGraph> {
     const response = await fetch(path);
 
     if (!response.ok) {

@@ -6,6 +6,7 @@ import dev.graphnous.core.model.ScanTarget.Language;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -25,8 +26,22 @@ public class EnhancerProvider {
      * @return what each enhancer added, in the order they ran
      */
     public List<Enhancements> enhanceScan(final ScanResult scanResult) {
+        return enhanceScan(scanResult, enhancer -> true);
+    }
+
+    /**
+     * Runs those of the enhancers for each language of the scan result
+     * that are chosen on it.
+     *
+     * @return what each enhancer added, in the order they ran
+     */
+    public List<Enhancements> enhanceScan(
+        final ScanResult scanResult,
+        final Predicate<Enhancer> chosen
+    ) {
         return languages(scanResult)
             .flatMap(language -> enhancerRegistry.enhancersFor(language).stream())
+            .filter(chosen)
             .map(enhancer -> enhancer.enhance(scanResult))
             .toList();
     }

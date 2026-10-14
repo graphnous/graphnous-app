@@ -44,7 +44,7 @@ class ScanGraphControllerTest {
         final var scan = scanId.id().toString();
         final var target = scan + "|backend";
 
-        when(scanGraphService.getNeighbourhood(any(), eq(scanId), isNull(), isNull())).thenReturn(
+        when(scanGraphService.getNeighbourhood(any(), eq(scanId), isNull(), isNull(), isNull())).thenReturn(
             new ScanGraph.Neighbourhood(
                 scan,
                 2,
@@ -71,10 +71,32 @@ class ScanGraphControllerTest {
     }
 
     @Test
+    void passesTheLayersShownAndListsEveryLayer() throws Exception {
+        final var scan = scanId.id().toString();
+
+        when(scanGraphService.getNeighbourhood(any(), eq(scanId), isNull(), isNull(), eq(List.of("result", "spring@1.0.0")))).thenReturn(
+            new ScanGraph.Neighbourhood(
+                scan, 2, List.of(), List.of(), false,
+                List.of(
+                    new ScanGraph.Layer("result", "Scan result"),
+                    new ScanGraph.Layer("spring@1.0.0", "spring 1.0.0"),
+                    new ScanGraph.Layer("jpa@2.1.0", "jpa 2.1.0")
+                )
+            )
+        );
+
+        mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("layers", "result,spring@1.0.0"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.layers.length()").value(3))
+            .andExpect(jsonPath("$.layers[1].id").value("spring@1.0.0"))
+            .andExpect(jsonPath("$.layers[1].name").value("spring 1.0.0"));
+    }
+
+    @Test
     void passesTheFocusAndDepth() throws Exception {
         final var focus = scanId.id() + "|backend|orders|class:com.example.Order";
 
-        when(scanGraphService.getNeighbourhood(any(), eq(scanId), eq(focus), eq(3))).thenReturn(
+        when(scanGraphService.getNeighbourhood(any(), eq(scanId), eq(focus), eq(3), isNull())).thenReturn(
             new ScanGraph.Neighbourhood(focus, 3, List.of(), List.of(), true)
         );
 
@@ -88,7 +110,7 @@ class ScanGraphControllerTest {
 
     @Test
     void answersNotFoundForANodeThatIsNotInTheScan() throws Exception {
-        when(scanGraphService.getNeighbourhood(any(), any(), any(), any()))
+        when(scanGraphService.getNeighbourhood(any(), any(), any(), any(), any()))
             .thenThrow(new NotFoundException("Not in the graph"));
 
         mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("focus", "missing"))
@@ -97,7 +119,7 @@ class ScanGraphControllerTest {
 
     @Test
     void answersBadRequestForADepthOutOfRange() throws Exception {
-        when(scanGraphService.getNeighbourhood(any(), any(), any(), eq(9)))
+        when(scanGraphService.getNeighbourhood(any(), any(), any(), eq(9), any()))
             .thenThrow(new ValidationException("depth must be between 0 and 5"));
 
         mockMvc.perform(get("/api/v1/scans/{id}/graph", scanId.id()).queryParam("depth", "9"))

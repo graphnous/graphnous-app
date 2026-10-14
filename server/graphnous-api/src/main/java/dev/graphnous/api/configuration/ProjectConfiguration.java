@@ -1,5 +1,6 @@
 package dev.graphnous.api.configuration;
 
+import dev.graphnous.application.chat.ChatThreadRepository;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.entitlement.EntitlementService;
 import dev.graphnous.application.notification.NotificationRepository;
@@ -35,12 +36,14 @@ public class ProjectConfiguration {
     ProjectDeleter projectDeleter(
         final ProjectRepository projectRepository,
         final ScanDeleter scanDeleter,
-        final NotificationRepository notificationRepository
+        final NotificationRepository notificationRepository,
+        final ChatThreadRepository chatThreadRepository
     ) {
         return new ProjectDeleter(
             projectRepository,
             scanDeleter,
-            notificationRepository
+            notificationRepository,
+            chatThreadRepository
         );
     }
 

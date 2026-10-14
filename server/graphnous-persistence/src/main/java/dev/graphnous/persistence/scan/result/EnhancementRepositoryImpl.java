@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 @Repository
 public class EnhancementRepositoryImpl implements EnhancementRepository {
 
-    static final String ENHANCEMENT = "Enhancement";
+    public static final String ENHANCEMENT = "Enhancement";
     /**
      * The label every node an enhancer adds has, besides its own.
      */
@@ -71,6 +71,22 @@ public class EnhancementRepositoryImpl implements EnhancementRepository {
     public void save(
         final Scan.ScanId scanId,
         final List<Enhancements> enhancements
+    ) {
+        save(scanId, enhancements, false);
+    }
+
+    @Override
+    public void replace(
+        final Scan.ScanId scanId,
+        final List<Enhancements> enhancements
+    ) {
+        save(scanId, enhancements, true);
+    }
+
+    private void save(
+        final Scan.ScanId scanId,
+        final List<Enhancements> enhancements,
+        final boolean replace
     ) {
         if (enhancements.isEmpty()) {
             return;
@@ -119,6 +135,22 @@ public class EnhancementRepositoryImpl implements EnhancementRepository {
 
         try (final var session = driver.session()) {
             session.executeWriteWithoutResult(tx -> {
+                if (replace) {
+                    // Whichever version added them: the nodes first, then the record
+                    final var names = enhancements.stream().map(Enhancements::name).distinct().toList();
+
+                    tx.run("""
+                        MATCH (enhancement:%1$s {scanId: $scanId})-[:ADDED]->(node:%2$s)
+                        WHERE enhancement.name IN $names
+                        DETACH DELETE node
+                        """.formatted(ENHANCEMENT, ENHANCED), Map.of("scanId", id, "names", names)).consume();
+                    tx.run("""
+                        MATCH (enhancement:%s {scanId: $scanId})
+                        WHERE enhancement.name IN $names
+                        DETACH DELETE enhancement
+                        """.formatted(ENHANCEMENT), Map.of("scanId", id, "names", names)).consume();
+                }
+
                 write(tx, id, List.copyOf(enhancers.values()), """
                     MATCH (scan:Scan {id: $scanId})
                     UNWIND $rows AS row

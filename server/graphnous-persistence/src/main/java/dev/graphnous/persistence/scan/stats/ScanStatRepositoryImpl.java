@@ -4,8 +4,11 @@ import dev.graphnous.application.scan.stats.ScanStatRepository;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.scan.stats.ScanStats;
+import dev.graphnous.domain.system.System;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -25,6 +28,20 @@ public class ScanStatRepositoryImpl implements ScanStatRepository {
     @Override
     public Optional<ScanStats> findByScanId(final Scan.ScanId scanId) {
         return this.jpaRepository.findByScanId(scanId.id()).map(ScanStatRepositoryImpl::toDomain);
+    }
+
+    @Override
+    public Optional<ScanStats> findLatestByProjectId(final Project.ProjectId projectId) {
+        return this.jpaRepository.findLatestByProjectId(projectId.id(), PageRequest.of(0, 1)).stream()
+            .findFirst()
+            .map(ScanStatRepositoryImpl::toDomain);
+    }
+
+    @Override
+    public List<ScanStats> findLatestBySystemId(final System.SystemId systemId) {
+        return this.jpaRepository.findLatestBySystemId(systemId.id()).stream()
+            .map(ScanStatRepositoryImpl::toDomain)
+            .toList();
     }
 
     @Override

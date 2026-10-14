@@ -1,5 +1,7 @@
 package dev.graphnous.application.project;
 
+import dev.graphnous.application.exception.ValidationException;
+import dev.graphnous.application.scan.result.ScanExcludes;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.RequestContext;
@@ -14,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public class ProjectService {
@@ -217,5 +220,51 @@ public class ProjectService {
     ) {
         return this.projectRepository.getOrCreateSnapshot(projectId);
     }
-}
 
+    /**
+     * The patterns of the files the project leaves out of its scans, such
+     * as {@code *.spec.ts}; a scan can be created with other ones.
+     */
+    public List<String> getScanExcludes(
+        final RequestContext context,
+        final Project.ProjectId id
+    ) {
+        // Only for a project the caller may read
+        this.getProject(context, id);
+
+        final var excludes = this.projectRepository.findScanExcludes(id);
+
+        return excludes == null ? List.of() : excludes;
+    }
+
+    /**
+     * Sets the patterns of the files the project leaves out of its scans
+     * from now on; the scans it has stay as they are.
+     *
+     * @return the patterns as they are kept
+     * @throws ValidationException when there are too many, or one is not
+     *                             well formed
+     */
+    public List<String> updateScanExcludes(
+        final RequestContext context,
+        final Project.ProjectId id,
+        final List<String> excludes
+    ) {
+        this.authorizationService.authorize(context, Permission.PROJECT_UPDATE);
+
+        this.getProject(context, id);
+
+        final var normalized = ScanExcludes.normalize(excludes);
+
+        log.info(
+            "Updating scan excludes of project id={} organizationId={} patterns={}",
+            id.id(),
+            context.organization().id(),
+            normalized.size()
+        );
+
+        this.projectRepository.saveScanExcludes(id, normalized);
+
+        return normalized;
+    }
+}

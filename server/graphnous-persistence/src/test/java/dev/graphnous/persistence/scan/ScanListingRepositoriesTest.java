@@ -7,6 +7,8 @@ import dev.graphnous.application.scan.classes.ScanClass;
 import dev.graphnous.application.scan.classes.ScanClassFilter;
 import dev.graphnous.application.scan.dependencies.ScanDependency;
 import dev.graphnous.application.scan.dependencies.ScanDependencyFilter;
+import dev.graphnous.application.scan.dependencies.SystemDependency;
+import dev.graphnous.application.scan.dependencies.SystemLibrary;
 import dev.graphnous.application.scan.files.ScanFile;
 import dev.graphnous.application.scan.files.ScanFileFilter;
 import dev.graphnous.application.scan.methods.ScanMethod;
@@ -16,6 +18,7 @@ import dev.graphnous.application.scan.modules.ScanModuleFilter;
 import dev.graphnous.application.scan.packages.ScanPackage;
 import dev.graphnous.application.scan.packages.ScanPackageFilter;
 import dev.graphnous.core.model.ScanResult;
+import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.persistence.scan.classes.ScanClassRepositoryImpl;
 import dev.graphnous.persistence.scan.dependencies.ScanDependencyRepositoryImpl;
@@ -36,6 +39,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.neo4j.Neo4jContainer;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -284,6 +288,91 @@ class ScanListingRepositoriesTest {
         assertThat(new ScanMethodRepositoryImpl(driver).findMethods(other, ScanMethodFilter.none(), sortedBy("name")).totalElements()).isZero();
         assertThat(new ScanDependencyRepositoryImpl(driver).findDependencies(other, ScanDependencyFilter.none(), sortedBy("name")).content())
             .isEmpty();
+    }
+
+    @Test
+    void listsTheDependenciesOfSeveralScansWithTheirProjects() throws IOException {
+        final var scans = twoProjects();
+        final var repository = new ScanDependencyRepositoryImpl(driver);
+
+        final var dependencies = repository.findDependencies(scans, ScanDependencyFilter.none(), sortedBy("name"));
+
+        assertThat(dependencies.totalElements()).isEqualTo(4);
+        assertThat(dependencies.content())
+            .extracting(SystemDependency::projectId, SystemDependency::scanId, row -> row.dependency().name(), row -> row.dependency().version())
+            .containsExactlyInAnyOrder(
+                tuple(scans.get(0).projectId(), scans.get(0).id(), "org.junit.jupiter:junit-jupiter", null),
+                tuple(scans.get(1).projectId(), scans.get(1).id(), "org.junit.jupiter:junit-jupiter", null),
+                tuple(scans.get(0).projectId(), scans.get(0).id(), "org.slf4j:slf4j-api", "2.0.18"),
+                tuple(scans.get(1).projectId(), scans.get(1).id(), "org.slf4j:slf4j-api", "2.0.9")
+            );
+        assertThat(repository.findDependencies(scans, new ScanDependencyFilter("slf4j", null, null), sortedBy("name")).content())
+            .hasSize(2);
+        // Only the scans asked for
+        assertThat(repository.findDependencies(scans.subList(1, 2), ScanDependencyFilter.none(), sortedBy("name")).content())
+            .extracting(SystemDependency::scanId).containsOnly(scans.get(1).id());
+        assertThat(repository.findDependencies(List.of(), ScanDependencyFilter.none(), sortedBy("name")).content()).isEmpty();
+    }
+
+    @Test
+    void groupsTheLibrariesOfSeveralScansByTheVersionsInUse() throws IOException {
+        final var scans = twoProjects();
+        final var first = scans.get(0).projectId();
+        final var second = scans.get(1).projectId();
+        final var repository = new ScanDependencyRepositoryImpl(driver);
+
+        final var libraries = repository.findLibraries(scans, null, false, sortedBy("name"));
+
+        assertThat(libraries.totalElements()).isEqualTo(2);
+        assertThat(libraries.content()).extracting(SystemLibrary::name)
+            .containsExactly("org.junit.jupiter:junit-jupiter", "org.slf4j:slf4j-api");
+
+        // One version, used by both projects
+        final var junit = libraries.content().get(0);
+        assertThat(junit.versions()).hasSize(1);
+        assertThat(junit.versions().getFirst().version()).isNull();
+        assertThat(junit.versions().getFirst().projects()).containsExactlyInAnyOrder(first, second);
+
+        // Two versions, one project each
+        assertThat(libraries.content().get(1).versions()).containsExactly(
+            new SystemLibrary.Version("2.0.18", List.of(first)),
+            new SystemLibrary.Version("2.0.9", List.of(second))
+        );
+
+        assertThat(repository.findLibraries(scans, null, true, sortedBy("name")).content())
+            .extracting(SystemLibrary::name).containsExactly("org.slf4j:slf4j-api");
+        assertThat(repository.findLibraries(scans, "JUNIT", false, sortedBy("name")).content())
+            .extracting(SystemLibrary::name).containsExactly("org.junit.jupiter:junit-jupiter");
+        // The most versions first
+        assertThat(repository.findLibraries(scans, null, false, new PageQuery(0, 1, new Sort("versions", Sort.Direction.DESC))).content())
+            .extracting(SystemLibrary::name).containsExactly("org.slf4j:slf4j-api");
+        assertThat(repository.findLibraries(List.of(), null, false, sortedBy("name")).content()).isEmpty();
+    }
+
+    /**
+     * The stored scan as one project's, and a second scan as another's,
+     * which uses another version of slf4j.
+     */
+    private List<Scan> twoProjects() throws IOException {
+        final var other = createScan();
+        final var result = read("/scan-result.json");
+
+        result.getModules().forEach(module -> module.getDependencies().stream()
+            .filter(dependency -> dependency.getName().equals("org.slf4j:slf4j-api"))
+            .forEach(dependency -> dependency.setVersion("2.0.9")));
+
+        new ScanResultRepositoryImpl(driver).save(other, List.of(result));
+
+        return List.of(completed(scanId), completed(other));
+    }
+
+    private static Scan completed(final Scan.ScanId id) {
+        final var now = Instant.now();
+
+        return new Scan(
+            id, Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("abc123", "main"), now, now, now
+        );
     }
 
     private String scan() {

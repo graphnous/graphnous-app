@@ -26,6 +26,7 @@ const aroundOrder: ScanGraph = {
   focus: order,
   depth: 1,
   truncated: false,
+  layers: [{ id: "result", name: "Scan result" }],
   nodes: [
     node(order, "Class", "Order", 0, {
       qualifiedName: "com.example.Order",
@@ -60,6 +61,7 @@ const aroundScan: ScanGraph = {
   focus: scan,
   depth: 3,
   truncated: false,
+  layers: [{ id: "result", name: "Scan result" }],
   nodes: [
     node(scan, "Scan", "Scan", 0),
     node(target, "ScanTarget", "backend", 1, { language: "JAVA", buildSystem: "MAVEN" }),

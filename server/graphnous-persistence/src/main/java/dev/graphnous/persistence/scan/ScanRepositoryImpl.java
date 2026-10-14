@@ -6,6 +6,7 @@ import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.scan.ScanRepository;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.domain.system.System;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -53,6 +54,23 @@ public class ScanRepositoryImpl implements ScanRepository {
 
     @Override
     public Page<Scan> findAll(Project.ProjectId projectId, PageQuery pageQuery) {
+        return toPage(this.jpaRepository.findAllByProjectId(projectId.id(), pageable(pageQuery)));
+    }
+
+    @Override
+    public Page<Scan> findAllInSystem(System.SystemId systemId, PageQuery pageQuery) {
+        return toPage(this.jpaRepository.findAllBySystemId(systemId.id(), pageable(pageQuery)));
+    }
+
+    @Override
+    public List<Scan> findLatestCompletedInSystem(final System.SystemId systemId) {
+        return this.jpaRepository.findLatestBySystemIdAndStatus(systemId.id(), Scan.ScanStatus.COMPLETED)
+            .stream()
+            .map(this.scanMapper::toDomain)
+            .toList();
+    }
+
+    private static org.springframework.data.domain.Pageable pageable(final PageQuery pageQuery) {
         final var sort = switch (pageQuery.sort().direction()) {
             case ASC -> org.springframework.data.domain.Sort
                 .by(pageQuery.sort().property())
@@ -63,18 +81,14 @@ public class ScanRepositoryImpl implements ScanRepository {
                 .descending();
         };
 
-
-        final var pageable = org.springframework.data.domain.PageRequest.of(
+        return org.springframework.data.domain.PageRequest.of(
             pageQuery.page(),
             pageQuery.size(),
             sort
         );
+    }
 
-        final var result = this.jpaRepository.findAllByProjectId(
-            projectId.id(),
-            pageable
-        );
-
+    private Page<Scan> toPage(final org.springframework.data.domain.Page<ScanEntity> result) {
         return new Page<>(
             result
                 .stream()

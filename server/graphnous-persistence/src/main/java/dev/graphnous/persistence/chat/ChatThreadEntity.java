@@ -21,6 +21,20 @@ public class ChatThreadEntity {
     @Column(name = "user_id", updatable = false)
     private UUID userId;
 
+    /**
+     * The project it is about; null when it is about the system as a whole.
+     */
+    @Column(name = "project_id", updatable = false)
+    private UUID projectId;
+
+    public UUID getProjectId() {
+        return projectId;
+    }
+
+    public void setProjectId(final UUID projectId) {
+        this.projectId = projectId;
+    }
+
     @Column(name = "title")
     private String title;
 

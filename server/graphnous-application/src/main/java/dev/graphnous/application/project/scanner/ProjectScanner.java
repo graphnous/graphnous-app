@@ -2,6 +2,7 @@ package dev.graphnous.application.project.scanner;
 
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.enhancer.EnhancementRepository;
+import dev.graphnous.application.enhancer.EnhancementSummary;
 import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.notification.ScanNotifier;
@@ -10,6 +11,8 @@ import dev.graphnous.application.scan.ScanCompletedEvent;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
+import dev.graphnous.application.scan.result.ScanResultArchive;
+import dev.graphnous.application.scan.result.ScanResultFilter;
 import dev.graphnous.application.scan.result.ScanResultRepository;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
@@ -23,9 +26,9 @@ import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.scanner.ScanFailure;
 
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ProjectScanner {
@@ -40,6 +43,7 @@ public class ProjectScanner {
     private final SourceCheckout sourceCheckout;
     private final RepositoryScanner repositoryScanner;
     private final ScanResultRepository scanResultRepository;
+    private final ScanResultArchive scanResultArchive;
 
     private final EnhancerProvider enhancerProvider;
     private final EnhancementRepository enhancementRepository;
@@ -58,6 +62,7 @@ public class ProjectScanner {
         final SourceCheckout sourceCheckout,
         final RepositoryScanner repositoryScanner,
         final ScanResultRepository scanResultRepository,
+        final ScanResultArchive scanResultArchive,
         final EnhancerProvider enhancerProvider,
         final EnhancementRepository enhancementRepository,
         final ScanSteps scanSteps,
@@ -74,6 +79,7 @@ public class ProjectScanner {
         this.sourceCheckout = sourceCheckout;
         this.repositoryScanner = repositoryScanner;
         this.scanResultRepository = scanResultRepository;
+        this.scanResultArchive = scanResultArchive;
 
         this.enhancerProvider = enhancerProvider;
         this.enhancementRepository = enhancementRepository;
@@ -106,7 +112,7 @@ public class ProjectScanner {
         );
 
         this.scanExecutor.execute(
-            () -> this.executeScan(project, scan, context)
+            () -> this.executeScan(project, scan, command.enhancers(), context)
         );
 
     }
@@ -114,6 +120,7 @@ public class ProjectScanner {
     private void executeScan(
         final Project project,
         final Scan scan,
+        final Set<String> enhancers,
         final RequestContext context
     ) {
         final ScanLogger logger = (level, message) ->
@@ -185,10 +192,13 @@ public class ProjectScanner {
                 return;
             }
 
-            final var enhanced = enhance(report.results());
+            exclude(scan, report.results(), logger);
+
+            final var enhanced = enhance(report.results(), enhancers);
 
             step = start(scanId, ScanStepType.STORE);
             this.scanResultRepository.save(scanId, report.results());
+            archive(scanId, report.results(), logger);
             this.scanSteps.complete(scanId, step);
 
             // The results are stored, so enhancing does not fail the scan
@@ -242,10 +252,13 @@ public class ProjectScanner {
 
             logger.log(ScanLogLevel.INFO, "Storing " + results.size() + " uploaded scan result(s)");
 
-            final var enhanced = enhance(results);
+            exclude(scan, results, logger);
+
+            final var enhanced = enhance(results, null);
 
             step = start(scanId, ScanStepType.STORE);
             this.scanResultRepository.save(scanId, results);
+            archive(scanId, results, logger);
             this.scanSteps.complete(scanId, step);
 
             // The results are stored, so enhancing does not fail the scan
@@ -255,6 +268,45 @@ public class ProjectScanner {
             complete(scan, results, context);
         } catch (Exception e) {
             fail(scan, context, logger, step, e);
+        }
+    }
+
+    /**
+     * Leaves the files the scan was created to leave out, such as tests,
+     * out of the results, with what they declare: before anything is
+     * enhanced, stored or counted, so nothing of the scan has them.
+     */
+    private static void exclude(
+        final Scan scan,
+        final List<ScanResult> results,
+        final ScanLogger logger
+    ) {
+        if (scan.excludes().isEmpty()) {
+            return;
+        }
+
+        final var excluded = ScanResultFilter.exclude(results, scan.excludes());
+
+        logger.log(
+            ScanLogLevel.INFO,
+            "Left out " + excluded + " file(s) matching " + String.join(", ", scan.excludes())
+        );
+    }
+
+    /**
+     * Keeps the results as they are stored, without the files left out, to
+     * enhance the scan again later. The graph has them already, so failing to keep them
+     * does not fail the scan; it only cannot be enhanced again.
+     */
+    private void archive(
+        final Scan.ScanId scanId,
+        final List<ScanResult> results,
+        final ScanLogger logger
+    ) {
+        try {
+            this.scanResultArchive.save(scanId, results);
+        } catch (final RuntimeException e) {
+            logQuietly(logger, ScanLogLevel.WARN, "Failed to keep the results to enhance again later: " + message(e));
         }
     }
 
@@ -321,11 +373,20 @@ public class ProjectScanner {
     /**
      * Runs the enhancers on each result, before the results are stored.
      * A failure is kept for the enhance step, so it cannot fail the scan.
+     *
+     * @param enhancers the names of the enhancers to run; null for every
+     *                  installed enhancer
      */
-    private Enhanced enhance(final List<ScanResult> results) {
+    private Enhanced enhance(
+        final List<ScanResult> results,
+        final Set<String> enhancers
+    ) {
         try {
             final var enhancements = results.stream()
-                .flatMap(result -> this.enhancerProvider.enhanceScan(result).stream())
+                .flatMap(result -> (enhancers == null
+                    ? this.enhancerProvider.enhanceScan(result)
+                    : this.enhancerProvider.enhanceScan(result, enhancer -> enhancers.contains(enhancer.name()))
+                ).stream())
                 .toList();
 
             return new Enhanced(enhancements, null);
@@ -354,7 +415,7 @@ public class ProjectScanner {
 
             if (!enhanced.enhancements().isEmpty()) {
                 this.enhancementRepository.save(scanId, enhanced.enhancements());
-                describeEnhancements(enhanced.enhancements()).forEach(description ->
+                EnhancementSummary.describe(enhanced.enhancements()).forEach(description ->
                     logger.log(ScanLogLevel.INFO, "Enhanced the results with " + description)
                 );
             }
@@ -380,32 +441,6 @@ public class ProjectScanner {
         } catch (Exception ignored) {
             // The scan status is still updated
         }
-    }
-
-    /**
-     * What each enhancer added over all results, e.g. "spring 1.0.0: 3
-     * node(s) and 2 relationship(s)".
-     */
-    private static List<String> describeEnhancements(final List<Enhancements> enhancements) {
-        final var nodes = new LinkedHashMap<String, Integer>();
-        final var relationships = new LinkedHashMap<String, Integer>();
-
-        for (final var enhancer : enhancements) {
-            final var name = enhancer.name() + " " + enhancer.version();
-
-            for (final var enhancement : enhancer.enhancements()) {
-                nodes.merge(name, enhancement.nodes().size(), Integer::sum);
-                relationships.merge(name, enhancement.relationships().size(), Integer::sum);
-            }
-
-            nodes.putIfAbsent(name, 0);
-            relationships.putIfAbsent(name, 0);
-        }
-
-        return nodes.keySet()
-            .stream()
-            .map(name -> name + ": " + nodes.get(name) + " node(s) and " + relationships.get(name) + " relationship(s)")
-            .toList();
     }
 
     private static String describe(final List<ScanFailure> failures) {

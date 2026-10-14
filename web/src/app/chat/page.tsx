@@ -31,6 +31,7 @@ import { useDeleteChatThread } from "@/lib/hooks/chat/useDeleteChatThread";
 import { useListChatThreads } from "@/lib/hooks/chat/useListChatThreads";
 import { useSystemStore } from "@/lib/store/systemStore";
 import type { ChatThread, System } from "@/types";
+import { breadcrumbs } from "@/lib/breadcrumbs";
 
 export default function ChatPage() {
     const selectedSystem = useSystemStore(
@@ -101,10 +102,7 @@ export default function ChatPage() {
             <Stack gap={8}>
                 <PageHeader
                     title="System Chat"
-                    breadcrumbs={[
-                        { label: selectedSystem?.name || '', href: "/" },
-                        { label: "Chat" },
-                    ]}
+                    breadcrumbs={breadcrumbs(selectedSystem, { label: "Chat" })}
                     description={`Ask questions about the architecture, code, dependencies, and relationships across ${selectedSystem?.name}.`}
                     actions={
                         <Button

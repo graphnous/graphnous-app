@@ -26,6 +26,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-graphnous}
       POSTGRES_USER: ${POSTGRES_USER:-graphnous}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      # Checkouts in the checkouts volume, mounted below
+      GRAPHNOUS_WORKSPACE_TYPE: volume
+      GRAPHNOUS_WORKSPACE_VOLUME: graphnous-checkouts
+      GRAPHNOUS_WORKSPACE_PATH: /checkouts
     # The server runs as a non-root user, which needs the group that owns
     # the Docker socket: 0 on Docker Desktop, usually the docker group on
     # Linux (DOCKER_GID=$(stat -c %g /var/run/docker.sock))

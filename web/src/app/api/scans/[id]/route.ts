@@ -5,6 +5,7 @@ import {
     ResponseError,
     ScansApi,
 } from "@/generated/api";
+import { forward, graphnousFetch } from "@/lib/server/graphnousApi";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
@@ -48,6 +49,21 @@ async function errorResponse(error: unknown, action: string): Promise<NextRespon
     return error instanceof FetchError
         ? NextResponse.json({ code: "NETWORK_ERROR", message: "The Graphnous API could not be reached." }, { status: 502 })
         : NextResponse.json({ code: "INTERNAL_ERROR", message: `Failed to ${action}.` }, { status: 500 });
+}
+
+/**
+ * The scan; 404 when it is not one of the caller's.
+ */
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const { id: scanId } = await params;
+
+    return forward(
+        () => graphnousFetch(
+            `/api/v1/scans/${encodeURIComponent(scanId)}`,
+            request.headers.get("authorization"),
+        ),
+        "get scan",
+    );
 }
 
 /**

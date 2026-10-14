@@ -25,7 +25,8 @@ public class ProjectScanListener implements EventHandler<StartScanEvent> {
     @Async()
     public void handle(StartScanEvent event) {
         final var command = new StartScanCommand(
-            event.getScanId()
+            event.getScanId(),
+            event.getEnhancers()
         );
 
         this.projectScanner.startScan(command, event.getContext());

@@ -1,5 +1,8 @@
 package dev.graphnous.application.scan.stats;
 
+import dev.graphnous.application.authorization.AuthorizationService;
+import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.application.system.SystemService;
 import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.File;
 import dev.graphnous.core.model.Method;
@@ -31,6 +34,15 @@ class ScanStatServiceTest {
 
     @Mock
     private ScanStatRepository scanStatRepository;
+
+    @Mock
+    private ProjectService projectService;
+
+    @Mock
+    private SystemService systemService;
+
+    @Mock
+    private AuthorizationService authorizationService;
 
     private final Scan.ScanId scanId = Scan.ScanId.generate();
     private final Project.ProjectId projectId = Project.ProjectId.generate();
@@ -159,7 +171,7 @@ class ScanStatServiceTest {
     }
 
     private ScanStatService service() {
-        return new ScanStatService(scanStatRepository);
+        return new ScanStatService(scanStatRepository, projectService, systemService, authorizationService);
     }
 
     /**

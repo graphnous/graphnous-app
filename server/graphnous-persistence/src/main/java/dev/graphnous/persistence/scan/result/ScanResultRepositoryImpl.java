@@ -51,6 +51,13 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
         EnhancementRepositoryImpl.ENHANCEMENT, EnhancementRepositoryImpl.ENHANCED
     );
 
+    /**
+     * The relationships from a method or function to what its body uses.
+     * There are very many of them, so the graph of a scan is drawn without
+     * them; they are what is asked for to see what a change affects.
+     */
+    public static final List<String> USAGE_TYPES = List.copyOf(ScanResultGraph.USAGES.keySet());
+
     private final Driver driver;
 
     private volatile boolean schemaCreated;
@@ -177,6 +184,16 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
                     MATCH (supertype:Class {scanId: $scanId, qualifiedName: row.qualifiedName})
                     MERGE (class)-[:IMPLEMENTS]->(supertype)
                     """);
+
+                // One for each place: a method that calls another three
+                // times has three places to change
+                graph.usages().forEach((type, rows) -> write(tx, id, rows, """
+                    UNWIND $rows AS row
+                    MATCH (source:Method {id: row.sourceId})
+                    MATCH (target:%2$s {id: row.targetId})
+                    CREATE (source)-[usage:%1$s]->(target)
+                    SET usage.line = row.line, usage.reference = row.reference, usage.kind = row.kind
+                    """.formatted(type, ScanResultGraph.USAGES.get(type))));
 
                 deleteUnusedDependencies(tx, previousDependencies);
             });

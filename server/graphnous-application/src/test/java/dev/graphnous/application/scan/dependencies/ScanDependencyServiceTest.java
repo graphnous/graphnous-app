@@ -10,12 +10,15 @@ import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.pagination.Sort;
 import dev.graphnous.application.scan.ScanService;
+import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
+import dev.graphnous.domain.system.System;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,6 +76,63 @@ class ScanDependencyServiceTest {
             .hasMessageContaining("name");
 
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    void listsDependenciesOfTheLatestCompletedScansOfASystem() {
+        final var systemId = System.SystemId.generate();
+        final var now = Instant.now();
+        final var scans = List.of(new Scan(
+            scanId, Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("abc123", "main"), now, now, now
+        ));
+        final var found = new Page<SystemDependency>(List.of(), 0, 20, 0, 0);
+
+        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(repository.findDependencies(scans, new ScanDependencyFilter("slf4j", null, null), page)).thenReturn(found);
+
+        assertThat(service().getSystemDependencies(context, systemId, new ScanDependencyFilter("slf4j", null, null), page))
+            .isSameAs(found);
+    }
+
+    @Test
+    void doesNotListDependenciesOfASystemTheUserMayNotRead() {
+        final var systemId = System.SystemId.generate();
+
+        when(scanService.getLatestCompletedScans(context, systemId)).thenThrow(new AuthorizationException("Not allowed"));
+
+        assertThatThrownBy(() -> service().getSystemDependencies(context, systemId, ScanDependencyFilter.none(), page))
+            .isInstanceOf(AuthorizationException.class);
+
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void listsTheLibrariesOfTheLatestCompletedScansOfASystem() {
+        final var systemId = System.SystemId.generate();
+        final var now = Instant.now();
+        final var scans = List.of(new Scan(
+            scanId, Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("abc123", "main"), now, now, now
+        ));
+        final var byVersions = new PageQuery(0, 20, new Sort("versions", Sort.Direction.DESC));
+        final var found = new Page<SystemLibrary>(List.of(), 0, 20, 0, 0);
+
+        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(repository.findLibraries(scans, "slf4j", true, byVersions)).thenReturn(found);
+
+        assertThat(service().getSystemLibraries(context, systemId, " slf4j ", true, byVersions)).isSameAs(found);
+    }
+
+    @Test
+    void refusesToSortLibrariesByAnythingElse() {
+        final var systemId = System.SystemId.generate();
+        final var byScope = new PageQuery(0, 20, new Sort("scope", Sort.Direction.ASC));
+
+        assertThatThrownBy(() -> service().getSystemLibraries(context, systemId, null, false, byScope))
+            .isInstanceOf(ValidationException.class);
+
+        verifyNoInteractions(repository, scanService);
     }
 
     private ScanDependencyService service() {
