@@ -23,7 +23,7 @@ class GraphnousScannerTest {
         final var executed = new ArrayList<ScanPlan>();
 
         final var scanner = new GraphnousScanner(
-            planPath -> {
+            (planPath, languages) -> {
                 plannedPaths.add(planPath);
                 return plan;
             },
@@ -76,7 +76,7 @@ class GraphnousScannerTest {
         };
 
         final var scanner = new GraphnousScanner(
-            path -> {
+            (path, languages) -> {
                 events.add("plan");
                 return plan;
             },

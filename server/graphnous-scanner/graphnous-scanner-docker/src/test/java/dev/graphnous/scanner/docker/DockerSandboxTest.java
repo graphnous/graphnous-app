@@ -200,6 +200,62 @@ class DockerSandboxTest {
     }
 
     @Test
+    void failsWhenItsContainerIsRemovedWhileItRuns() {
+        final var scanner = scanner("echo started; sleep 60");
+
+        // As a cancelled scan, or anyone else, removes it
+        onceStarted(id -> docker.removeContainerCmd(id).withForce(true).exec());
+
+        assertThatThrownBy(() -> sandbox.execute(scanner, repository, target()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Scanner's container was removed while it ran, from outside the scan");
+    }
+
+    @Test
+    void failsWhenItsContainerIsKilledFromOutside() {
+        final var scanner = scanner("echo started; sleep 60");
+
+        onceStarted(id -> docker.killContainerCmd(id).exec());
+
+        assertThatThrownBy(() -> sandbox.execute(scanner, repository, target()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageStartingWith("Scanner was killed (exit code 137)");
+    }
+
+    @Test
+    void saysWhenTheScannerRanOutOfMemory() {
+        assertThat(DockerSandbox.failure(new Containers.Exit(137, true)))
+            .startsWith("Scanner ran out of memory: Docker stopped its container (exit code 137).");
+        assertThat(DockerSandbox.failure(new Containers.Exit(3, false))).isEqualTo("Scanner failed with exit code 3");
+    }
+
+    /**
+     * Runs the action on the scanner's container once it printed started,
+     * in the background.
+     */
+    private void onceStarted(final java.util.function.Consumer<String> action) {
+        final var thread = new Thread(() -> {
+            try {
+                while (!stdout.contains("started")) {
+                    Thread.sleep(100);
+                }
+
+                docker.listContainersCmd()
+                    .withAncestorFilter(List.of(IMAGE))
+                    .withStatusFilter(List.of("running"))
+                    .exec()
+                    .stream()
+                    .filter(container -> String.join(" ", container.getCommand()).contains("sleep 60"))
+                    .forEach(container -> action.accept(container.getId()));
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    @Test
     void failsWhenTheScannerWritesNoResult() throws IOException {
         final var scanner = scanner("echo nothing to report");
 

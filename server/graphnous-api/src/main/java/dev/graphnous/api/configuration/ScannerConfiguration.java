@@ -17,8 +17,10 @@ import dev.graphnous.application.project.scanner.RepositoryScanner;
 import dev.graphnous.application.project.scanner.ScanExecutor;
 import dev.graphnous.application.project.scanner.ScannerFiles;
 import dev.graphnous.application.project.scanner.SourceCheckout;
+import dev.graphnous.application.scan.ScanLanguages;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
+import dev.graphnous.core.model.ScanTarget;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.result.ScanResultRepository;
@@ -79,6 +81,17 @@ public class ScannerConfiguration {
             scanSteps,
             eventPublisher,
             scanNotifier
+        );
+    }
+
+    /**
+     * The languages {@code graphnous.scanners} configures a scanner for,
+     * which projects and scans can choose from.
+     */
+    @Bean
+    public ScanLanguages scanLanguages(final ScannersProperties scanners) {
+        return new ScanLanguages(
+            scanners.scanners().keySet().stream().map(ScanTarget.Language::value).toList()
         );
     }
 

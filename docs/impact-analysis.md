@@ -121,6 +121,15 @@ A schema change, a change in both scanners, and here.
   taken for the query. On this repository that took the links found from
   15, all from the browser into Next.js routes and half of them to the
   wrong method, to 68, 24 of them from Next.js routes into the Spring API.
+- **Links stored in the graph.** The links between the latest completed
+  scans of a system are stored as `(HttpCall)-[:REQUESTS]->(Endpoint)`,
+  with how they matched (`PATH` or `SUFFIX`), the version of the matching,
+  and whether they cross projects. A scan's links are found again when it
+  completes or is enhanced again, against the latest scan of each other
+  project; and when they are read and were stored by an earlier version of
+  the matching, or not at all, as for scans from before. Links of other
+  scans, such as earlier ones chosen to compare, are found when asked for.
+  Impact analysis does not follow them yet.
 
 Result: "these 14 files use `OrderList`" becomes "these 3 do not pass
 `customerId`", and each call site of a Java method shows what it passes.

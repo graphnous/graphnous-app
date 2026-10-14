@@ -35,6 +35,13 @@ import java.util.regex.Pattern;
  */
 public final class HttpLinkMatcher {
 
+    /**
+     * The version of how calls and endpoints are matched, kept with the
+     * links stored from it; raise it with any change to the matching, so
+     * the stored links are found again.
+     */
+    public static final String VERSION = "2";
+
     static final String ANY_METHOD = "ANY";
 
     private static final Pattern SCHEME = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*://");

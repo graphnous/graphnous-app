@@ -1,5 +1,6 @@
 package dev.graphnous.application.enhancer;
 
+import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
 import dev.graphnous.application.context.OrganizationContext;
@@ -81,6 +82,9 @@ class ScanEnhancementServiceTest {
 
     @Mock
     private ScanLogService scanLogService;
+
+    @Mock
+    private EventPublisher eventPublisher;
 
     private final InMemoryScanStepRepository steps = new InMemoryScanStepRepository();
     private final ScanSteps scanSteps = new ScanSteps(steps, Clock.systemUTC());
@@ -318,7 +322,8 @@ class ScanEnhancementServiceTest {
             enhancementRepository,
             scanSteps,
             scanLogService,
-            executor
+            executor,
+            eventPublisher
         );
     }
 

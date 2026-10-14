@@ -11,6 +11,7 @@ import {
     Sidebar,
 } from "@graphnous/theme";
 
+import { ThemeToggle } from "@/components/ThemeToggle/ThemeToggle";
 import {
     ChatCircleIcon,
     FoldersIcon,
@@ -89,10 +90,14 @@ export function AppLayout({
                         Graphnous
                     </span>
 
-                    <IconButton
-                        icon={UserCircleIcon}
-                        label="Account"
-                    />
+                    <div className="flex items-center gap-1">
+                        <ThemeToggle />
+
+                        <IconButton
+                            icon={UserCircleIcon}
+                            label="Account"
+                        />
+                    </div>
                 </div>
             }
             sidebar={

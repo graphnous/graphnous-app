@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import {
+    Alert,
     Button,
     Checkbox,
     Dialog,
@@ -18,7 +19,10 @@ import {
 
 import { useProjectScanSettings } from "@/lib/hooks/project/useProjectScanSettings";
 import { useListEnhancers } from "@/lib/hooks/enhancer/useListEnhancers";
+import { useListScanners } from "@/lib/hooks/scanner/useListScanners";
+import { languageLabel } from "@/lib/languages";
 
+import { MultiSelect } from "@/components/MultiSelect/MultiSelect";
 import { useCreateScan } from "@/lib/hooks/scan/useCreateScan";
 import type { Scan } from "@/types";
 
@@ -48,19 +52,38 @@ export const CreateScanModal = forwardRef<
         error: enhancersError,
     } = useListEnhancers(opened);
 
-    // What the project's scans leave out, to start from
+    // The languages the server can scan
+    const { scanners } = useListScanners(opened);
+    const available = scanners.map((scanner) => scanner.language);
+
+    // What the project's scans leave out and which languages they scan,
+    // to start from
     const {
         excludes: projectExcludes,
-        saveExcludes,
+        languages: projectLanguages,
+        saveSettings,
     } = useProjectScanSettings(projectId, opened);
 
     // The patterns as typed, one a line, once they were changed; the
     // project's own until then
     const [typedExcludes, setTypedExcludes] = useState<string | null>(null);
-    const [rememberExcludes, setRememberExcludes] = useState(false);
-    const [excludesError, setExcludesError] = useState<string | null>(null);
+    const [remember, setRemember] = useState(false);
+    const [settingsError, setSettingsError] = useState<string | null>(null);
 
     const excludesText = typedExcludes ?? (projectExcludes ?? []).join("\n");
+
+    // The languages the project scans; none of them chosen means every one
+    const projectScans = projectLanguages && projectLanguages.length > 0
+        ? available.filter((language) => projectLanguages.includes(language))
+        : available;
+
+    // The languages ticked once they were changed; the project's until then
+    const [chosenLanguages, setChosenLanguages] = useState<string[] | null>(null);
+    const languages = chosenLanguages ?? projectScans;
+
+    // A scan replaces what the project's views show, so a language the
+    // project scans but this scan does not goes missing from them
+    const missing = remember ? [] : projectScans.filter((language) => !languages.includes(language));
 
     const {
         createScan,
@@ -76,12 +99,18 @@ export const CreateScanModal = forwardRef<
         setRevision("");
         setSkipped([]);
         setTypedExcludes(null);
-        setRememberExcludes(false);
-        setExcludesError(null);
+        setChosenLanguages(null);
+        setRemember(false);
+        setSettingsError(null);
     };
 
-    const toggle = (name: string) =>
-        setSkipped((current) => (current.includes(name) ? current.filter((other) => other !== name) : [...current, name]));
+
+    const toggleLanguage = (language: string) =>
+        setChosenLanguages(
+            languages.includes(language)
+                ? languages.filter((other) => other !== language)
+                : available.filter((other) => other === language || languages.includes(other)),
+        );
 
     useImperativeHandle(ref, () => ({
         open: () => setOpened(true),
@@ -95,14 +124,18 @@ export const CreateScanModal = forwardRef<
 
         const excludes = excludesText.split("\n").map((pattern) => pattern.trim()).filter(Boolean);
 
-        setExcludesError(null);
+        // None when every language is ticked, so languages the server can
+        // scan later are scanned too
+        const scanned = languages.length === available.length ? [] : languages;
 
-        if (rememberExcludes) {
+        setSettingsError(null);
+
+        if (remember) {
             try {
                 // First, so a pattern that is not well formed stops the scan too
-                await saveExcludes(excludes);
+                await saveSettings({ excludes, languages: scanned });
             } catch (error) {
-                setExcludesError(error instanceof Error ? error.message : "Failed to save the patterns");
+                setSettingsError(error instanceof Error ? error.message : "Failed to save the project's scan settings");
                 return;
             }
         }
@@ -118,6 +151,10 @@ export const CreateScanModal = forwardRef<
                 // Left out until the project's own are loaded or changed, as
                 // the API then uses the project's
                 excludes: typedExcludes !== null || projectExcludes !== null ? excludes : undefined,
+                // Likewise until the project's own and the scanners are loaded
+                languages: chosenLanguages !== null || (projectLanguages !== null && available.length > 0)
+                    ? scanned
+                    : undefined,
             });
 
             onCreated?.(scan);
@@ -145,7 +182,7 @@ export const CreateScanModal = forwardRef<
                     <Button
                         variant="primary"
                         onClick={save}
-                        disabled={loading || !projectId || !branch.trim()}
+                        disabled={loading || !projectId || !branch.trim() || (available.length > 0 && languages.length === 0)}
                     >
                         {loading ? "Creating..." : "Create Scan"}
                     </Button>
@@ -173,6 +210,31 @@ export const CreateScanModal = forwardRef<
                 />
             </Field>
 
+            {available.length > 1 && (
+                <Field
+                    label="Languages"
+                    description="The languages to scan; the parts of the project in other languages are left out."
+                >
+                    <div className="flex flex-col gap-2">
+                        {available.map((language) => (
+                            <Checkbox
+                                key={language}
+                                label={languageLabel(language)}
+                                checked={languages.includes(language)}
+                                disabled={loading}
+                                onChange={() => toggleLanguage(language)}
+                            />
+                        ))}
+                    </div>
+                </Field>
+            )}
+
+            {available.length > 0 && languages.length === 0 && (
+                <Text size="sm" tone="muted">
+                    Choose at least one language to scan.
+                </Text>
+            )}
+
             <Field
                 label="Leave out files"
                 description="One pattern a line, as in a .gitignore: *.spec.ts, generated/, src/**/*.stories.tsx. What these files declare is left out of the scan too."
@@ -189,15 +251,22 @@ export const CreateScanModal = forwardRef<
             </Field>
 
             <Checkbox
-                label="Remember for this project's next scans"
-                checked={rememberExcludes}
+                label="Remember the languages and files for this project's next scans"
+                checked={remember}
                 disabled={loading}
-                onChange={() => setRememberExcludes(!rememberExcludes)}
+                onChange={() => setRemember(!remember)}
             />
 
-            {excludesError && (
+            {missing.length > 0 && languages.length > 0 && (
+                <Alert tone="warning" title="This scan replaces the project's current results">
+                    {missing.map(languageLabel).join(" and ")} will be missing from the project&apos;s views, usages and
+                    impact analysis until a scan includes {missing.length === 1 ? "it" : "them"} again.
+                </Alert>
+            )}
+
+            {settingsError && (
                 <div role="alert">
-                    {excludesError}
+                    {settingsError}
                 </div>
             )}
 
@@ -206,17 +275,18 @@ export const CreateScanModal = forwardRef<
                     label="Enhancers"
                     description="What runs on the scan's results to add to them, such as the components of a React application."
                 >
-                    <div className="flex flex-col gap-2">
-                        {enhancers.map((enhancer) => (
-                            <Checkbox
-                                key={enhancer.name}
-                                label={`${enhancer.name} ${enhancer.version}`}
-                                checked={!skipped.includes(enhancer.name)}
-                                disabled={loading}
-                                onChange={() => toggle(enhancer.name)}
-                            />
-                        ))}
-                    </div>
+                    <MultiSelect
+                        options={enhancers.map((enhancer) => ({
+                            value: enhancer.name,
+                            label: enhancer.name,
+                            description: enhancer.version,
+                        }))}
+                        value={enhancers.map((enhancer) => enhancer.name).filter((name) => !skipped.includes(name))}
+                        onValueChange={(chosen) =>
+                            setSkipped(enhancers.map((enhancer) => enhancer.name).filter((name) => !chosen.includes(name)))}
+                        placeholder="None"
+                        disabled={loading}
+                    />
                 </Field>
             )}
 

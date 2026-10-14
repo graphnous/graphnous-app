@@ -23,6 +23,7 @@ import dev.graphnous.scanner.sandbox.ScanSandbox;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Runs each scanner in a container that mounts the workspace the
@@ -75,9 +76,17 @@ public class DockerRepositoryScanner implements RepositoryScanner {
     @Override
     public ScanPlan plan(
         final Path path,
+        final Set<ScanTarget.Language> languages,
         final ScanLogger logger
     ) {
-        final var plan = planner.plan(path);
+        final var plan = planner.plan(path, languages);
+
+        for (final var target : plan.leftOut()) {
+            logger.log(
+                ScanLogLevel.INFO,
+                "Leaving out " + target.getLanguage() + " target " + target.getPath()
+            );
+        }
 
         new LoggingListener(logger).onPlanCreated(plan);
 
@@ -108,12 +117,21 @@ public class DockerRepositoryScanner implements RepositoryScanner {
                 throw new IllegalStateException("Scan was cancelled");
             }
 
-            return dockerSandbox.execute(
-                definition,
-                repository,
-                target,
-                files.files(target.getLanguage(), organization)
-            );
+            try {
+                return dockerSandbox.execute(
+                    definition,
+                    repository,
+                    target,
+                    files.files(target.getLanguage(), organization)
+                );
+            } catch (final RuntimeException e) {
+                // Its containers are removed when it is cancelled
+                if (containers.isCancelled(scanId)) {
+                    throw new IllegalStateException("Scan was cancelled", e);
+                }
+
+                throw e;
+            }
         };
 
         return new DefaultScanExecutor(scanners, sandbox, List.of(listener)).execute(path, plan);

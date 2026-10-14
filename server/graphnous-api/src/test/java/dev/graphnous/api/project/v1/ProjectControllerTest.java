@@ -298,6 +298,70 @@ class ProjectControllerTest {
     }
 
     @Test
+    void createsAScanOfSomeLanguages() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), projectId, Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision(null, "main"), now, now, null
+        );
+
+        when(scanService.create(any(), any(CreateScanCommand.class))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\", \"languages\": [\"JAVA\"]}")
+        )
+        .andExpect(status().isCreated());
+
+        verify(scanService).create(
+            any(),
+            eq(new CreateScanCommand(projectId, null, "main", null, null, java.util.Set.of("JAVA")))
+        );
+    }
+
+    @Test
+    void getsAndSetsTheLanguagesAProjectScans() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+
+        when(projectService.getScanExcludes(any(), eq(projectId))).thenReturn(List.of("*.spec.ts"));
+        when(projectService.getScanLanguages(any(), eq(projectId))).thenReturn(java.util.Set.of("JAVA"));
+        when(projectService.updateScanLanguages(any(), eq(projectId), eq(List.of("typescript", "JAVA"))))
+            .thenReturn(java.util.Set.of("TYPESCRIPT", "JAVA"));
+
+        mockMvc.perform(get("/api/v1/projects/{id}/scan-settings", projectId.id()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.languages[0]").value("JAVA"));
+
+        // The patterns it leaves out stay as they are
+        mockMvc.perform(
+            put("/api/v1/projects/{id}/scan-settings", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"languages\": [\"typescript\", \"JAVA\"]}")
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.excludes[0]").value("*.spec.ts"))
+            .andExpect(jsonPath("$.languages[0]").value("JAVA"))
+            .andExpect(jsonPath("$.languages[1]").value("TYPESCRIPT"));
+
+        verify(projectService, never()).updateScanExcludes(any(), any(), any());
+    }
+
+    @Test
+    void refusesALanguageWithoutAScanner() throws Exception {
+        when(projectService.updateScanLanguages(any(), any(), any()))
+            .thenThrow(new dev.graphnous.application.exception.ValidationException("No scanner for GO"));
+
+        mockMvc.perform(
+            put("/api/v1/projects/{id}/scan-settings", UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"languages\": [\"GO\"]}")
+        )
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void getsAndSetsWhatAProjectsScansLeaveOut() throws Exception {
         final var projectId = Project.ProjectId.generate();
 

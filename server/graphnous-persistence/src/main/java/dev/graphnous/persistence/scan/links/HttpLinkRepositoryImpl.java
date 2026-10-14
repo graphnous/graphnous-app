@@ -8,6 +8,7 @@ import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.springframework.stereotype.Repository;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -18,10 +19,27 @@ import static dev.graphnous.persistence.scan.GraphPages.string;
 /**
  * Reads the HTTP calls and endpoints enhancers added to scans, as
  * EnhancementRepositoryImpl stores them: nodes labelled {@code HttpCall}
- * and {@code Endpoint}, whichever enhancer added them.
+ * and {@code Endpoint}, whichever enhancer added them. Stores the links
+ * between them as
+ * <pre>
+ * (HttpCall)-[:REQUESTS {match, matcher, crossesProjects}]->(Endpoint)
+ * </pre>
+ * and on each scan's node the version of the matching its links were
+ * stored with.
  */
 @Repository
 public class HttpLinkRepositoryImpl implements HttpLinkRepository {
+
+    /**
+     * The relationship of a call to the endpoint it requests.
+     */
+    public static final String REQUESTS = "REQUESTS";
+
+    /**
+     * The property of a scan's node that holds the version of the
+     * matching its links were stored with.
+     */
+    public static final String LINKED_WITH = "httpLinksMatcher";
 
     private final Driver driver;
 
@@ -52,6 +70,124 @@ public class HttpLinkRepositoryImpl implements HttpLinkRepository {
                 string(record.get("httpMethod")),
                 string(record.get("url"))
             ));
+    }
+
+    @Override
+    public List<HttpLinks.Link> findStoredLinks(final List<Scan> scans) {
+        if (scans.isEmpty()) {
+            return List.of();
+        }
+
+        final var byId = byId(scans);
+
+        try (final var session = driver.session()) {
+            return session.executeRead(tx -> tx.run(
+                """
+                    MATCH (call:%1$s:HttpCall)-[link:%2$s]->(endpoint:%1$s:Endpoint)
+                    WHERE call.scanId IN $scanIds AND endpoint.scanId IN $scanIds
+                    RETURN call.id AS callId, call.scanId AS callScanId, call.httpMethod AS callMethod,
+                           call.url AS callUrl, call.client AS client,
+                           endpoint.id AS endpointId, endpoint.scanId AS endpointScanId,
+                           endpoint.httpMethod AS endpointMethod, endpoint.url AS endpointUrl,
+                           link.match AS match
+                    ORDER BY callId, endpointId
+                    """.formatted(EnhancementRepositoryImpl.ENHANCED, REQUESTS),
+                Map.of("scanIds", List.copyOf(byId.keySet()))
+            ).list(record -> {
+                final var callScan = byId.get(record.get("callScanId").asString());
+                final var endpointScan = byId.get(record.get("endpointScanId").asString());
+
+                return new HttpLinks.Link(
+                    new HttpLinks.Call(
+                        string(record.get("callId")),
+                        callScan.id(),
+                        callScan.projectId(),
+                        string(record.get("callMethod")),
+                        string(record.get("callUrl")),
+                        string(record.get("client"))
+                    ),
+                    new HttpLinks.Endpoint(
+                        string(record.get("endpointId")),
+                        endpointScan.id(),
+                        endpointScan.projectId(),
+                        string(record.get("endpointMethod")),
+                        string(record.get("endpointUrl"))
+                    ),
+                    HttpLinks.Match.valueOf(record.get("match").asString())
+                );
+            }));
+        }
+    }
+
+    @Override
+    public Map<Scan.ScanId, String> findLinkedWith(final List<Scan> scans) {
+        if (scans.isEmpty()) {
+            return Map.of();
+        }
+
+        final var byId = byId(scans);
+        final var linkedWith = new HashMap<Scan.ScanId, String>();
+
+        try (final var session = driver.session()) {
+            session.executeRead(tx -> tx.run(
+                """
+                    MATCH (scan:Scan)
+                    WHERE scan.id IN $scanIds AND scan.%s IS NOT NULL
+                    RETURN scan.id AS id, scan.%1$s AS matcher
+                    """.formatted(LINKED_WITH),
+                Map.of("scanIds", List.copyOf(byId.keySet()))
+            ).list()).forEach(record ->
+                linkedWith.put(byId.get(record.get("id").asString()).id(), record.get("matcher").asString())
+            );
+        }
+
+        return linkedWith;
+    }
+
+    @Override
+    public void replaceLinks(
+        final Scan.ScanId scanId,
+        final List<HttpLinks.Link> links,
+        final String matcherVersion
+    ) {
+        final var id = scanId.id().toString();
+        final var rows = links.stream()
+            .map(link -> Map.<String, Object>of(
+                "call", link.call().id(),
+                "endpoint", link.endpoint().id(),
+                "match", link.match().name(),
+                "crossesProjects", link.crossesProjects()
+            ))
+            .toList();
+
+        try (final var session = driver.session()) {
+            session.executeWriteWithoutResult(tx -> {
+                // From its calls and to its endpoints, to whichever scan
+                tx.run("""
+                    MATCH (node:%1$s {scanId: $scanId})-[link:%2$s]-()
+                    DELETE link
+                    """.formatted(EnhancementRepositoryImpl.ENHANCED, REQUESTS), Map.of("scanId", id)).consume();
+
+                tx.run("""
+                    UNWIND $rows AS row
+                    MATCH (call:%1$s:HttpCall {id: row.call})
+                    MATCH (endpoint:%1$s:Endpoint {id: row.endpoint})
+                    MERGE (call)-[link:%2$s]->(endpoint)
+                    SET link.match = row.match, link.matcher = $matcher, link.crossesProjects = row.crossesProjects
+                    """.formatted(EnhancementRepositoryImpl.ENHANCED, REQUESTS),
+                    Map.of("rows", rows, "matcher", matcherVersion)).consume();
+
+                tx.run("""
+                    MATCH (scan:Scan {id: $scanId})
+                    SET scan.%s = $matcher
+                    """.formatted(LINKED_WITH), Map.of("scanId", id, "matcher", matcherVersion)).consume();
+            });
+        }
+    }
+
+    private static Map<String, Scan> byId(final List<Scan> scans) {
+        return scans.stream()
+            .collect(Collectors.toMap(scan -> scan.id().id().toString(), scan -> scan, (first, second) -> first));
     }
 
     /**

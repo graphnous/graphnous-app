@@ -18,6 +18,7 @@ export type {
 export type { ProjectStats } from "./ProjectStats";
 export type { SystemStats } from "./SystemStats";
 export type { Enhancer } from "./Enhancer";
+export type { Scanner } from "./Scanner";
 export type { ScanClass, ScanCodeItems, ScanCodeKind, ScanFile, ScanMethod, ScanModule, ScanPackage } from "./ScanCode";
 export type { SystemLink, SystemLinkCall, SystemLinkEndpoint, SystemLinks } from "./SystemLinks";
 export type { ScanUsage, ScanUsageArgument, ScanUsageNode, ScanUsageRelationship, ScanUsages } from "./ScanUsages";

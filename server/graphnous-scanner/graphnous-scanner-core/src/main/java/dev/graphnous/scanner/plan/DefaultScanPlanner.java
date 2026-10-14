@@ -7,6 +7,8 @@ import dev.graphnous.scanner.targetdetector.ScanTargetDetector;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class DefaultScanPlanner implements ScanPlanner {
 
@@ -23,10 +25,21 @@ public class DefaultScanPlanner implements ScanPlanner {
     }
 
     @Override
-    public ScanPlan plan(final Path path) {
-        final var targets = detectors.stream()
+    public ScanPlan plan(
+        final Path path,
+        final Set<ScanTarget.Language> languages
+    ) {
+        final var found = detectors.stream()
             .flatMap(detector -> detector.detect(path).stream())
             .toList();
+
+        // Before their versions are looked for, which left out ones do not need
+        final var scanned = found.stream()
+            .collect(Collectors.partitioningBy(
+                target -> languages.isEmpty() || languages.contains(target.getLanguage())
+            ));
+        final var targets = scanned.get(true);
+        final var leftOut = scanned.get(false);
 
         final var warnings = new ArrayList<String>();
 
@@ -36,7 +49,7 @@ public class DefaultScanPlanner implements ScanPlanner {
             );
         }
 
-        return new ScanPlan(targets, warnings);
+        return new ScanPlan(targets, warnings, leftOut);
     }
 
     /**

@@ -7,6 +7,7 @@ import {
 
 import { AppLinkProvider } from "@/components/AppLinkProvider";
 import { ApiClientProvider } from "@/lib/api/client";
+import { themeScript } from "@/lib/theme/theme";
 
 import "./globals.css";
 import { AppLayout } from "./AppLayout";
@@ -31,7 +32,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The theme script sets data-theme before React hydrates
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <ApiClientProvider>
           <AppLinkProvider>

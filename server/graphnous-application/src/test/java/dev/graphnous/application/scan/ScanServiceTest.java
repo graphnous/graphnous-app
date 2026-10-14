@@ -249,6 +249,53 @@ class ScanServiceTest {
     }
 
     @Test
+    void scansTheLanguagesItsProjectSaysByDefault() {
+        final var projectId = Project.ProjectId.generate();
+
+        when(scanRepository.count(projectId)).thenReturn(3);
+        when(scanRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(projectService.getScanLanguages(context, projectId)).thenReturn(Set.of("JAVA"));
+
+        final var scan = service().create(context, new CreateScanCommand(projectId, null, "main"));
+
+        assertThat(scan.languages()).containsExactly("JAVA");
+    }
+
+    @Test
+    void scansTheLanguagesTheScanWasAskedTo() {
+        final var projectId = Project.ProjectId.generate();
+
+        when(scanRepository.count(projectId)).thenReturn(3);
+        when(scanRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        final var other = service().create(
+            context,
+            new CreateScanCommand(projectId, null, "main", null, null, Set.of(" typescript ", ""))
+        );
+        // Every language, whatever the project says
+        final var all = service().create(context, new CreateScanCommand(projectId, null, "main", null, null, Set.of()));
+
+        assertThat(other.languages()).containsExactly("TYPESCRIPT");
+        assertThat(all.languages()).isEmpty();
+        verify(projectService, never()).getScanLanguages(any(), any());
+    }
+
+    @Test
+    void doesNotCreateAScanOfALanguageWithoutAScanner() {
+        final var projectId = Project.ProjectId.generate();
+
+        assertThatThrownBy(() -> service().create(
+            context,
+            new CreateScanCommand(projectId, null, "main", null, null, Set.of("JAVA", "PYTHON"))
+        ))
+            .isInstanceOf(ValidationException.class)
+            .hasMessageContaining("PYTHON");
+
+        verify(scanRepository, never()).save(any());
+        verify(eventPublisher, never()).publish(any());
+    }
+
+    @Test
     void doesNotCreateAScanWithAPatternThatIsNotWellFormed() {
         final var projectId = Project.ProjectId.generate();
 
@@ -540,7 +587,8 @@ class ScanServiceTest {
             systemService,
             authorizationService,
             entitlementService,
-            new EnhancerRegistry(List.of(enhancer("spring"), enhancer("react")))
+            new EnhancerRegistry(List.of(enhancer("spring"), enhancer("react"))),
+            new ScanLanguages(List.of("JAVA", "TYPESCRIPT"))
         );
     }
 

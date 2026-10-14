@@ -28,7 +28,9 @@ final class Scanners {
 
     static List<ScannerDefinition> of(final CliOptions options) {
         final var javaCommand = new ArrayList<>(List.of(
-            "java", "-jar", "/opt/graphnous/java-scanner.jar",
+            // As the server runs it: resolving calls into the project's
+            // libraries needs more than the JVM's default quarter
+            "java", "-XX:MaxRAMPercentage=75", "-jar", "/opt/graphnous/java-scanner.jar",
             "--path", REPOSITORY,
             "--target", TARGET,
             "--java-version", LANGUAGE_VERSION,

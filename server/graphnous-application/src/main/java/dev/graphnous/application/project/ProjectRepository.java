@@ -6,6 +6,7 @@ import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.system.System;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ProjectRepository {
@@ -47,6 +48,19 @@ public interface ProjectRepository {
     void saveScanExcludes(
         final Project.ProjectId id,
         final List<String> excludes
+    );
+
+    /**
+     * The languages the project scans, such as {@code JAVA}; none when it
+     * scans every language its scans find.
+     */
+    Set<String> findScanLanguages(
+        final Project.ProjectId id
+    );
+
+    void saveScanLanguages(
+        final Project.ProjectId id,
+        final Set<String> languages
     );
 
     UUID getOrCreateSnapshot(

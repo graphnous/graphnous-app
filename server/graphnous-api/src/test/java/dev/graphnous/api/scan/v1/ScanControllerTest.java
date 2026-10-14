@@ -66,7 +66,7 @@ class ScanControllerTest {
         final var scan = new Scan(
             Scan.ScanId.generate(), Project.ProjectId.generate(), Scan.ScanStatus.COMPLETED,
             new Scan.SourceRevision("abc123", "main"), now, now, now,
-            Set.of("spring", "react"), List.of("*.spec.ts", "generated/")
+            Set.of("spring", "react"), List.of("*.spec.ts", "generated/"), Set.of("TYPESCRIPT", "JAVA")
         );
 
         when(scanService.getScan(any(), eq(scan.id()))).thenReturn(scan);
@@ -76,7 +76,9 @@ class ScanControllerTest {
             .andExpect(jsonPath("$.enhancers[0]").value("react"))
             .andExpect(jsonPath("$.enhancers[1]").value("spring"))
             .andExpect(jsonPath("$.excludes[0]").value("*.spec.ts"))
-            .andExpect(jsonPath("$.excludes[1]").value("generated/"));
+            .andExpect(jsonPath("$.excludes[1]").value("generated/"))
+            .andExpect(jsonPath("$.languages[0]").value("JAVA"))
+            .andExpect(jsonPath("$.languages[1]").value("TYPESCRIPT"));
     }
 
     @Test
@@ -88,7 +90,8 @@ class ScanControllerTest {
         mockMvc.perform(get("/api/v1/scans/{id}/options", scan.id().id()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.enhancers").isEmpty())
-            .andExpect(jsonPath("$.excludes").isEmpty());
+            .andExpect(jsonPath("$.excludes").isEmpty())
+            .andExpect(jsonPath("$.languages").isEmpty());
     }
 
     @Test

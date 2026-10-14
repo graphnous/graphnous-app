@@ -2,15 +2,20 @@ package dev.graphnous.scanner.docker;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
+import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.command.InspectImageResponse;
 import com.github.dockerjava.api.command.PullImageResultCallback;
-import com.github.dockerjava.api.command.WaitContainerResultCallback;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.StreamType;
 import dev.graphnous.scanner.listener.ScanProcessListener;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Container steps shared by the scanner sandbox and the git checkout.
@@ -76,10 +81,68 @@ final class Containers {
     }
 
     /**
+     * How often a running container is looked at.
+     */
+    private static final Duration POLL = Duration.ofSeconds(1);
+
+    /**
+     * How long the Docker daemon may not answer before the container is
+     * given up on.
+     */
+    static final Duration UNREACHABLE = Duration.ofSeconds(30);
+
+    /**
+     * How long the rest of a stopped container's output may take to arrive.
+     */
+    private static final Duration DRAIN = Duration.ofSeconds(10);
+
+    /**
+     * How a container stopped.
+     *
+     * @param code      its exit code
+     * @param oomKilled whether Docker killed it for using more memory than
+     *                  it may have
+     */
+    record Exit(int code, boolean oomKilled) {
+    }
+
+    /**
+     * The container was removed while it ran, such as by a cancelled scan
+     * or from outside.
+     */
+    static final class RemovedException extends IllegalStateException {
+
+        RemovedException(final Throwable cause) {
+            super("The container was removed while it ran", cause);
+        }
+    }
+
+    /**
      * Starts the container, streams its output to the listener line by
      * line and returns the exit code once it has stopped.
      */
     static int runAndForwardOutput(
+        final DockerClient docker,
+        final String containerId,
+        final ScanProcessListener listener
+    ) throws InterruptedException {
+        return run(docker, containerId, listener).code();
+    }
+
+    /**
+     * Starts the container, streams its output to the listener line by
+     * line and returns how it stopped.
+     * <p>
+     * The container is looked at every second rather than waited for, so
+     * nothing waits forever on it: one that is removed while it runs, such
+     * as by a cancelled scan or from outside, ends the run at once, and so
+     * does a Docker daemon that does not answer for {@link #UNREACHABLE}.
+     *
+     * @throws RemovedException     when the container was removed while
+     *                               it ran
+     * @throws IllegalStateException when the daemon stopped answering
+     */
+    static Exit run(
         final DockerClient docker,
         final String containerId,
         final ScanProcessListener listener
@@ -105,17 +168,69 @@ final class Containers {
                 }
             });
 
-        final var exitCode = docker
-            .waitContainerCmd(containerId)
-            .exec(new WaitContainerResultCallback())
-            .awaitStatusCode();
+        try {
+            final var state = awaitStopped(docker, containerId);
 
-        logs.awaitCompletion();
+            // Its output ends with it, unless the stream was cut off
+            logs.awaitCompletion(DRAIN.toMillis(), TimeUnit.MILLISECONDS);
 
-        stdout.flush();
-        stderr.flush();
+            return new Exit(
+                state.getExitCodeLong() == null ? -1 : state.getExitCodeLong().intValue(),
+                Boolean.TRUE.equals(state.getOOMKilled())
+            );
+        } finally {
+            closeQuietly(logs);
 
-        return exitCode;
+            stdout.flush();
+            stderr.flush();
+        }
+    }
+
+    /**
+     * The state of the container once it has stopped.
+     */
+    private static InspectContainerResponse.ContainerState awaitStopped(
+        final DockerClient docker,
+        final String containerId
+    ) throws InterruptedException {
+        Instant unreachableSince = null;
+
+        while (true) {
+            try {
+                final var state = docker.inspectContainerCmd(containerId).exec().getState();
+                unreachableSince = null;
+
+                if (state != null && isStopped(state)) {
+                    return state;
+                }
+            } catch (final NotFoundException e) {
+                throw new RemovedException(e);
+            } catch (final RuntimeException e) {
+                if (unreachableSince == null) {
+                    unreachableSince = Instant.now();
+                } else if (Duration.between(unreachableSince, Instant.now()).compareTo(UNREACHABLE) > 0) {
+                    throw new IllegalStateException(
+                        "Docker did not answer for " + UNREACHABLE.toSeconds() + " seconds while the container ran: "
+                        + e.getMessage(),
+                        e
+                    );
+                }
+            }
+
+            Thread.sleep(POLL.toMillis());
+        }
+    }
+
+    private static boolean isStopped(final InspectContainerResponse.ContainerState state) {
+        return "exited".equals(state.getStatus()) || "dead".equals(state.getStatus());
+    }
+
+    private static void closeQuietly(final Closeable closeable) {
+        try {
+            closeable.close();
+        } catch (final IOException | RuntimeException ignored) {
+            // Only frees the stream
+        }
     }
 
     static void remove(

@@ -11,18 +11,35 @@ import java.util.Set;
  * @param excludes  the patterns of the files to leave out of the scan's
  *                  results, such as {@code *.spec.ts}; null for the ones
  *                  its project gives its scans, empty to keep every file
+ * @param languages the languages to scan, such as {@code JAVA}; null for
+ *                  the ones its project scans, empty for every language
  */
 public record CreateScanCommand(
     Project.ProjectId projectId,
     String revision,
     String branch,
     Set<String> enhancers,
-    List<String> excludes
+    List<String> excludes,
+    Set<String> languages
 ) {
 
     public CreateScanCommand {
         enhancers = enhancers == null ? null : Set.copyOf(enhancers);
         excludes = excludes == null ? null : List.copyOf(excludes);
+        languages = languages == null ? null : Set.copyOf(languages);
+    }
+
+    /**
+     * A scan of the languages its project says.
+     */
+    public CreateScanCommand(
+        final Project.ProjectId projectId,
+        final String revision,
+        final String branch,
+        final Set<String> enhancers,
+        final List<String> excludes
+    ) {
+        this(projectId, revision, branch, enhancers, excludes, null);
     }
 
     /**
@@ -34,7 +51,7 @@ public record CreateScanCommand(
         final String branch,
         final Set<String> enhancers
     ) {
-        this(projectId, revision, branch, enhancers, null);
+        this(projectId, revision, branch, enhancers, null, null);
     }
 
     /**
@@ -45,6 +62,6 @@ public record CreateScanCommand(
         final String revision,
         final String branch
     ) {
-        this(projectId, revision, branch, null, null);
+        this(projectId, revision, branch, null, null, null);
     }
 }

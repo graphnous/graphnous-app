@@ -37,6 +37,7 @@ import { revisionLabel, ScanRevision } from "@/components/ScanRevision/ScanRevis
 import { ScanStatusBadge } from "@/components/ScanStatusBadge/ScanStatusBadge";
 import { useEventStream } from "@/lib/hooks";
 import { useGetProject } from "@/lib/hooks/project/useGetProject";
+import { languageLabel } from "@/lib/languages";
 import { useScanOptions } from "@/lib/hooks/scan/useScanOptions";
 import { useGetScanGraph } from "@/lib/hooks/scan/graph/useGetScanGraph";
 import { useGetScanLogs } from "@/lib/hooks/scan/logs/useGetScanLogs";
@@ -146,7 +147,7 @@ export function ScanDetails({ scanId, via = "scans" }: ScanDetailsProps) {
     const [choosingEnhancers, setChoosingEnhancers] = useState(false);
 
     // What was chosen when the scan was created, to choose again at first
-    const { enhancers: chosenEnhancers, excludes } = useScanOptions(scanId);
+    const { enhancers: chosenEnhancers, excludes, languages } = useScanOptions(scanId);
 
     const enhancing = completed && steps.some((step) => step.type === "ENHANCE_RESULTS" && step.status === "RUNNING");
 
@@ -320,6 +321,16 @@ export function ScanDetails({ scanId, via = "scans" }: ScanDetailsProps) {
                                                     ),
                                                 },
                                                 {
+                                                    label: "Languages",
+                                                    value: languages.length > 0 ? (
+                                                        <Text as="span" size="sm">
+                                                            {languages.map(languageLabel).join(", ")}
+                                                        </Text>
+                                                    ) : (
+                                                        <Text as="span" size="sm" tone="muted">Every language found</Text>
+                                                    ),
+                                                },
+                                                {
                                                     label: "Left out",
                                                     value: excludes.length > 0 ? (
                                                         <span className="flex flex-wrap gap-1">
@@ -368,6 +379,7 @@ export function ScanDetails({ scanId, via = "scans" }: ScanDetailsProps) {
                                     <LogViewer
                                         label="Logs"
                                         lines={logs.map((log) => ({
+                                            timestamp: new Date(log.timestamp).toISOString(),
                                             message: log.message,
                                             level: logLevel(log.level),
                                         }))}

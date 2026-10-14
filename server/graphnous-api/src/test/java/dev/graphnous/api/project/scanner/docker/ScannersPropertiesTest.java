@@ -38,7 +38,7 @@ class ScannersPropertiesTest {
             .orElseThrow();
 
         assertThat(java.command("/checkouts/org/repo", target(ScanTarget.Language.JAVA))).containsExactly(
-            "java", "-jar", "/opt/graphnous/java-scanner.jar",
+            "java", "-XX:MaxRAMPercentage=75", "-jar", "/opt/graphnous/java-scanner.jar",
             "--path", "/checkouts/org/repo",
             "--target", "backend",
             "--java-version", "",

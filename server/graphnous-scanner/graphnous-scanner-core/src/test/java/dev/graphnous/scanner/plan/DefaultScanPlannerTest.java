@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,6 +29,43 @@ class DefaultScanPlannerTest {
 
         assertThat(planner.plan(REPOSITORY).targets())
             .containsExactly(backend, frontend);
+    }
+
+    @Test
+    void plansOnlyTheTargetsInTheLanguagesAskedFor() {
+        final var backend = target(ScanTarget.Language.JAVA, "backend");
+        final var frontend = target(ScanTarget.Language.TYPESCRIPT, "frontend");
+
+        final var planner = new DefaultScanPlanner(
+            List.of(repository -> List.of(backend, frontend)),
+            List.of(
+                versionDetector(ScanTarget.Language.JAVA, "25"),
+                versionDetector(ScanTarget.Language.TYPESCRIPT, "24")
+            )
+        );
+
+        final var plan = planner.plan(REPOSITORY, Set.of(ScanTarget.Language.JAVA));
+
+        assertThat(plan.targets()).containsExactly(backend);
+        assertThat(plan.leftOut()).containsExactly(frontend);
+        // Not looked for, as it is not scanned
+        assertThat(frontend.getLanguageVersion()).isNull();
+    }
+
+    @Test
+    void plansEveryLanguageWhenNoneAreAskedFor() {
+        final var backend = target(ScanTarget.Language.JAVA, "backend");
+        final var frontend = target(ScanTarget.Language.TYPESCRIPT, "frontend");
+
+        final var planner = new DefaultScanPlanner(
+            List.of(repository -> List.of(backend, frontend)),
+            List.of()
+        );
+
+        final var plan = planner.plan(REPOSITORY, Set.of());
+
+        assertThat(plan.targets()).containsExactly(backend, frontend);
+        assertThat(plan.leftOut()).isEmpty();
     }
 
     @Test

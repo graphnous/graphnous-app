@@ -121,17 +121,20 @@ public class ScanController {
      *                  and empty for none
      * @param excludes  the patterns of the files left out of the scan,
      *                  such as *.spec.ts; empty when every file was kept
+     * @param languages the languages the scan scanned, such as JAVA; empty
+     *                  when it scanned every language it found
      */
     public record ScanOptionsResponse(
         List<String> enhancers,
-        List<String> excludes
+        List<String> excludes,
+        List<String> languages
     ) {
     }
 
     /**
      * What the scan was created with besides its source: which enhancers
      * were chosen for it, such as to choose them again when enhancing it
-     * again, and which files it left out.
+     * again, which files it left out, and which languages it scanned.
      */
     @GetMapping("/{id}/options")
     public ResponseEntity<ScanOptionsResponse> getScanOptions(
@@ -144,7 +147,8 @@ public class ScanController {
 
         return ResponseEntity.ok(new ScanOptionsResponse(
             scan.enhancers() == null ? null : scan.enhancers().stream().sorted().toList(),
-            scan.excludes()
+            scan.excludes(),
+            scan.languages().stream().sorted().toList()
         ));
     }
 
@@ -247,7 +251,8 @@ public class ScanController {
                             .data(log)
                     );
                 } catch (IOException e) {
-                    emitter.completeWithError(e);
+                    // The client went away: nothing to tell it an error on
+                    emitter.complete();
                 }
             }
         };

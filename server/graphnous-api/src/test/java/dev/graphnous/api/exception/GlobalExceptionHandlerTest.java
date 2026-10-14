@@ -1,5 +1,8 @@
 package dev.graphnous.api.exception;
 
+import static org.mockito.Mockito.verifyNoInteractions;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.mock.web.MockHttpServletResponse;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.context.OrganizationContext;
 import dev.graphnous.application.context.RequestContext;
@@ -121,5 +124,37 @@ class GlobalExceptionHandlerTest {
 
     private GlobalExceptionHandler handler() {
         return new GlobalExceptionHandler(errorReporter, contextProvider);
+    }
+
+    @Test
+    void answersAnErrorOfAnEventStreamWithoutABody() {
+        final var stream = new MockHttpServletRequest("GET", "/api/v1/scans/1/logs/stream");
+        stream.addHeader("Accept", "text/event-stream");
+        final var response = new MockHttpServletResponse();
+        response.setContentType("text/event-stream");
+
+        final var answer = handler().handleException(new IllegalStateException("broken"), stream, response);
+
+        assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(answer.getBody()).isNull();
+        verify(errorReporter).report(any(), any());
+    }
+
+    @Test
+    void neitherAnswersNorReportsAClientThatWentAway() {
+        final var gone = new AsyncRequestNotUsableException("Response not usable after response errors.");
+
+        final var answer = handler().handleException(gone, request, new MockHttpServletResponse());
+
+        assertThat(answer).isNull();
+        verifyNoInteractions(errorReporter);
+    }
+
+    @Test
+    void answersAnyOtherErrorWithAnApiError() {
+        final var answer = handler().handleException(new IllegalStateException("broken"), request, new MockHttpServletResponse());
+
+        assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(answer.getBody()).isEqualTo(new ApiError("INTERNAL_ERROR", "An unexpected error occurred"));
     }
 }

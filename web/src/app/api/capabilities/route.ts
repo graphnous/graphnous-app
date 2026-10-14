@@ -21,6 +21,7 @@ function capabilitiesApi(request: NextRequest): CapabilitiesApi {
     return new CapabilitiesApi(
         new Configuration({
             basePath,
+            fetchApi: fetch
         }),
     );
 }

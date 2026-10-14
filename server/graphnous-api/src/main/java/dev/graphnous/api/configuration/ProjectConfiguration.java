@@ -7,6 +7,7 @@ import dev.graphnous.application.notification.NotificationRepository;
 import dev.graphnous.application.project.ProjectDeleter;
 import dev.graphnous.application.project.ProjectRepository;
 import dev.graphnous.application.project.ProjectService;
+import dev.graphnous.application.scan.ScanLanguages;
 import dev.graphnous.application.scan.ScanDeleter;
 import dev.graphnous.application.system.SystemService;
 import org.springframework.context.annotation.Bean;
@@ -21,14 +22,16 @@ public class ProjectConfiguration {
         final AuthorizationService authorizationService,
         final EntitlementService entitlementService,
         final SystemService systemService,
-        final ProjectDeleter projectDeleter
+        final ProjectDeleter projectDeleter,
+        final ScanLanguages scanLanguages
     ) {
         return new ProjectService(
             projectRepository,
             authorizationService,
             entitlementService,
             systemService,
-            projectDeleter
+            projectDeleter,
+            scanLanguages
         );
     }
 

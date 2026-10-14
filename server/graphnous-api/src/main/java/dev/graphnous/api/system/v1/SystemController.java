@@ -512,8 +512,10 @@ public class SystemController {
 
     /**
      * How the system's projects are linked over HTTP: which HTTP calls
-     * request which endpoints, as far as their urls and methods say. Found
-     * anew each time from what enhancers added to the scans.
+     * request which endpoints, as far as their urls and methods say, from
+     * what enhancers added to the scans. The links of the latest completed
+     * scans are the ones stored in the graph; those of other scans are
+     * found anew each time.
      *
      * @param scans the scans to link, such as the ones a graph shows; the
      *              latest completed scan of each project when missing

@@ -1,6 +1,7 @@
 package dev.graphnous.application.project;
 
 import dev.graphnous.application.exception.ValidationException;
+import dev.graphnous.application.scan.ScanLanguages;
 import dev.graphnous.application.scan.result.ScanExcludes;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.authorization.Permission;
@@ -16,7 +17,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public class ProjectService {
@@ -29,6 +32,8 @@ public class ProjectService {
 
     private final ProjectDeleter projectDeleter;
 
+    private final ScanLanguages scanLanguages;
+
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
 
     public ProjectService(
@@ -36,7 +41,8 @@ public class ProjectService {
         final AuthorizationService authorizationService,
         final EntitlementService entitlementService,
         final SystemService systemService,
-        final ProjectDeleter projectDeleter
+        final ProjectDeleter projectDeleter,
+        final ScanLanguages scanLanguages
     ) {
         this.projectRepository = projectRepository;
 
@@ -46,6 +52,8 @@ public class ProjectService {
         this.systemService = systemService;
 
         this.projectDeleter = projectDeleter;
+
+        this.scanLanguages = scanLanguages;
     }
 
     public Page<Project> getProjects(
@@ -264,6 +272,51 @@ public class ProjectService {
         );
 
         this.projectRepository.saveScanExcludes(id, normalized);
+
+        return normalized;
+    }
+
+    /**
+     * The languages the project scans, such as {@code JAVA}; none when it
+     * scans every language its scans find. A scan can be created with
+     * other ones.
+     */
+    public Set<String> getScanLanguages(
+        final RequestContext context,
+        final Project.ProjectId id
+    ) {
+        // Only for a project the caller may read
+        this.getProject(context, id);
+
+        return this.scanLanguages.current(this.projectRepository.findScanLanguages(id));
+    }
+
+    /**
+     * Sets the languages the project scans from now on; the scans it has
+     * stay as they are. None scans every language its scans find.
+     *
+     * @return the languages as they are kept
+     * @throws ValidationException when this server has no scanner for one
+     */
+    public Set<String> updateScanLanguages(
+        final RequestContext context,
+        final Project.ProjectId id,
+        final Collection<String> languages
+    ) {
+        this.authorizationService.authorize(context, Permission.PROJECT_UPDATE);
+
+        this.getProject(context, id);
+
+        final var normalized = this.scanLanguages.normalize(languages);
+
+        log.info(
+            "Updating scan languages of project id={} organizationId={} languages={}",
+            id.id(),
+            context.organization().id(),
+            normalized.isEmpty() ? "all" : normalized
+        );
+
+        this.projectRepository.saveScanLanguages(id, normalized);
 
         return normalized;
     }
