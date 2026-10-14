@@ -22,9 +22,7 @@ export class GraphnousAgentRunner extends InMemoryAgentRunner {
         }
 
         return new Observable<BaseEvent>((subscriber) => {
-            const authorization = request.headers?.authorization ?? request.headers?.Authorization;
-
-            savedMessages(request.threadId, authorization)
+            savedMessages(request.threadId)
                 .then((messages) => {
                     if (messages.length > 0) {
                         const runId = `restore-${request.threadId}`;
@@ -50,9 +48,9 @@ export class GraphnousAgentRunner extends InMemoryAgentRunner {
  * The messages the server kept of the thread; none for a thread it does not
  * have, or that is not the caller's.
  */
-async function savedMessages(threadId: string, authorization: string | undefined): Promise<Message[]> {
+async function savedMessages(threadId: string): Promise<Message[]> {
     try {
-        const thread = await graphnousApi(authorization).chat.getChatThread({ threadId });
+        const thread = await graphnousApi().chat.getChatThread({ threadId });
 
         return Array.isArray(thread.messages) ? (thread.messages as Message[]) : [];
     } catch (error) {

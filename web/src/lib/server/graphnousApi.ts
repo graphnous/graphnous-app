@@ -20,10 +20,8 @@ import { NextResponse, type NextRequest } from "next/server";
 export const graphnousApiUrl = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL || BASE_PATH).replace(/\/+$/, "");
 
 /**
- * Calls the API as the caller: their access token, when they sent one, goes
- * along, as the server checks it when security is on. For what the
- * generated client does not do, such as following an event stream; use
- * graphnousApi otherwise.
+ * Calls the API, for what the generated client does not do, such as
+ * following an event stream; use graphnousApi otherwise.
  */
 export function graphnousFetch(
     path: string,
@@ -58,9 +56,8 @@ export async function forward(call: () => Promise<Response>, action: string): Pr
 }
 
 /**
- * The generated clients of the API, calling it as the caller: their access
- * token, when they sent one, goes along, as the server checks it when
- * security is on. Nothing is cached, as with graphnousFetch.
+ * The generated clients of the API. Nothing is cached, as with
+ * graphnousFetch.
  */
 export function graphnousApi() {
     const configuration = new Configuration({

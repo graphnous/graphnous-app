@@ -17,16 +17,12 @@ import { NextResponse, type NextRequest } from "next/server";
 const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replace(/\/+$/, "");
 
 /**
- * A client that calls the API as the caller: their access token, when they
- * sent one, goes along, as the server checks it when security is on.
+ * A client of the API.
  */
-function scanLogsApi(request: NextRequest): ScanLogsApi {
-    const authorization = request.headers.get("authorization");
-
+function scanLogsApi(): ScanLogsApi {
     return new ScanLogsApi(
         new Configuration({
             basePath,
-            headers: authorization ? { Authorization: authorization } : undefined,
         }),
     );
 }
@@ -70,7 +66,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const response = await fetch(backendUrl, {
             headers: {
                 Accept: "text/event-stream",
-                Authorization: request.headers.get("authorization") ?? "",
             },
             cache: "no-store",
         });

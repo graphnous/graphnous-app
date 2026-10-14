@@ -17,16 +17,12 @@ import { NextResponse, type NextRequest } from "next/server";
 const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replace(/\/+$/, "");
 
 /**
- * A client that calls the API as the caller: their access token, when they
- * sent one, goes along, as the server checks it when security is on.
+ * A client of the API.
  */
-function systemsApi(request: NextRequest): SystemsApi {
-  const authorization = request.headers.get("authorization");
-
+function systemsApi(): SystemsApi {
   return new SystemsApi(
     new Configuration({
       basePath,
-      headers: authorization ? { Authorization: authorization } : undefined,
       fetchApi: fetch
     }),
   );
@@ -89,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const systems = await systemsApi(request).listSystems({
+    const systems = await systemsApi().listSystems({
       page: page === null ? undefined : Number(page),
       size: size === null ? undefined : Number(size),
       sort: sort === null ? undefined : oneOf(ListSystemsSortEnum, sort),
@@ -126,7 +122,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const system = await systemsApi(request).createSystem({
+    const system = await systemsApi().createSystem({
       createSystemRequest: { name: name.trim(), description: description ?? undefined },
     });
 
