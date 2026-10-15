@@ -123,7 +123,7 @@ graphnous:
           source: graphnous-maven
           target: /maven-repository
     TYPESCRIPT:
-      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.0
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.1
       command: [node, /opt/graphnous/scanner.js,
                 --path, "{repository}", --target, "{target}", --output, "{output}",
                 --download-dependencies]
