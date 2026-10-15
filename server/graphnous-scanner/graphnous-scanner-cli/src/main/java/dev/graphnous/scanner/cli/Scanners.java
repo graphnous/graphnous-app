@@ -18,8 +18,8 @@ import static dev.graphnous.scanner.definition.ImageScannerDefinition.TARGET;
  */
 final class Scanners {
 
-    static final String JAVA_IMAGE = "ghcr.io/graphnous/graphnous-java-scanner:0.3.1";
-    static final String TYPESCRIPT_IMAGE = "ghcr.io/graphnous/graphnous-typescript-scanner:0.2.1";
+    static final String JAVA_IMAGE = "ghcr.io/graphnous/graphnous-java-scanner:0.3.2";
+    static final String TYPESCRIPT_IMAGE = "ghcr.io/graphnous/graphnous-typescript-scanner:0.2.2";
 
     private static final String RESULT = "/output/scan-result.json";
 
