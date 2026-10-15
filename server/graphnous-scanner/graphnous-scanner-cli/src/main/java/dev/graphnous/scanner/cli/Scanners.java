@@ -19,7 +19,7 @@ import static dev.graphnous.scanner.definition.ImageScannerDefinition.TARGET;
 final class Scanners {
 
     static final String JAVA_IMAGE = "ghcr.io/graphnous/graphnous-java-scanner:0.3.1";
-    static final String TYPESCRIPT_IMAGE = "ghcr.io/graphnous/graphnous-typescript-scanner:0.1.1";
+    static final String TYPESCRIPT_IMAGE = "ghcr.io/graphnous/graphnous-typescript-scanner:0.2.0";
 
     private static final String RESULT = "/output/scan-result.json";
 
@@ -37,23 +37,21 @@ final class Scanners {
             "--output", OUTPUT
         ));
 
+        final var typescriptCommand = new ArrayList<>(List.of(
+            "node", "/opt/graphnous/scanner.js",
+            "--path", REPOSITORY,
+            "--target", TARGET,
+            "--output", OUTPUT
+        ));
+
         if (options.verbose()) {
             javaCommand.add("--verbose");
+            typescriptCommand.add("--verbose");
         }
 
         return List.of(
             new ImageScannerDefinition(ScanTarget.Language.JAVA, options.javaScannerImage(), javaCommand, RESULT),
-            new ImageScannerDefinition(
-                ScanTarget.Language.TYPESCRIPT,
-                options.typescriptScannerImage(),
-                List.of(
-                    "node", "/opt/graphnous/scanner.js",
-                    "--path", REPOSITORY,
-                    "--target", TARGET,
-                    "--output", OUTPUT
-                ),
-                RESULT
-            )
+            new ImageScannerDefinition(ScanTarget.Language.TYPESCRIPT, options.typescriptScannerImage(), typescriptCommand, RESULT)
         );
     }
 }

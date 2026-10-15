@@ -53,6 +53,13 @@ class ScannersTest {
         );
     }
 
+    @Test
+    void makesTheTypescriptScannerVerbose() {
+        final var typescript = Scanners.of(options(Scanners.JAVA_IMAGE, Scanners.TYPESCRIPT_IMAGE, true)).get(1);
+
+        assertThat(typescript.command("/workspace", target(ScanTarget.Language.TYPESCRIPT, null))).endsWith("--verbose");
+    }
+
     private static CliOptions options(
         final String javaImage,
         final String typescriptImage,
