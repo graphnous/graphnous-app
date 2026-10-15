@@ -49,7 +49,7 @@ class ScannersPropertiesTest {
     }
 
     @Test
-    void keepsTheLibrariesOfJavaProjectsInAVolumeOfTheJavaScannerAlone() throws IOException {
+    void keepsTheLibrariesOfEachLanguageInAVolumeOfItsScannerAlone() throws IOException {
         final var definitions = bind().definitions();
 
         assertThat(definitions)
@@ -62,7 +62,9 @@ class ScannersPropertiesTest {
             .filteredOn(definition -> definition.supports(target(ScanTarget.Language.TYPESCRIPT)))
             .singleElement()
             .satisfies(typescript -> {
-                assertThat(typescript.mounts()).isEmpty();
+                assertThat(typescript.mounts()).containsExactly(
+                    new ScannerMount(ScannerMount.Type.VOLUME, "graphnous-npm", "/npm-cache", false)
+                );
                 assertThat(typescript.environment()).isEmpty();
             });
     }
@@ -119,7 +121,8 @@ class ScannersPropertiesTest {
             "node", "/opt/graphnous/scanner.js",
             "--path", "/checkouts/org/repo",
             "--target", "backend",
-            "--output", "/output/scan-result.json"
+            "--output", "/output/scan-result.json",
+            "--download-dependencies"
         );
     }
 

@@ -122,6 +122,16 @@ graphnous:
         - type: volume
           source: graphnous-maven
           target: /maven-repository
+    TYPESCRIPT:
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.0
+      command: [node, /opt/graphnous/scanner.js,
+                --path, "{repository}", --target, "{target}", --output, "{output}",
+                --download-dependencies]
+      output: /output/scan-result.json
+      mounts:
+        - type: volume
+          source: graphnous-npm
+          target: /npm-cache
 ```
 
 For each target the server starts a container of the image with the
@@ -189,6 +199,38 @@ another.
 
 See the [Java scanner's README](https://github.com/graphnous/Graphnous-java-scanner#libraries)
 for what it reads from the settings.
+
+### Packages of TypeScript projects
+
+The TypeScript scanner resolves calls into the npm packages of a project
+from their type definitions. With `--download-dependencies`, it downloads
+those of the packages the project declares, in the versions its lock file
+pins, into the package cache at `/npm-cache`, which the `graphnous-npm`
+volume keeps for the next scans. Scanner containers therefore need
+outbound HTTPS to `registry.npmjs.org`.
+
+For private registries, such as GitHub Packages, a company Nexus or
+Artifactory, give the TypeScript scanner an `.npmrc` at
+`/npm-settings/.npmrc`, with its registries, scoped registries and their
+credentials, as a file the server copies into the scanner containers:
+
+```yaml
+graphnous:
+  scanners:
+    TYPESCRIPT:
+      # ...
+      files:
+        - source: /etc/graphnous/npmrc
+          target: /npm-settings/.npmrc
+```
+
+The `.npmrc` can hold the tokens, or refer to them as `${NAME}`, passed as
+`environment` of the TypeScript scanner. As with Maven, a server scanning
+for several organizations with different private registries should give
+each its own `graphnous-npm` volume.
+
+See the [TypeScript scanner's README](https://github.com/graphnous/Graphnous-typescript-scanner#packages)
+for what it reads from the `.npmrc`.
 
 ## Security
 

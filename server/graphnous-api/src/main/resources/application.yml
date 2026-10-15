@@ -101,7 +101,7 @@ graphnous:
       #   - source: /etc/graphnous/maven-settings.xml
       #     target: /maven-settings/settings.xml
     TYPESCRIPT:
-      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.1.1
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.0
       command:
         - node
         - /opt/graphnous/scanner.js
@@ -111,4 +111,19 @@ graphnous:
         - "{target}"
         - --output
         - "{output}"
+        # Downloads the type definitions of the packages the project uses
+        # into the package cache, to resolve calls into them; needs access
+        # to registry.npmjs.org, or to the registries of the .npmrc below
+        - --download-dependencies
       output: /output/scan-result.json
+      mounts:
+        # Keeps the downloaded packages for the next scans
+        - type: volume
+          source: graphnous-npm
+          target: /npm-cache
+      # For private registries, an .npmrc with the registries and their
+      # credentials, which this server reads and copies into each scanner
+      # container; the scanner reads /npm-settings/.npmrc
+      # files:
+      #   - source: /etc/graphnous/npmrc
+      #     target: /npm-settings/.npmrc
