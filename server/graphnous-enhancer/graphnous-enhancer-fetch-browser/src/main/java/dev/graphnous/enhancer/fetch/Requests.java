@@ -163,7 +163,7 @@ final class Requests {
             return new Request(null, null, null);
         }
 
-        final var url = WrittenUrl.of(arguments.getFirst().getValue());
+        final var url = url(arguments.getFirst());
 
         return arguments.size() < 2 ? new Request(url, GET, null) : options(url, arguments.get(1));
     }
@@ -208,6 +208,15 @@ final class Requests {
         }
 
         return new Request(url, GET, null);
+    }
+
+    /**
+     * The url an argument gives: its value when it is a constant, such as
+     * {@code API.ORDERS} or {@code `${BASE}/orders`} of constants, else as
+     * written, see {@link WrittenUrl}.
+     */
+    private static String url(final Argument argument) {
+        return argument.getConstant() != null ? argument.getConstant() : WrittenUrl.of(argument.getValue());
     }
 
     private static boolean isSpread(final Argument argument) {
@@ -260,7 +269,7 @@ final class Requests {
 
                 if (url != null && url.contains("{" + parameter + "}")) {
                     url = argument != null
-                        ? url.replace("{" + parameter + "}", WrittenUrl.of(argument.getValue()))
+                        ? url.replace("{" + parameter + "}", url(argument))
                         : known ? url : null;
                 }
 

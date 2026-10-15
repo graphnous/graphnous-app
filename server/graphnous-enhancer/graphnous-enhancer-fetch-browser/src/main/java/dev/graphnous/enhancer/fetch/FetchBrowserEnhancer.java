@@ -48,7 +48,7 @@ import java.util.regex.Pattern;
 public class FetchBrowserEnhancer implements Enhancer {
 
     static final String NAME = "fetch-browser";
-    static final String VERSION = "1.1.0";
+    static final String VERSION = "1.2.0";
 
     static final String CLIENT = "fetch";
 

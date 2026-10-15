@@ -3,6 +3,7 @@ package dev.graphnous.enhancer.spring;
 import dev.graphnous.core.model.Annotation;
 import dev.graphnous.core.model.Arguments;
 import dev.graphnous.core.model.Class;
+import dev.graphnous.core.model.ConfigurationProperty;
 import dev.graphnous.core.model.File;
 import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.Module;
@@ -42,9 +43,9 @@ class SpringEnhancerTest {
         final var enhancements = enhancer.enhance(scanResult(controller(annotation(WEB + "RestController", Map.of()))));
 
         assertThat(enhancer.name()).isEqualTo("spring");
-        assertThat(enhancer.version()).isEqualTo("1.0.0");
+        assertThat(enhancer.version()).isEqualTo("1.1.0");
         assertThat(enhancements.name()).isEqualTo("spring");
-        assertThat(enhancements.version()).isEqualTo("1.0.0");
+        assertThat(enhancements.version()).isEqualTo("1.1.0");
     }
 
     @Test
@@ -452,6 +453,67 @@ class SpringEnhancerTest {
     }
 
     @Test
+    void resolvesPlaceholdersInPathsWithTheConfiguration() {
+        final var result = scanResult(controller(
+            List.of(
+                method("list()", annotation(WEB + "GetMapping", Map.of())),
+                method("find(java.lang.String)", annotation(WEB + "GetMapping", Map.of("value", "${orders.item-path:/{id}}"))),
+                method("search()", annotation(WEB + "GetMapping", Map.of("value", "${orders.search}")))
+            ),
+            annotation(WEB + "RestController", Map.of()),
+            annotation(WEB + "RequestMapping", Map.of("value", "${api.prefix}/orders"))
+        ));
+
+        // Set by the application module, and differently for a profile
+        final var app = new Module();
+        app.setPath("app");
+        app.setConfiguration(List.of(
+            property("api.prefix", "/api/${api.version}", null),
+            property("api.version", "v1", null),
+            property("api.prefix", "/test", "test")
+        ));
+        result.getModules().add(app);
+
+        final var enhancement = enhancer.enhance(result).enhancements().getFirst();
+
+        assertThat(enhancement.nodes().getFirst().metadata()).containsEntry("baseUrl", "/api/v1/orders");
+        assertThat(endpoints(enhancement)).containsExactly(
+            tuple("GET", "/api/v1/orders"),
+            tuple("GET", "/api/v1/orders/{id}"),
+            tuple("GET", "/api/v1/orders/${orders.search}")
+        );
+    }
+
+    @Test
+    void startsTheUrlsWithTheContextPathOfTheApplication() {
+        final var result = scanResult(controller(
+            List.of(method("list()", annotation(WEB + "GetMapping", Map.of()))),
+            annotation(WEB + "RestController", Map.of()),
+            annotation(WEB + "RequestMapping", Map.of("value", "/orders"))
+        ));
+        result.getModules().getFirst().setConfiguration(List.of(
+            property("server.servlet.context-path", "/shop/", null),
+            property("spring.mvc.servlet.path", "/api", null)
+        ));
+
+        final var enhancement = enhancer.enhance(result).enhancements().getFirst();
+
+        assertThat(enhancement.nodes().getFirst().metadata()).containsEntry("baseUrl", "/shop/api/orders");
+        assertThat(endpoints(enhancement)).containsExactly(tuple("GET", "/shop/api/orders"));
+    }
+
+    @Test
+    void startsTheUrlsWithTheBasePathOfAWebFluxApplication() {
+        final var result = scanResult(controller(
+            List.of(method("list()", annotation(WEB + "GetMapping", Map.of()))),
+            annotation(WEB + "RestController", Map.of())
+        ));
+        result.getModules().getFirst().setConfiguration(List.of(property("spring.webflux.base-path", "/reactive", null)));
+
+        assertThat(endpoints(enhancer.enhance(result).enhancements().getFirst())).containsExactly(tuple("GET", "/reactive"));
+    }
+
+    @Test
     void joinsUrlsWithOneSlash() {
         assertThat(SpringEnhancer.url("", "")).isEqualTo("/");
         assertThat(SpringEnhancer.url("/orders/", "/{id}")).isEqualTo("/orders/{id}");
@@ -537,6 +599,16 @@ class SpringEnhancerTest {
             "type", type,
             "optional", optional
         ));
+    }
+
+    private static ConfigurationProperty property(final String key, final String value, final String profile) {
+        final var property = new ConfigurationProperty();
+        property.setKey(key);
+        property.setValue(value);
+        property.setFile("src/main/resources/application.yml");
+        property.setProfile(profile);
+
+        return property;
     }
 
     private static Annotation annotation(final String qualifiedName, final Map<String, Object> arguments) {

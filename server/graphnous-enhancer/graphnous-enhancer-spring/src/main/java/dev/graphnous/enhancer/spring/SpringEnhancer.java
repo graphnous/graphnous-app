@@ -5,6 +5,7 @@ import dev.graphnous.core.model.Class;
 import dev.graphnous.core.model.Method;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.core.model.ScanTarget.Language;
+import dev.graphnous.enhancer.Configuration;
 import dev.graphnous.enhancer.Enhancement;
 import dev.graphnous.enhancer.Enhancements;
 import dev.graphnous.enhancer.Enhancer;
@@ -38,7 +39,12 @@ import java.util.Optional;
  * of its endpoints. Every method of it with a request mapping, such as
  * {@code @GetMapping}, is an endpoint for each of its paths and HTTP
  * methods. A {@code @RequestMapping} without methods matches every method,
- * which the endpoint names {@value #ANY_METHOD}.
+ * which the endpoint names {@value #ANY_METHOD}. Placeholders in the paths,
+ * as in {@code @RequestMapping("${api.prefix}/orders")}, are resolved with
+ * the configuration of the module, see {@link Configuration}, and the urls
+ * start with the path the application serves below: its
+ * {@code server.servlet.context-path} and {@code spring.mvc.servlet.path},
+ * or its {@code spring.webflux.base-path}.
  * <p>
  * The {@code @RequestParam}, {@code @PathVariable} and {@code @RequestBody}
  * parameters of an endpoint's method are its query parameters, path
@@ -140,7 +146,7 @@ public class SpringEnhancer implements Enhancer {
     );
 
     static final String NAME = "spring";
-    static final String VERSION = "1.0.0";
+    static final String VERSION = "1.1.0";
 
     @Override
     public String name() {
@@ -164,10 +170,11 @@ public class SpringEnhancer implements Enhancer {
 
         for (final var module : scanResult.getModules()) {
             final var moduleId = targetId + "|" + module.getPath();
+            final var configuration = Configuration.of(scanResult, module);
 
             for (final var file : module.getFiles()) {
                 for (final var type : file.getClasses()) {
-                    declare(classes, moduleId, type);
+                    declare(classes, moduleId, configuration, type);
                 }
             }
         }
@@ -183,7 +190,7 @@ public class SpringEnhancer implements Enhancer {
             final var type = declared.type();
 
             if (type.getAnnotations().stream().anyMatch(annotation -> isAny(annotation, CONTROLLERS))) {
-                final var controller = controller(classId, type);
+                final var controller = controller(classId, type, declared.configuration());
 
                 enhancements.add(controller);
                 springNodes.putIfAbsent(classId, controller.nodes().getFirst().id());
@@ -216,9 +223,10 @@ public class SpringEnhancer implements Enhancer {
     }
 
     /**
-     * A class of the scan result, by the id of its node.
+     * A class of the scan result, by the id of its node, with the
+     * configuration its module runs with.
      */
-    record Declared(String id, Class type) {
+    record Declared(String id, Class type, Configuration configuration) {
     }
 
     /**
@@ -253,11 +261,12 @@ public class SpringEnhancer implements Enhancer {
     private static void declare(
         final List<Declared> classes,
         final String moduleId,
+        final Configuration configuration,
         final Class type
     ) {
-        classes.add(new Declared(moduleId + "|class:" + type.getQualifiedName(), type));
+        classes.add(new Declared(moduleId + "|class:" + type.getQualifiedName(), type, configuration));
 
-        type.getClasses().forEach(nested -> declare(classes, moduleId, nested));
+        type.getClasses().forEach(nested -> declare(classes, moduleId, configuration, nested));
     }
 
     /**
@@ -278,15 +287,19 @@ public class SpringEnhancer implements Enhancer {
 
     private static Enhancement controller(
         final String classId,
-        final Class type
+        final Class type,
+        final Configuration configuration
     ) {
         final var controllerId = classId + "|controller";
-        final var baseUrl = type.getAnnotations()
+        final var mapping = type.getAnnotations()
             .stream()
             .filter(annotation -> isAny(annotation, List.of(REQUEST_MAPPING)))
             .findFirst()
             .flatMap(annotation -> paths(annotation).stream().findFirst())
+            .map(configuration::resolve)
             .orElse("");
+        final var prefix = prefix(configuration);
+        final var baseUrl = prefix.isEmpty() ? mapping : url(prefix, mapping);
 
         final var nodes = new ArrayList<Node>();
         final var relationships = new ArrayList<Relationship>();
@@ -296,7 +309,7 @@ public class SpringEnhancer implements Enhancer {
         for (final var method : type.getMethods()) {
             final var methodId = classId + "|method:" + method.getQualifiedName();
 
-            final var endpoints = endpoints(method, baseUrl);
+            final var endpoints = endpoints(method, baseUrl, configuration);
 
             if (endpoints.isEmpty()) {
                 continue;
@@ -397,12 +410,33 @@ public class SpringEnhancer implements Enhancer {
     }
 
     /**
+     * The path all endpoints of the application are below: its
+     * {@code spring.webflux.base-path}, or else its
+     * {@code server.servlet.context-path} followed by its
+     * {@code spring.mvc.servlet.path}; empty when it sets none.
+     */
+    private static String prefix(final Configuration configuration) {
+        final var basePath = configuration.get("spring.webflux.base-path").orElse("");
+
+        if (!basePath.isBlank()) {
+            return url(basePath, "");
+        }
+
+        final var contextPath = configuration.get("server.servlet.context-path").orElse("");
+        final var servletPath = configuration.get("spring.mvc.servlet.path").orElse("");
+
+        return contextPath.isBlank() && servletPath.isBlank() ? "" : url(contextPath, servletPath);
+    }
+
+    /**
      * The endpoints of the method's request mappings: one for each of their
      * paths and HTTP methods, with no path meaning the base url itself.
+     * Placeholders in the paths are resolved with the configuration.
      */
     private static List<Endpoint> endpoints(
         final Method method,
-        final String baseUrl
+        final String baseUrl,
+        final Configuration configuration
     ) {
         final var endpoints = new ArrayList<Endpoint>();
 
@@ -418,7 +452,7 @@ public class SpringEnhancer implements Enhancer {
 
             for (final var httpMethod : httpMethods) {
                 for (final var path : paths.isEmpty() ? List.of("") : paths) {
-                    endpoints.add(new Endpoint(httpMethod, url(baseUrl, path)));
+                    endpoints.add(new Endpoint(httpMethod, url(baseUrl, configuration.resolve(path))));
                 }
             }
         }

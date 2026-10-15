@@ -36,9 +36,9 @@ class FetchBrowserEnhancerTest {
         final var enhancements = enhancer.enhance(scanResult(file()));
 
         assertThat(enhancer.name()).isEqualTo("fetch-browser");
-        assertThat(enhancer.version()).isEqualTo("1.1.0");
+        assertThat(enhancer.version()).isEqualTo("1.2.0");
         assertThat(enhancements.name()).isEqualTo("fetch-browser");
-        assertThat(enhancements.version()).isEqualTo("1.1.0");
+        assertThat(enhancements.version()).isEqualTo("1.2.0");
     }
 
     @Test
@@ -75,6 +75,38 @@ class FetchBrowserEnhancerTest {
         assertThat(enhance(file).nodes().getFirst().metadata())
             .containsEntry("url", "/api/orders/{id}")
             .containsEntry("httpMethod", "DELETE");
+    }
+
+    @Test
+    void takesTheUrlOfAConstant() {
+        final var call = call("fetch", 3, 11);
+        call.setArguments(List.of(constant("API.ORDERS", "/api/orders"), argument("{ method: \"POST\" }")));
+
+        final var file = file();
+        file.getFunctions().add(function("load", call));
+
+        assertThat(enhance(file).nodes().getFirst().metadata())
+            .containsEntry("url", "/api/orders")
+            .containsEntry("httpMethod", "POST");
+    }
+
+    @Test
+    void takesTheUrlOfAConstantPassedToAWrapper() {
+        final var api = file("src/lib/api.ts");
+        api.getFunctions().add(function("src/lib/api:apiFetch", List.of("path"), fetch(2, "`/api${path}`")));
+
+        final var orders = file("src/lib/orders.ts");
+        final var load = wrapperCall("src/lib/api:apiFetch", 7, "Paths.ORDERS");
+        load.getArguments().getFirst().setConstant("/orders");
+        orders.getFunctions().add(function("src/lib/orders:load", List.of(), load));
+
+        final var urls = enhancer.enhance(scanResult(api, orders)).enhancements().stream()
+            .flatMap(enhancement -> enhancement.nodes().stream())
+            .filter(node -> node.sourceId().contains("orders"))
+            .map(node -> node.metadata().get("url"))
+            .toList();
+
+        assertThat(urls).containsExactly("/api/orders");
     }
 
     @Test
@@ -347,6 +379,13 @@ class FetchBrowserEnhancerTest {
         result.getModules().add(module);
 
         return result;
+    }
+
+    private static Argument constant(final String value, final String constant) {
+        final var argument = argument(value);
+        argument.setConstant(constant);
+
+        return argument;
     }
 
     private static Argument argument(final String value) {
