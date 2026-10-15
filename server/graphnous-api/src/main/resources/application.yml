@@ -101,7 +101,7 @@ graphnous:
       #   - source: /etc/graphnous/maven-settings.xml
       #     target: /maven-settings/settings.xml
     TYPESCRIPT:
-      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.0
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.1
       command:
         - node
         - /opt/graphnous/scanner.js

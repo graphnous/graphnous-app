@@ -360,6 +360,16 @@
                 </executions>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!-- Controller tests check against the spec the API is generated from -->
+                        <graphnous.openapi.spec>${graphnous.openapi.spec}</graphnous.openapi.spec>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
@@ -374,4 +384,23 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <!--
+                Builds and tests against a checkout of graphnous-schemas
+                instead of the published spec, e.g. without network access:
+                -Dgraphnous.schemas=/path/to/graphnous-schemas
+            -->
+            <id>local-schemas</id>
+            <activation>
+                <property>
+                    <name>graphnous.schemas</name>
+                </property>
+            </activation>
+            <properties>
+                <graphnous.openapi.spec>${graphnous.schemas}/openapi/v1.yaml</graphnous.openapi.spec>
+            </properties>
+        </profile>
+    </profiles>
 </project>

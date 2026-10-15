@@ -1,5 +1,6 @@
 package dev.graphnous.api.scan.v1;
 
+import dev.graphnous.api.OpenApiSpec;
 import com.atlassian.oai.validator.OpenApiInteractionValidator;
 import com.atlassian.oai.validator.report.LevelResolver;
 import com.atlassian.oai.validator.report.ValidationReport;
@@ -46,8 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class ScanControllerTest {
 
-    private static final String OPENAPI_SPEC =
-            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
+    private static final String OPENAPI_SPEC = OpenApiSpec.LOCATION;
 
     /**
      * Checks only the response, for requests that are invalid on purpose.

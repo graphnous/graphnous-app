@@ -123,7 +123,7 @@ graphnous:
           source: graphnous-maven
           target: /maven-repository
     TYPESCRIPT:
-      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.0
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.1
       command: [node, /opt/graphnous/scanner.js,
                 --path, "{repository}", --target, "{target}", --output, "{output}",
                 --download-dependencies]
@@ -264,7 +264,16 @@ cancellation, and the Neo4j repository tests through Testcontainers) are
 skipped when no Docker daemon is reachable. They run as the instance
 `graphnous-test`, so they do not remove the containers of a server running on
 the same daemon. Controller tests check requests and responses against the
-OpenAPI spec.
+OpenAPI spec the API is generated from.
+
+The build, and the controller tests, take the OpenAPI spec and the scan
+result schema from GitHub Pages, as graphnous-schemas publishes them.
+Without access to it, or to try changes to them, build and test against a
+checkout of `graphnous-schemas` instead, by its absolute path:
+
+```sh
+mvn test -Dgraphnous.schemas=/path/to/graphnous-schemas
+```
 
 ## License
 
