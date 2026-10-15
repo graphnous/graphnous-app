@@ -1,5 +1,6 @@
 package dev.graphnous.api.enhancer.v1;
 
+import dev.graphnous.api.OpenApiSpec;
 import dev.graphnous.enhancer.Enhancer;
 import dev.graphnous.enhancer.EnhancerRegistry;
 import org.junit.jupiter.api.Test;
@@ -22,8 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class EnhancerControllerTest {
 
-    private static final String OPENAPI_SPEC =
-            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
+    private static final String OPENAPI_SPEC = OpenApiSpec.LOCATION;
 
     @Autowired
     private MockMvc mockMvc;

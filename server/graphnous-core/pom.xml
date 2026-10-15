@@ -27,6 +27,8 @@
         -->
         <graphnous.scan.result.schema.url>https://graphnous.github.io/graphnous-schemas/schema/scan/scan-result.schema.json</graphnous.scan.result.schema.url>
         <graphnous.scan.result.schema.dir>${project.build.directory}/schemas/scan</graphnous.scan.result.schema.dir>
+        <graphnous.scan.result.schema.local>false</graphnous.scan.result.schema.local>
+        <graphnous.scan.result.schema.copy.skip>true</graphnous.scan.result.schema.copy.skip>
     </properties>
 
     <dependencies>
@@ -52,12 +54,41 @@
                             <goal>wget</goal>
                         </goals>
                         <configuration>
+                            <skip>${graphnous.scan.result.schema.local}</skip>
                             <uri>${graphnous.scan.result.schema.url}</uri>
                             <outputDirectory>${graphnous.scan.result.schema.dir}</outputDirectory>
                             <!-- The file name names the root class: ScanResult -->
                             <outputFileName>scan-result.json</outputFileName>
                             <skipCache>true</skipCache>
                             <overwrite>true</overwrite>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!--
+                    Copies the schema of a checkout of graphnous-schemas in its
+                    place, under the name the download gives it, with the
+                    local-schemas profile; declared before generating
+                -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>copy-scan-result-schema</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${graphnous.scan.result.schema.copy.skip}</skip>
+                            <target>
+                                <copy file="${graphnous.schemas}/scan/scan-result.schema.json"
+                                      tofile="${graphnous.scan.result.schema.dir}/scan-result.json"
+                                      overwrite="true"
+                                      failonerror="true"/>
+                            </target>
                         </configuration>
                     </execution>
                 </executions>
@@ -96,4 +127,24 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <!--
+                Builds from a checkout of graphnous-schemas instead of the
+                published schema, e.g. without network access:
+                -Dgraphnous.schemas=/path/to/graphnous-schemas
+            -->
+            <id>local-schemas</id>
+            <activation>
+                <property>
+                    <name>graphnous.schemas</name>
+                </property>
+            </activation>
+            <properties>
+                <graphnous.scan.result.schema.local>true</graphnous.scan.result.schema.local>
+                <graphnous.scan.result.schema.copy.skip>false</graphnous.scan.result.schema.copy.skip>
+            </properties>
+        </profile>
+    </profiles>
 </project>

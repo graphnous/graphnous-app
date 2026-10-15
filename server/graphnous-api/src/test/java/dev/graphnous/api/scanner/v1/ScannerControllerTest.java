@@ -1,5 +1,6 @@
 package dev.graphnous.api.scanner.v1;
 
+import dev.graphnous.api.OpenApiSpec;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,8 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class ScannerControllerTest {
 
-    private static final String OPENAPI_SPEC =
-            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
+    private static final String OPENAPI_SPEC = OpenApiSpec.LOCATION;
 
     @Autowired
     private MockMvc mockMvc;

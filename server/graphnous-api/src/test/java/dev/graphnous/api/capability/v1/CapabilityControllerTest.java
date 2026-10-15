@@ -1,5 +1,6 @@
 package dev.graphnous.api.capability.v1;
 
+import dev.graphnous.api.OpenApiSpec;
 import dev.graphnous.application.capability.Capabilities;
 import dev.graphnous.application.capability.Capability;
 import dev.graphnous.application.capability.CapabilityService;
@@ -23,8 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class CapabilityControllerTest {
 
-    private static final String OPENAPI_SPEC =
-            "https://graphnous.github.io/graphnous-schemas/openapi/v1.yaml";
+    private static final String OPENAPI_SPEC = OpenApiSpec.LOCATION;
 
     @Autowired
     private MockMvc mockMvc;
