@@ -112,7 +112,7 @@ language:
 graphnous:
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.1
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.2
       command: [java, -XX:MaxRAMPercentage=75, -jar, /opt/graphnous/java-scanner.jar,
                 --path, "{repository}", --target, "{target}",
                 --java-version, "{languageVersion}", --output, "{output}",
@@ -123,7 +123,7 @@ graphnous:
           source: graphnous-maven
           target: /maven-repository
     TYPESCRIPT:
-      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.1
+      image: ghcr.io/graphnous/graphnous-typescript-scanner:0.2.2
       command: [node, /opt/graphnous/scanner.js,
                 --path, "{repository}", --target, "{target}", --output, "{output}",
                 --download-dependencies]
