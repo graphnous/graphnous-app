@@ -11,7 +11,9 @@ import {
     Sidebar,
 } from "@graphnous/theme";
 
+import { NotificationBell } from "@/components/NotificationBell/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle/ThemeToggle";
+import { useUnreadNotificationCount } from "@/lib/hooks/notification/useUnreadNotificationCount";
 import {
     ChatCircleIcon,
     FoldersIcon,
@@ -55,6 +57,8 @@ export function AppLayout({
         (state) => state.setSelectedSystem,
     );
 
+    const { count: unreadNotifications } = useUnreadNotificationCount(selectedSystem?.id);
+
     // The stored system may have been deleted since. Only checked once the
     // systems have loaded, so a pending or failed request keeps the selection.
     useEffect(() => {
@@ -91,6 +95,8 @@ export function AppLayout({
                     </span>
 
                     <div className="flex items-center gap-1">
+                        <NotificationBell unread={unreadNotifications} />
+
                         <ThemeToggle />
 
                         <IconButton
