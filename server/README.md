@@ -16,6 +16,7 @@ persistence. Its web app is in [`../web`](../web). See the
 | `graphnous-security` | Who may call the API (see Security below), authorization, entitlements and capabilities. Authorization and entitlements currently allow everything, and the local deployment has every capability and reports authorization as disabled. |
 | `graphnous-scanner` | The scanner framework: target detection, scan planning, the scanner definitions, the Docker sandbox that runs the scanner images, and `graphnous-scanner-cli`, which scans a repository from the command line. |
 | `graphnous-enhancer` | The enhancers, which add to what a scan found before it is stored. `graphnous-enhancer-core` holds the `Enhancer` interface, what enhancers return, and the provider that runs them; `graphnous-enhancer-spring` adds the controllers and endpoints of Spring web applications; `graphnous-enhancer-angular` the components, directives, services and modules (`NgModule`) of Angular applications and the HTTP calls they make with `HttpClient`. |
+| `graphnous-github` | The GitHub App: its webhooks, the scans of pushes and pull requests, and the impact reports it posts on pull requests (see GitHub App below). |
 | `graphnous-mcp` | The tools AI agents may use to look up systems, projects, scans and what the scans found, read-only and as the user they run for: the assistant's, and those of the MCP server for coding agents (see MCP below). |
 
 The relational database is PostgreSQL. Flyway creates and migrates its
@@ -101,6 +102,7 @@ command-line arguments or environment variables.
 | `graphnous.security.enabled` (`GRAPHNOUS_SECURITY_ENABLED`) | `false` | Whether the API needs access tokens; see Security. |
 | `graphnous.security.issuer-uri` (`GRAPHNOUS_PLATFORM_URL`) | `http://localhost:1338` | The Graphnous platform, which issues the access tokens. |
 | `graphnous.security.default-organization-id` | `00000000-0000-0000-0000-000000000000` | The organization of every request with security off. |
+| `graphnous.github.enabled` (`GRAPHNOUS_GITHUB_ENABLED`) | `false` | Whether the server is a GitHub App; see GitHub App. |
 
 ## Scanners
 
@@ -253,6 +255,27 @@ the token's signature with the platform's keys, its issuer, its expiry,
 that it is for `graphnous-api`, and that it has an organization; it knows
 nothing else of the platform, and fetches its keys on the first request,
 so the platform need not be up when the server starts.
+
+## GitHub App
+
+The server can be a GitHub App that reports on every pull request what its
+change affects: it scans the pull request's head, compares it with the
+newest completed scan of the branch it merges into, and posts the impact
+report as a check run and a comment, edited on every new push. A push to
+the default branch scans it, and the repositories the App is installed on
+are checked out with its token. It is off unless `graphnous.github.enabled`
+(`GRAPHNOUS_GITHUB_ENABLED`) is on.
+
+[GITHUB_APP.md](../GITHUB_APP.md) describes how to create the App, from
+Graphnous's settings or by hand, how to develop with it locally through
+smee.io, and its configuration.
+
+The webhooks (`POST /github/webhooks`) and the page GitHub sends the browser
+back to after registering the App (`GET /github/setup/callback`) need no
+access token, with security on too: a delivery's signature, and the
+callback's one-time state, are what let them in. Without the App, the
+[impact report Action](../actions/impact-report) posts the same comment from
+a workflow.
 
 ## MCP
 

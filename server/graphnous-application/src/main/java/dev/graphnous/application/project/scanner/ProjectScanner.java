@@ -8,6 +8,7 @@ import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanCompletedEvent;
+import dev.graphnous.application.scan.ScanFailedEvent;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
@@ -372,6 +373,7 @@ public class ProjectScanner {
 
         this.scanService.updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
         this.scanNotifier.scanFailed(scan, message(error));
+        this.eventPublisher.publish(new ScanFailedEvent(scan.id(), scan.projectId(), message(error)));
     }
 
     private ScanStepType start(

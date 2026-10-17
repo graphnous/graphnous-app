@@ -7,6 +7,7 @@ import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.pagination.Page;
+import dev.graphnous.application.project.GitRepositories;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.system.SystemService;
@@ -76,7 +77,7 @@ class ScanSourceServiceTest {
         "ssh://git@github.com:22/acme/shop"
     })
     void takesEachFormOfTheRepositorysUrl(final String gitUrl) {
-        assertThat(ScanSourceService.repositoryKey(gitUrl)).isEqualTo("github.com/acme/shop");
+        assertThat(GitRepositories.key(gitUrl)).isEqualTo("github.com/acme/shop");
     }
 
     @Test
@@ -131,6 +132,15 @@ class ScanSourceServiceTest {
 
         assertThat(found.project()).isEqualTo(web);
         assertThat(found.file()).isEqualTo(page);
+    }
+
+    @Test
+    void listsEveryProjectOfTheRepository() {
+        final var web = project("web", "git@github.com:acme/shop.git", "web");
+
+        projects(app, web, project("other", "https://github.com/acme/other", null));
+
+        assertThat(service().getRepositoryProjects(context, "https://github.com/Acme/shop")).containsExactly(app, web);
     }
 
     @Test

@@ -11,6 +11,7 @@ import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.InMemoryScanStepRepository;
 import dev.graphnous.application.scan.ScanCompletedEvent;
+import dev.graphnous.application.scan.ScanFailedEvent;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.ScanSteps;
 import dev.graphnous.application.scan.log.ScanLogService;
@@ -316,7 +317,7 @@ class ProjectScannerTest {
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(COMPLETED, COMPLETED, COMPLETED, FAILED, SKIPPED, SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
-        verify(eventPublisher, never()).publish(any());
+        verify(eventPublisher, never()).publish(any(ScanCompletedEvent.class));
     }
 
     @Test
@@ -328,7 +329,7 @@ class ProjectScannerTest {
 
         verify(scanResultRepository, never()).save(any(), any());
         verify(scanService, never()).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
-        verify(eventPublisher, never()).publish(any());
+        verify(eventPublisher, never()).publish(any(ScanCompletedEvent.class));
         verify(scanLogService).log(eq(scan.id()), eq(ScanLogLevel.WARN), startsWith("Scan finished after it was marked FAILED"));
         verify(sourceCheckout).remove(eq(scan.id()), any());
     }
@@ -344,7 +345,7 @@ class ProjectScannerTest {
 
         verify(scanResultRepository, never()).save(any(), any());
         verify(scanService, never()).updateStatus(context, scan.id(), Scan.ScanStatus.COMPLETED);
-        verify(eventPublisher, never()).publish(any());
+        verify(eventPublisher, never()).publish(any(ScanCompletedEvent.class));
         // Its logs were deleted with it
         verify(scanLogService, never()).log(eq(scan.id()), eq(ScanLogLevel.WARN), startsWith("Scan finished"));
     }
@@ -359,6 +360,7 @@ class ProjectScannerTest {
         verify(scanLogService).log(scan.id(), ScanLogLevel.ERROR, "Scan failed: Scanner crashed");
         assertThat(steps.step(scan.id(), SCAN).error()).isEqualTo("Scanner crashed");
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
+        verify(eventPublisher).publish(new ScanFailedEvent(scan.id(), scan.projectId(), "Scanner crashed"));
     }
 
     @Test
@@ -573,7 +575,7 @@ class ProjectScannerTest {
         assertThat(steps.statuses(scan.id()).values())
             .containsExactly(SKIPPED, SKIPPED, SKIPPED, FAILED, SKIPPED, SKIPPED);
         verify(scanService).updateStatus(context, scan.id(), Scan.ScanStatus.FAILED);
-        verify(eventPublisher, never()).publish(any());
+        verify(eventPublisher, never()).publish(any(ScanCompletedEvent.class));
         verify(scanNotifier).scanFailed(scan, "Neo4j unavailable");
     }
 

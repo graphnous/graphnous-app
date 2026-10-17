@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -76,6 +77,11 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                     .requestMatchers("/error", "/actuator/health").permitAll()
+                    // GitHub's webhooks, which have no token: the App checks their signature
+                    .requestMatchers(HttpMethod.POST, "/github/webhooks").permitAll()
+                    // Where GitHub sends the browser back to after registering the App: the
+                    // state it carries, which the API gave out, is what lets it in
+                    .requestMatchers(HttpMethod.GET, "/github/setup/callback").permitAll()
                     .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()));

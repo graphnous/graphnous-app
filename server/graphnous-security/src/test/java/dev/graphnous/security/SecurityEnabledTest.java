@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -98,6 +99,19 @@ class SecurityEnabledTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.user").value(this.user.toString()))
             .andExpect(jsonPath("$.organization").value(this.organization.toString()));
+    }
+
+    @Test
+    void letsGitHubsWebhooksAndSetupCallbackThroughWithoutAToken() throws Exception {
+        // Past security to no handler, as the test has no App: its signature is the App's to check
+        this.mvc.perform(post("/github/webhooks"))
+            .andExpect(status().isNotFound());
+        this.mvc.perform(get("/github/webhooks"))
+            .andExpect(status().isUnauthorized());
+        this.mvc.perform(get("/github/setup/callback"))
+            .andExpect(status().isNotFound());
+        this.mvc.perform(get("/api/v1/github/app"))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -16,6 +16,7 @@ import dev.graphnous.application.project.scanner.ProjectScanner;
 import dev.graphnous.application.project.scanner.RepositoryScanner;
 import dev.graphnous.application.project.scanner.ScanExecutor;
 import dev.graphnous.application.project.scanner.ScannerFiles;
+import dev.graphnous.application.project.scanner.GitCredentials;
 import dev.graphnous.application.project.scanner.SourceCheckout;
 import dev.graphnous.application.scan.ScanLanguages;
 import dev.graphnous.application.scan.ScanService;
@@ -36,6 +37,7 @@ import dev.graphnous.scanner.typescript.language.NodeVersionDetector;
 import dev.graphnous.scanner.typescript.targetdetector.NpmTargetDetector;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -134,13 +136,16 @@ public class ScannerConfiguration {
         final DockerGitCheckout dockerGitCheckout,
         final DockerScanContainers dockerScanContainers,
         final SshKeyRetriever sshKeyRetriever,
-        final ScannerProperties properties
+        final ScannerProperties properties,
+        final ObjectProvider<GitCredentials> gitCredentials
     ) {
         return new DockerSourceCheckout(
             dockerGitCheckout,
             dockerScanContainers,
             sshKeyRetriever,
-            properties.sshKnownHosts()
+            properties.sshKnownHosts(),
+            // Such as the GitHub App's, when it is on
+            gitCredentials.getIfAvailable(() -> GitCredentials.NONE)
         );
     }
 

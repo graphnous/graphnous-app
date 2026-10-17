@@ -242,6 +242,23 @@ class RepositoriesTest {
     }
 
     @Test
+    void findsTheLatestCompletedScanOfABranch() {
+        final var backend = project(system("Shop"), "backend");
+        final var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        scan(backend, Scan.ScanStatus.COMPLETED, now.minusSeconds(300));
+        final var latest = scan(backend, Scan.ScanStatus.COMPLETED, now.minusSeconds(200));
+        scan(backend, Scan.ScanStatus.FAILED, now.minusSeconds(100));
+        scan(backend, Scan.ScanStatus.RUNNING, now);
+        scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.COMPLETED, new Scan.SourceRevision("abc", "feature"), now, now, null
+        ));
+
+        assertThat(scanRepository.findLatestCompleted(backend.id(), "main")).map(Scan::id).contains(latest.id());
+        assertThat(scanRepository.findLatestCompleted(backend.id(), "develop")).isEmpty();
+    }
+
+    @Test
     void tellsWhetherAProjectHasActiveScans() {
         final var shop = system("Shop");
         final var idle = project(shop, "idle");

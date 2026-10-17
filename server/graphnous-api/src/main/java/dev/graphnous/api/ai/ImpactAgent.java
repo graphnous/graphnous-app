@@ -1,6 +1,7 @@
 package dev.graphnous.api.ai;
 
 import dev.graphnous.application.context.RequestContext;
+import dev.graphnous.application.scan.impact.ImpactAssessor;
 import dev.graphnous.application.scan.impact.ImpactReport;
 import dev.graphnous.mcp.GraphnousTools;
 import org.springframework.ai.chat.client.ChatClient;
@@ -19,7 +20,7 @@ import java.util.Set;
  * runs for the chat assistant, as a tool, so the report and the lookups
  * stay out of the conversation, which gets the assessment only.
  */
-public class ImpactAgent {
+public class ImpactAgent implements ImpactAssessor {
 
     static final String SYSTEM_PROMPT = """
         You assess what a change of a software project risks breaking, for
@@ -103,6 +104,7 @@ public class ImpactAgent {
      *
      * @throws IllegalStateException when there is no model to run on
      */
+    @Override
     public String assess(final RequestContext context, final ImpactReport report) {
         final var scoped = tools.forContext(context);
 

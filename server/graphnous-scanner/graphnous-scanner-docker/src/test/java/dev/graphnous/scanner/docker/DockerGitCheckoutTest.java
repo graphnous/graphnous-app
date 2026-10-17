@@ -10,10 +10,13 @@ import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -189,6 +192,29 @@ class DockerGitCheckoutTest {
         final var source = new GitSource("git@example.com:org/repo.git", null, null, "secret", "example.com ssh-ed25519 AAAA");
 
         assertThat(source.toString()).doesNotContain("secret");
+    }
+
+    @Test
+    void sendsHttpsCredentialsToTheUrlsServerOnly() {
+        final var source = new GitSource(
+            "https://github.com/acme/shop.git", null, "abc123", null, null, "x-access-token", "ghs_secret"
+        );
+
+        assertThat(DockerGitCheckout.credentialFiles(source)).containsExactly(Map.entry(
+            "gitconfig",
+            "[http \"https://github.com/\"]\n\textraHeader = Authorization: Basic "
+                + Base64.getEncoder().encodeToString("x-access-token:ghs_secret".getBytes(StandardCharsets.UTF_8)) + "\n"
+        ));
+        assertThat(source.toString()).contains("httpUsername=x-access-token").doesNotContain("ghs_secret");
+    }
+
+    @Test
+    void usesHttpsCredentialsForHttpsUrlsOnly() {
+        final var ssh = new GitSource("git@github.com:acme/shop.git", null, null, null, null, "x-access-token", "ghs_secret");
+
+        assertThat(ssh.httpUsername()).isNull();
+        assertThat(ssh.httpPassword()).isNull();
+        assertThat(DockerGitCheckout.credentialFiles(ssh)).isEmpty();
     }
 
     @Test

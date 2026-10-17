@@ -6,6 +6,7 @@ import dev.graphnous.application.exception.ValidationException;
 import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.pagination.PageQuery;
 import dev.graphnous.application.pagination.Sort;
+import dev.graphnous.application.project.GitRepositories;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.system.SystemService;
@@ -19,7 +20,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.IntFunction;
-import java.util.regex.Pattern;
 
 /**
  * Finds a source file of a repository in the newest completed scan of its
@@ -34,12 +34,6 @@ public class ScanSourceService {
      * How many systems, projects or scans are read at once.
      */
     private static final int PAGE_SIZE = 100;
-
-    // The host and path of an scp-like git url, such as git@github.com:org/repo.git
-    private static final Pattern SCP_LIKE = Pattern.compile("^(?:[^@/]+@)?([^:/]+):(?!//)(.+)$");
-
-    // The scheme, and the user of a url such as ssh://git@github.com/org/repo
-    private static final Pattern SCHEME = Pattern.compile("^[a-z][a-z0-9+.-]*://(?:[^@/]+@)?", Pattern.CASE_INSENSITIVE);
 
     private final SystemService systemService;
     private final ProjectService projectService;
@@ -90,7 +84,7 @@ public class ScanSourceService {
             throw new ValidationException("path is required");
         }
 
-        final var repository = repositoryKey(gitUrl);
+        final var repository = GitRepositories.key(gitUrl);
         final var projects = projects(context, repository, file);
 
         if (projects.isEmpty()) {
@@ -155,10 +149,21 @@ public class ScanSourceService {
     }
 
     /**
-     * The user's projects of the repository whose directory the file is in,
-     * the deepest directory first.
+     * The user's projects of the repository, by system and name: one, or
+     * several when they are directories of it.
+     *
+     * @param gitUrl the url of the repository, in any form git takes, such
+     *               as {@code git@github.com:acme/shop.git}
      */
-    private List<Project> projects(final RequestContext context, final String repository, final String file) {
+    public List<Project> getRepositoryProjects(final RequestContext context, final String gitUrl) {
+        if (gitUrl == null || gitUrl.isBlank()) {
+            throw new ValidationException("gitUrl is required");
+        }
+
+        return repositoryProjects(context, GitRepositories.key(gitUrl));
+    }
+
+    private List<Project> repositoryProjects(final RequestContext context, final String repository) {
         final var projects = new ArrayList<Project>();
 
         all(page -> systemService.getSystems(context, query(page, new Sort("name", Sort.Direction.ASC))))
@@ -166,9 +171,21 @@ public class ScanSourceService {
                     context, query(page, new Sort("name", Sort.Direction.ASC)), system.id()
                 ))
                 .stream()
-                .filter(project -> project.gitUrl() != null && repository.equals(repositoryKey(project.gitUrl())))
-                .filter(project -> isIn(file, normalizePath(project.path())))
+                .filter(project -> project.gitUrl() != null && repository.equals(GitRepositories.key(project.gitUrl())))
                 .forEach(projects::add));
+
+        return projects;
+    }
+
+    /**
+     * The user's projects of the repository whose directory the file is in,
+     * the deepest directory first.
+     */
+    private List<Project> projects(final RequestContext context, final String repository, final String file) {
+        final var projects = new ArrayList<>(repositoryProjects(context, repository)
+            .stream()
+            .filter(project -> isIn(file, normalizePath(project.path())))
+            .toList());
 
         projects.sort(Comparator.comparingInt((Project project) -> normalizePath(project.path()).length()).reversed());
 
@@ -190,34 +207,6 @@ public class ScanSourceService {
         }
     }
 
-    /**
-     * Who hosts the repository and where, the same for each form of its url:
-     * {@code github.com/org/repo} for {@code https://github.com/org/repo},
-     * {@code git@github.com:org/repo.git} and
-     * {@code ssh://git@github.com/org/repo}.
-     */
-    static String repositoryKey(final String gitUrl) {
-        var url = gitUrl.trim();
-
-        final var scheme = SCHEME.matcher(url);
-
-        if (scheme.find()) {
-            url = url.substring(scheme.end());
-        } else {
-            final var scpLike = SCP_LIKE.matcher(url);
-
-            if (scpLike.matches()) {
-                url = scpLike.group(1) + "/" + scpLike.group(2);
-            }
-        }
-
-        url = url.replaceAll("/+$", "").replaceAll("(?i)\\.git$", "");
-
-        // A port, as in ssh://git@host:2222/org/repo, does not change the repository
-        url = url.replaceFirst("^([^/:]+):\\d+/", "$1/");
-
-        return url.toLowerCase(Locale.ROOT);
-    }
 
     /**
      * The path with forward slashes and without a leading {@code ./} or

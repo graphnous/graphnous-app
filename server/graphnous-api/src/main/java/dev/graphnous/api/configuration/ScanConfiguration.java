@@ -5,6 +5,7 @@ import dev.graphnous.api.event.SpringEventPublisher;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.entitlement.EntitlementService;
 import dev.graphnous.application.notification.NotificationRepository;
+import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.project.scanner.ScanCanceller;
@@ -72,6 +73,7 @@ public class ScanConfiguration {
         final ScanCanceller scanCanceller,
         final ScanSteps scanSteps,
         final ScanNotifier scanNotifier,
+        final EventPublisher eventPublisher,
         @Value("${graphnous.scans.timeout}") final Duration timeout
     ) {
         return new ScanRecovery(
@@ -80,6 +82,7 @@ public class ScanConfiguration {
             scanCanceller,
             scanSteps,
             scanNotifier,
+            eventPublisher,
             timeout,
             Clock.systemUTC()
         );

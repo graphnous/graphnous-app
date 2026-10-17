@@ -30,6 +30,15 @@ services:
       GRAPHNOUS_WORKSPACE_TYPE: volume
       GRAPHNOUS_WORKSPACE_VOLUME: graphnous-checkouts
       GRAPHNOUS_WORKSPACE_PATH: /checkouts
+      # The GitHub App, off unless enabled (see GITHUB_APP.md at the
+      # repository's root); unset values are left empty
+      GRAPHNOUS_GITHUB_ENABLED: ${GRAPHNOUS_GITHUB_ENABLED:-false}
+      GRAPHNOUS_SECRETS_KEY: ${GRAPHNOUS_SECRETS_KEY:-}
+      GRAPHNOUS_GITHUB_SERVER_URL: ${GRAPHNOUS_GITHUB_SERVER_URL:-}
+      GRAPHNOUS_GITHUB_WEBHOOK_URL: ${GRAPHNOUS_GITHUB_WEBHOOK_URL:-}
+      GRAPHNOUS_GITHUB_APP_ID: ${GRAPHNOUS_GITHUB_APP_ID:-}
+      GRAPHNOUS_GITHUB_PRIVATE_KEY: ${GRAPHNOUS_GITHUB_PRIVATE_KEY:-}
+      GRAPHNOUS_GITHUB_WEBHOOK_SECRET: ${GRAPHNOUS_GITHUB_WEBHOOK_SECRET:-}
     # The server runs as a non-root user, which needs the group that owns
     # the Docker socket: 0 on Docker Desktop, usually the docker group on
     # Linux (DOCKER_GID=$(stat -c %g /var/run/docker.sock))

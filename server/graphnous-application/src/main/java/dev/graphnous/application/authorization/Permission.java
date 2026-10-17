@@ -18,5 +18,9 @@ public enum Permission {
 
     CHAT_READ,
     CHAT_WRITE,
-    CHAT_DELETE
+    CHAT_DELETE,
+
+    // The organization's integrations, such as the GitHub App
+    INTEGRATION_READ,
+    INTEGRATION_MANAGE
 }
