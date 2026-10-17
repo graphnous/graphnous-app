@@ -35,6 +35,9 @@ class GraphnousAgentTest {
     private GraphnousTools tools;
 
     @Mock
+    private ImpactAgent impactAgent;
+
+    @Mock
     private ChatService chatService;
 
     @Test
@@ -109,9 +112,10 @@ class GraphnousAgentTest {
 
     private GraphnousAgent agent() {
         return new GraphnousAgent(
-            tokenRetriever,
+            new ChatModels(tokenRetriever),
             contextProvider,
             tools,
+            impactAgent,
             chatService,
             new JacksonSerializer(),
             "gpt-5"

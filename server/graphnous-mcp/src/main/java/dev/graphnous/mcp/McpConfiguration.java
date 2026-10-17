@@ -4,6 +4,7 @@ import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.graph.ScanGraphService;
+import dev.graphnous.application.scan.impact.ImpactAnalysisService;
 import dev.graphnous.application.scan.links.HttpLinkService;
 import dev.graphnous.application.scan.methods.ScanMethodService;
 import dev.graphnous.application.scan.source.ScanSourceService;
@@ -40,7 +41,8 @@ public class McpConfiguration {
         final ScanMethodService scanMethodService,
         final ScanUsageService scanUsageService,
         final ScanSourceService scanSourceService,
-        final HttpLinkService httpLinkService
+        final HttpLinkService httpLinkService,
+        final ImpactAnalysisService impactAnalysisService
     ) {
         return new GraphnousTools(
             contextProvider,
@@ -51,7 +53,8 @@ public class McpConfiguration {
             scanMethodService,
             scanUsageService,
             scanSourceService,
-            httpLinkService
+            httpLinkService,
+            impactAnalysisService
         );
     }
 

@@ -264,8 +264,14 @@ the systems, projects and scans, a scan's classes, methods, annotations and
 dependencies; what uses a class, method or field, in its project and over
 HTTP in the other projects of its system; a system's HTTP endpoints, with
 the method that serves each and every call of it, and the calls that reach
-none; and what one scan of a project changes from another, such as a
-branch's from main's, endpoints included. With Claude Code, against a server on this machine:
+none; what one scan of a project changes from another, such as a
+branch's from main's, endpoints included; and what that change affects
+(`analyzeImpact`): what uses what it removes or changes, in every project
+of the system, and the calls that no longer reach an endpoint. The chat
+assistant asks an impact agent of its own, on
+`graphnous.ai.openai.impact-model`, to rank those risks. The same report is
+a pull request comment at `GET /api/v1/scans/{head}/impact-comment`, which
+the [impact report Action](../actions/impact-report) posts. With Claude Code, against a server on this machine:
 
 ```sh
 claude mcp add --transport http graphnous http://localhost:1337/mcp

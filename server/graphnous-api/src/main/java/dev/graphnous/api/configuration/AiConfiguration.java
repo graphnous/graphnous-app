@@ -2,7 +2,9 @@ package dev.graphnous.api.configuration;
 
 import com.agui.community.core.agent.Agent;
 import com.agui.community.core.serialization.Serializer;
+import dev.graphnous.api.ai.ChatModels;
 import dev.graphnous.api.ai.GraphnousAgent;
+import dev.graphnous.api.ai.ImpactAgent;
 import dev.graphnous.application.ai.AiApiTokenRetriever;
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.chat.ChatService;
@@ -14,28 +16,49 @@ import dev.graphnous.mcp.GraphnousTools;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
 
 @Configuration
 public class AiConfiguration {
 
+    @Bean
+    ChatModels chatModels(final AiApiTokenRetriever tokenRetriever) {
+        return new ChatModels(tokenRetriever);
+    }
+
+    /**
+     * What a change risks breaking, which the assistant asks for as a tool.
+     */
+    @Bean
+    ImpactAgent impactAgent(
+        final ChatModels chatModels,
+        final GraphnousTools tools,
+        final JsonMapper json,
+        @Value("${graphnous.ai.openai.impact-model}") final String model
+    ) {
+        return new ImpactAgent(chatModels, tools, json, model);
+    }
+
     /**
      * The assistant; the AG-UI starter serves it at ag-ui.server.path.
      */
     @Bean
     Agent assistant(
-        final AiApiTokenRetriever tokenRetriever,
+        final ChatModels chatModels,
         final RequestContextProvider contextProvider,
         final GraphnousTools tools,
+        final ImpactAgent impactAgent,
         final ChatService chatService,
         final Serializer serializer,
         @Value("${graphnous.ai.openai.model}") final String model
     ) {
         return new GraphnousAgent(
-            tokenRetriever,
+            chatModels,
             contextProvider,
             tools,
+            impactAgent,
             chatService,
             serializer,
             model

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -68,6 +69,13 @@ public class ScanRepositoryImpl implements ScanRepository {
             .stream()
             .map(this.scanMapper::toDomain)
             .toList();
+    }
+
+    @Override
+    public Optional<Scan> findLatestCompleted(final Project.ProjectId projectId, final String branch) {
+        return this.jpaRepository
+            .findFirstByProjectIdAndBranchAndStatusOrderByCreatedAtDesc(projectId.id(), branch, Scan.ScanStatus.COMPLETED)
+            .map(this.scanMapper::toDomain);
     }
 
     private static org.springframework.data.domain.Pageable pageable(final PageQuery pageQuery) {

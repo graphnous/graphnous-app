@@ -153,3 +153,18 @@ export const Failed: Story = {
 export const UnknownTool: Story = {
   args: { name: "somethingElse", parameters: {}, result: JSON.stringify({ answer: 42 }) },
 };
+
+export const ImpactAssessment: Story = {
+  args: {
+    name: "assessImpact",
+    parameters: { baseScanId: "a1", headScanId: "b2" },
+    result: JSON.stringify(
+      "**Risk: high**, as a call of the web app no longer reaches the api.\n\n" +
+        "1. `GET /api/orders` moved to `/api/v2/orders`: `loadOrders` in web, src/orders.ts:12, still calls the old path.",
+    ),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("What the change risks breaking")).toBeVisible();
+    await expect(canvas.getByText(/still calls the old path/)).toBeVisible();
+  },
+};

@@ -25,6 +25,7 @@ import dev.graphnous.application.scan.files.ScanFileRepository;
 import dev.graphnous.application.scan.files.ScanFileService;
 import dev.graphnous.application.scan.graph.ScanGraphRepository;
 import dev.graphnous.application.scan.graph.ScanGraphService;
+import dev.graphnous.application.scan.impact.ImpactAnalysisService;
 import dev.graphnous.application.scan.links.HttpLinkRepository;
 import dev.graphnous.application.scan.links.HttpLinkService;
 import dev.graphnous.application.scan.methods.ScanMethodRepository;
@@ -185,6 +186,17 @@ public class ScanConfiguration {
         final ScanSourceRepository scanSourceRepository
     ) {
         return new ScanSourceService(systemService, projectService, scanService, scanSourceRepository);
+    }
+
+    @Bean
+    ImpactAnalysisService impactAnalysisService(
+        final ScanService scanService,
+        final ProjectService projectService,
+        final ScanGraphService scanGraphService,
+        final ScanUsageService scanUsageService,
+        final HttpLinkRepository httpLinkRepository
+    ) {
+        return new ImpactAnalysisService(scanService, projectService, scanGraphService, scanUsageService, httpLinkRepository);
     }
 
     @Bean

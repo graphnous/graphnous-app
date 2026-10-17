@@ -9,6 +9,7 @@ import {
     MagnifyingGlassIcon,
     PackageIcon,
     ScanIcon,
+    ShieldWarningIcon,
     TagIcon,
     WrenchIcon,
     type Icon as PhosphorIcon,
@@ -120,6 +121,12 @@ const VIEWS: Record<string, ToolView> = {
         label: () => "Dependencies",
         count: length,
         render: (result) => <DependenciesView dependencies={result as Dependency[]} />,
+    },
+    // The impact agent's assessment, in Markdown, which the assistant passes on
+    assessImpact: {
+        icon: ShieldWarningIcon,
+        label: () => "What the change risks breaking",
+        render: (result) => <p className="whitespace-pre-wrap">{String(result)}</p>,
     },
 };
 
