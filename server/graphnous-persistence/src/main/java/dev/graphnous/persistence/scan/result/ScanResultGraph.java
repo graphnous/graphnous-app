@@ -62,6 +62,18 @@ import java.util.stream.Stream;
  * each is spread in {@code argumentSpreads}; all three are as long as each
  * other, and empty for a call that passes nothing. A scan whose scanner
  * did not record arguments has none of them.
+ * <p>
+ * A call of what a package exports, such as rendering {@code Button} of
+ * {@code @acme/theme}, which the scanner names with the module it is
+ * imported from, has a node of its own to point at: a
+ * {@code PackageExport} of the target, one for each export the target's
+ * code uses, with its {@code package} ({@code @acme/theme}), the
+ * {@code module} it is imported from ({@code @acme/theme} or a subpath
+ * such as {@code @acme/theme/format}), its {@code name} ({@code Button})
+ * and its {@code qualifiedName} as the scanner names it
+ * ({@code @acme/theme:Button}). Such a call is a {@code CALLS} or
+ * {@code INSTANTIATES} relationship to it like any other, with the line
+ * and what it passes.
  */
 record ScanResultGraph(
     List<Map<String, Object>> targets,
@@ -81,7 +93,9 @@ record ScanResultGraph(
     List<Map<String, Object>> classAnnotations,
     List<Map<String, Object>> methodAnnotations,
     List<Map<String, Object>> fieldAnnotations,
-    Map<String, List<Map<String, Object>>> usages
+    Map<String, List<Map<String, Object>>> usages,
+    List<Map<String, Object>> packageExports,
+    Map<String, List<Map<String, Object>>> packageExportUsages
 ) {
 
     /**
@@ -157,6 +171,8 @@ record ScanResultGraph(
         private final List<Map<String, Object>> classAnnotations = new ArrayList<>();
         private final List<Map<String, Object>> methodAnnotations = new ArrayList<>();
         private final List<Map<String, Object>> fieldAnnotations = new ArrayList<>();
+        private final Map<String, Map<String, Object>> packageExports = new LinkedHashMap<>();
+        private final Map<String, List<Map<String, Object>>> packageExportUsages = new LinkedHashMap<>();
 
         /**
          * The ids of the methods and functions, classes, and fields and
@@ -428,7 +444,13 @@ record ScanResultGraph(
          */
         private void addUsages(final String methodId, final Method method) {
             for (final var call : method.getCalls()) {
-                if (Boolean.FALSE.equals(call.getResolved()) || call.getTarget() == null) {
+                if (call.getTarget() == null) {
+                    continue;
+                }
+
+                final var ofPackage = call.getModule() != null && !Boolean.TRUE.equals(call.getResolved());
+
+                if (!ofPackage && Boolean.FALSE.equals(call.getResolved())) {
                     continue;
                 }
 
@@ -446,7 +468,9 @@ record ScanResultGraph(
                         .toList());
                 }
 
-                if (call.getKind() == Call.Kind.CONSTRUCTOR) {
+                if (ofPackage) {
+                    addPackageExportUsage(methodId, call, properties);
+                } else if (call.getKind() == Call.Kind.CONSTRUCTOR) {
                     pending.add(new PendingUsage("INSTANTIATES", methodId, key(call.getTarget()), properties));
                 } else {
                     // Passing a method on, as in onClick={this.save}, is not calling it
@@ -483,6 +507,56 @@ record ScanResultGraph(
                     row("line", use.getStartLine(), "kind", string(use.getKind()))
                 ));
             }
+        }
+
+        /**
+         * Keeps a call of what a package exports as a usage of the export's
+         * node, which it adds the first time the target's code uses it.
+         * The export's name is the target after the module, without the
+         * constructor of a class: {@code Store} for
+         * {@code state-kit:Store.constructor}.
+         */
+        private void addPackageExportUsage(
+            final String methodId,
+            final Call call,
+            final Map<String, Object> properties
+        ) {
+            final var constructor = call.getKind() == Call.Kind.CONSTRUCTOR;
+            final var qualifiedName = constructor && call.getTarget().endsWith(".constructor")
+                ? call.getTarget().substring(0, call.getTarget().length() - ".constructor".length())
+                : call.getTarget();
+            final var separator = qualifiedName.indexOf(':', call.getModule().length());
+            final var name = separator < 0 ? qualifiedName : qualifiedName.substring(separator + 1);
+            final var exportId = targetId + "|export:" + qualifiedName;
+
+            packageExports.computeIfAbsent(exportId, id -> row(
+                "id", id,
+                "targetId", targetId,
+                "package", packageOf(call.getModule()),
+                "module", call.getModule(),
+                "name", name,
+                "qualifiedName", qualifiedName
+            ));
+
+            if (!constructor) {
+                properties.put("reference", call.getKind() == Call.Kind.METHOD_REFERENCE);
+            }
+
+            final var usage = new HashMap<>(properties);
+            usage.put("sourceId", methodId);
+            usage.put("targetId", exportId);
+
+            packageExportUsages.computeIfAbsent(constructor ? "INSTANTIATES" : "CALLS", type -> new ArrayList<>()).add(usage);
+        }
+
+        /**
+         * The package a module imported is of: @acme/theme for
+         * @acme/theme/format, react for react/jsx-runtime.
+         */
+        private static String packageOf(final String module) {
+            final var parts = module.split("/");
+
+            return module.startsWith("@") && parts.length > 1 ? parts[0] + "/" + parts[1] : parts[0];
         }
 
         /**
@@ -765,7 +839,9 @@ record ScanResultGraph(
                 distinctById(classAnnotations),
                 distinctById(methodAnnotations),
                 distinctById(fieldAnnotations),
-                usages()
+                usages(),
+                List.copyOf(packageExports.values()),
+                packageExportUsages
             );
         }
 

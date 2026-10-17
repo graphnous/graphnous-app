@@ -296,6 +296,94 @@ class ScanResultGraphTest {
                 .containsEntry("argumentSpreads", List.of(false, true)));
     }
 
+    @Test
+    void usesAnExportOfAPackageOncePerTargetHoweverOftenItIsCalled() {
+        final var graph = ScanResultGraph.of("scan", List.of(toolbar()));
+        final var toolbar = "scan|web|.|file:src/Toolbar.tsx|function:Toolbar";
+
+        assertThat(graph.packageExports())
+            .extracting(
+                row -> row.get("id"),
+                row -> row.get("package"),
+                row -> row.get("module"),
+                row -> row.get("name"),
+                row -> row.get("qualifiedName")
+            )
+            .containsExactly(
+                tuple("scan|web|export:@acme/theme:Button", "@acme/theme", "@acme/theme", "Button", "@acme/theme:Button"),
+                tuple("scan|web|export:@acme/theme/format:formatTime", "@acme/theme", "@acme/theme/format", "formatTime",
+                    "@acme/theme/format:formatTime"),
+                tuple("scan|web|export:state-kit:Store", "state-kit", "state-kit", "Store", "state-kit:Store")
+            );
+
+        assertThat(graph.packageExportUsages().get("CALLS"))
+            .extracting(row -> row.get("sourceId"), row -> row.get("targetId"), row -> row.get("line"))
+            .containsExactly(
+                tuple(toolbar, "scan|web|export:@acme/theme:Button", 4),
+                tuple(toolbar, "scan|web|export:@acme/theme:Button", 5),
+                tuple(toolbar, "scan|web|export:@acme/theme/format:formatTime", 6)
+            );
+        assertThat(graph.packageExportUsages().get("INSTANTIATES"))
+            .extracting(row -> row.get("targetId"), row -> row.get("line"))
+            .containsExactly(tuple("scan|web|export:state-kit:Store", 7));
+
+        // Calls of what the scan does not have and that are of no package are left out
+        assertThat(graph.usages()).isEmpty();
+    }
+
+    /**
+     * A TypeScript function that renders Button of @acme/theme twice, calls
+     * formatTime of its subpath, constructs a Store of state-kit and calls
+     * a global, as the TypeScript scanner lists them.
+     */
+    private static ScanResult toolbar() {
+        final var function = new Method();
+        function.setName("Toolbar");
+        function.setQualifiedName("Toolbar");
+        function.setKind(Method.Kind.FUNCTION);
+        function.getCalls().addAll(List.of(
+            packageCall("@acme/theme:Button", "@acme/theme", Call.Kind.METHOD, 4),
+            packageCall("@acme/theme:Button", "@acme/theme", Call.Kind.METHOD, 5),
+            packageCall("@acme/theme/format:formatTime", "@acme/theme/format", Call.Kind.METHOD, 6),
+            packageCall("state-kit:Store.constructor", "state-kit", Call.Kind.CONSTRUCTOR, 7),
+            packageCall("setTimeout", null, Call.Kind.METHOD, 8)
+        ));
+
+        final var file = new File();
+        file.setPath("src/Toolbar.tsx");
+        file.getFunctions().add(function);
+
+        final var module = new Module();
+        module.setPath(".");
+        module.getFiles().add(file);
+
+        final var target = new ScanTarget();
+        target.setPath("web");
+        target.setLanguage(ScanTarget.Language.TYPESCRIPT);
+
+        final var result = new ScanResult();
+        result.setTarget(target);
+        result.getModules().add(module);
+
+        return result;
+    }
+
+    private static Call packageCall(
+        final String target,
+        final String module,
+        final Call.Kind kind,
+        final int line
+    ) {
+        final var call = new Call();
+        call.setTarget(target);
+        call.setModule(module);
+        call.setKind(kind);
+        call.setStartLine(line);
+        call.setResolved(false);
+
+        return call;
+    }
+
     private static ScanResult javaOrders() {
         return javaOrders(false);
     }

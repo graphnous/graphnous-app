@@ -19,6 +19,8 @@ import dev.graphnous.application.scan.classes.ScanClassRepository;
 import dev.graphnous.application.scan.classes.ScanClassService;
 import dev.graphnous.application.scan.dependencies.ScanDependencyRepository;
 import dev.graphnous.application.scan.dependencies.ScanDependencyService;
+import dev.graphnous.application.scan.exports.ScanPackageExportRepository;
+import dev.graphnous.application.scan.exports.ScanPackageExportService;
 import dev.graphnous.application.scan.files.ScanFileRepository;
 import dev.graphnous.application.scan.files.ScanFileService;
 import dev.graphnous.application.scan.graph.ScanGraphRepository;
@@ -123,6 +125,14 @@ public class ScanConfiguration {
         final ScanPackageRepository scanPackageRepository
     ) {
         return new ScanPackageService(scanService, scanPackageRepository);
+    }
+
+    @Bean
+    ScanPackageExportService scanPackageExportService(
+        final ScanService scanService,
+        final ScanPackageExportRepository scanPackageExportRepository
+    ) {
+        return new ScanPackageExportService(scanService, scanPackageExportRepository);
     }
 
     @Bean

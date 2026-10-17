@@ -48,7 +48,7 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
      */
     static final List<String> SCAN_LABELS = List.of(
         "ScanTarget", "Module", "File", "Package", "Class", "Method", "Field", "Annotation",
-        EnhancementRepositoryImpl.ENHANCEMENT, EnhancementRepositoryImpl.ENHANCED
+        "PackageExport", EnhancementRepositoryImpl.ENHANCEMENT, EnhancementRepositoryImpl.ENHANCED
     );
 
     /**
@@ -196,6 +196,25 @@ public class ScanResultRepositoryImpl implements ScanResultRepository {
                         usage.arguments = row.arguments, usage.argumentNames = row.argumentNames,
                         usage.argumentSpreads = row.argumentSpreads
                     """.formatted(type, ScanResultGraph.USAGES.get(type))));
+
+                write(tx, id, graph.packageExports(), """
+                    UNWIND $rows AS row
+                    MATCH (target:ScanTarget {id: row.targetId})
+                    CREATE (export:PackageExport)
+                    SET export = row, export.scanId = $scanId
+                    REMOVE export.targetId
+                    CREATE (target)-[:USES_EXPORT]->(export)
+                    """);
+
+                graph.packageExportUsages().forEach((type, rows) -> write(tx, id, rows, """
+                    UNWIND $rows AS row
+                    MATCH (source:Method {id: row.sourceId})
+                    MATCH (target:PackageExport {id: row.targetId})
+                    CREATE (source)-[usage:%s]->(target)
+                    SET usage.line = row.line, usage.reference = row.reference,
+                        usage.arguments = row.arguments, usage.argumentNames = row.argumentNames,
+                        usage.argumentSpreads = row.argumentSpreads
+                    """.formatted(type)));
 
                 deleteUnusedDependencies(tx, previousDependencies);
             });
