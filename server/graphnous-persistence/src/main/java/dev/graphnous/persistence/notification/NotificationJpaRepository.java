@@ -2,115 +2,76 @@ package dev.graphnous.persistence.notification;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
-public interface NotificationJpaRepository extends JpaRepository<NotificationEntity, UUID> {
+public interface NotificationJpaRepository
+    extends JpaRepository<NotificationEntity, UUID>, JpaSpecificationExecutor<NotificationEntity> {
+
+    Page<NotificationEntity> findAllBySystemId(
+        final UUID systemId,
+        final Pageable pageable
+    );
+
+    Page<NotificationEntity> findAllByProjectId(
+        final UUID projectId,
+        final Pageable pageable
+    );
+
+    Page<NotificationEntity> findAllByScanId(
+        final UUID scanId,
+        final Pageable pageable
+    );
+
+    // Their recipients go with them, as the database cascades
+
+    @Transactional
+    void deleteBySystemId(
+        final UUID systemId
+    );
+
+    @Transactional
+    void deleteByProjectId(
+        final UUID projectId
+    );
+
+    @Transactional
+    void deleteByScanId(
+        final UUID scanId
+    );
+
+    static Specification<NotificationEntity> ofSystem(final UUID systemId) {
+        return (root, query, builder) -> builder.equal(root.get("systemId"), systemId);
+    }
+
+    static Specification<NotificationEntity> ofProject(final UUID projectId) {
+        return (root, query, builder) -> builder.equal(root.get("projectId"), projectId);
+    }
+
+    static Specification<NotificationEntity> ofScan(final UUID scanId) {
+        return (root, query, builder) -> builder.equal(root.get("scanId"), scanId);
+    }
 
     /**
-     * The notifications, each with its recipient's row: the user's, or that
-     * of no user, matched as {@code COALESCE(r.userId, :noUser) = :user}, as
-     * no user has no id to compare.
+     * Those the user did not mark read, no user being null: without a
+     * recipient row of theirs that says read.
      */
-    String ROWS = """
-        SELECT new dev.graphnous.persistence.notification.NotificationRow(n, r.read)
-        FROM NotificationEntity n
-        LEFT JOIN NotificationRecipientEntity r ON r.notificationId = n.id AND COALESCE(r.userId, :noUser) = :user
-        """;
+    static Specification<NotificationEntity> unreadBy(final UUID userId) {
+        return (root, query, builder) -> {
+            final var read = query.subquery(Integer.class);
+            final var recipient = read.from(NotificationRecipientEntity.class);
 
-    String COUNT = """
-        SELECT COUNT(n)
-        FROM NotificationEntity n
-        LEFT JOIN NotificationRecipientEntity r ON r.notificationId = n.id AND COALESCE(r.userId, :noUser) = :user
-        """;
+            read.select(builder.literal(1)).where(
+                builder.equal(recipient.get("notificationId"), root.get("id")),
+                builder.isTrue(recipient.get("read")),
+                userId == null ? builder.isNull(recipient.get("userId")) : builder.equal(recipient.get("userId"), userId)
+            );
 
-    String UNREAD = " AND COALESCE(r.read, FALSE) = FALSE";
-
-    @Query(value = ROWS + "WHERE n.id = :id")
-    java.util.Optional<NotificationRow> findRow(
-        @Param("id") final UUID id,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser
-    );
-
-    @Query(value = ROWS + "WHERE n.systemId = :systemId", countQuery = COUNT + "WHERE n.systemId = :systemId")
-    Page<NotificationRow> findRowsOfSystem(
-        @Param("systemId") final UUID systemId,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser,
-        final Pageable pageable
-    );
-
-    @Query(value = ROWS + "WHERE n.projectId = :projectId", countQuery = COUNT + "WHERE n.projectId = :projectId")
-    Page<NotificationRow> findRowsOfProject(
-        @Param("projectId") final UUID projectId,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser,
-        final Pageable pageable
-    );
-
-    @Query(value = ROWS + "WHERE n.scanId = :scanId", countQuery = COUNT + "WHERE n.scanId = :scanId")
-    Page<NotificationRow> findRowsOfScan(
-        @Param("scanId") final UUID scanId,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser,
-        final Pageable pageable
-    );
-
-    @Query(value = ROWS + "WHERE n.systemId = :systemId" + UNREAD, countQuery = COUNT + "WHERE n.systemId = :systemId" + UNREAD)
-    Page<NotificationRow> findUnreadOfSystem(
-        @Param("systemId") final UUID systemId,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser,
-        final Pageable pageable
-    );
-
-    @Query(value = ROWS + "WHERE n.projectId = :projectId" + UNREAD, countQuery = COUNT + "WHERE n.projectId = :projectId" + UNREAD)
-    Page<NotificationRow> findUnreadOfProject(
-        @Param("projectId") final UUID projectId,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser,
-        final Pageable pageable
-    );
-
-    @Query(value = ROWS + "WHERE n.scanId = :scanId" + UNREAD, countQuery = COUNT + "WHERE n.scanId = :scanId" + UNREAD)
-    Page<NotificationRow> findUnreadOfScan(
-        @Param("scanId") final UUID scanId,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser,
-        final Pageable pageable
-    );
-
-    @Query(COUNT + "WHERE n.systemId = :systemId" + UNREAD)
-    long countUnreadOfSystem(
-        @Param("systemId") final UUID systemId,
-        @Param("user") final UUID user,
-        @Param("noUser") final UUID noUser
-    );
-
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM NotificationEntity n WHERE n.systemId = :systemId")
-    void deleteBySystemId(
-        @Param("systemId") final UUID systemId
-    );
-
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM NotificationEntity n WHERE n.projectId = :projectId")
-    void deleteByProjectId(
-        @Param("projectId") final UUID projectId
-    );
-
-    @Modifying
-    @Transactional
-    @Query("DELETE FROM NotificationEntity n WHERE n.scanId = :scanId")
-    void deleteByScanId(
-        @Param("scanId") final UUID scanId
-    );
+            return builder.not(builder.exists(read));
+        };
+    }
 }
