@@ -115,7 +115,7 @@ language:
 graphnous:
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.2
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.4.0
       command: [java, -XX:MaxRAMPercentage=75, -jar, /opt/graphnous/java-scanner.jar,
                 --path, "{repository}", --target, "{target}",
                 --java-version, "{languageVersion}", --output, "{output}",

@@ -70,7 +70,7 @@ graphnous:
   # and get files this server reads, all of which no other scanner gets.
   scanners:
     JAVA:
-      image: ghcr.io/graphnous/graphnous-java-scanner:0.3.2
+      image: ghcr.io/graphnous/graphnous-java-scanner:0.4.0
       command:
         - java
         # Resolving calls into the project's libraries takes a lot of
