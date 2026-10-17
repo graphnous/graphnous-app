@@ -1,6 +1,12 @@
 export type ScanStatus = "PENDING" | "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
 
 /**
+ * Why a scan started: in the app, from the assistant's chat, by the GitHub
+ * App, or of results uploaded from elsewhere.
+ */
+export type ScanTrigger = "MANUAL" | "CHAT" | "GITHUB_APP" | "UPLOAD";
+
+/**
  * A scan of a project at a branch and revision.
  */
 export interface Scan {
@@ -37,4 +43,9 @@ export interface Scan {
    * while it is active.
    */
   completedAt?: string | null;
+  /**
+   * Why the scan started; null for scans from before triggers were
+   * recorded.
+   */
+  trigger?: ScanTrigger | null;
 }

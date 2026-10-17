@@ -105,7 +105,7 @@ public class GitHubApp {
         final var revision = payload.path("after").asString();
 
         for (final var project : projects(context, repository)) {
-            final var scan = scanService.create(context, new CreateScanCommand(project.id(), revision, branch, null, null, null));
+            final var scan = scanService.create(context, scanOf(project, revision, branch));
 
             log.info("Scanning {} of {} for project {}: scan {}", revision, repository.path("full_name").asString(),
                 project.name(), scan.id().id());
@@ -141,7 +141,7 @@ public class GitHubApp {
             final Scan scan;
 
             try {
-                scan = scanService.create(context, new CreateScanCommand(project.id(), headSha, headBranch, null, null, null));
+                scan = scanService.create(context, scanOf(project, headSha, headBranch));
             } catch (final RuntimeException e) {
                 log.warn("Scanning pull request {}#{} for project {} failed", name, number, project.name(), e);
                 github.completeCheckRun(installation, name, checkRun, "failure",
@@ -158,6 +158,14 @@ public class GitHubApp {
             log.info("Scanning pull request {}#{} at {} for project {}: scan {}, compared with {}", name, number, headSha,
                 project.name(), scan.id().id(), baseScan == null ? "the newest scan of " + baseBranch : "scan " + baseScan.id());
         }
+    }
+
+    /**
+     * A scan the App starts, with every installed enhancer and the files
+     * and languages its project says.
+     */
+    private static CreateScanCommand scanOf(final Project project, final String revision, final String branch) {
+        return new CreateScanCommand(project.id(), revision, branch, null, null, null, Scan.Trigger.GITHUB_APP);
     }
 
     /**
@@ -193,7 +201,7 @@ public class GitHubApp {
                 return reusable.map(Scan::id);
             }
 
-            return Optional.of(scanService.create(context, new CreateScanCommand(project.id(), revision, baseBranch, null, null, null)).id());
+            return Optional.of(scanService.create(context, scanOf(project, revision, baseBranch)).id());
         } catch (final RuntimeException e) {
             log.warn("Scanning {} of project {} to compare with failed", revision, project.name(), e);
             return Optional.empty();

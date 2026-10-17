@@ -280,6 +280,21 @@ class RepositoriesTest {
     }
 
     @Test
+    void keepsWhyAScanStarted() {
+        final var backend = project(system("Shop"), "backend");
+        final var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        final var scan = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.PENDING,
+            Scan.SourceRevision.requested("abc123", "feature"), now, now, null, null, null, null, Scan.Trigger.GITHUB_APP
+        ));
+
+        assertThat(scanRepository.findById(scan.id()).trigger()).isEqualTo(Scan.Trigger.GITHUB_APP);
+        // A scan from before triggers were recorded has none
+        assertThat(scanRepository.findById(scan(backend, Scan.ScanStatus.COMPLETED).id()).trigger()).isNull();
+    }
+
+    @Test
     void tellsWhetherAProjectHasActiveScans() {
         final var shop = system("Shop");
         final var idle = project(shop, "idle");

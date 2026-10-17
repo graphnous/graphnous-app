@@ -29,6 +29,7 @@ public class ScanMapper {
         // Nothing rather than an empty list, as for the scans before there were any
         entity.setExcludes(domain.excludes().isEmpty() ? null : domain.excludes());
         entity.setLanguages(domain.languages().isEmpty() ? null : domain.languages().stream().sorted().toList());
+        entity.setTrigger(domain.trigger());
 
         return entity;
     }
@@ -48,7 +49,8 @@ public class ScanMapper {
             entity.getStartedAt(),
             entity.getEnhancers(),
             entity.getExcludes(),
-            entity.getLanguages() == null ? null : Set.copyOf(entity.getLanguages())
+            entity.getLanguages() == null ? null : Set.copyOf(entity.getLanguages()),
+            entity.getTrigger()
         );
     }
 }

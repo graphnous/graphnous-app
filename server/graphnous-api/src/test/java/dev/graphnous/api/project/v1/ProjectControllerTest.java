@@ -260,6 +260,41 @@ class ProjectControllerTest {
         verify(scanService).create(any(), eq(new CreateScanCommand(projectId, "abc123", "main")));
     }
 
+    @Test
+    void createsAScanTheUserApprovedInTheChat() throws Exception {
+        final var projectId = Project.ProjectId.generate();
+        final var now = Instant.now();
+        final var scan = new Scan(
+            Scan.ScanId.generate(), projectId, Scan.ScanStatus.PENDING,
+            new Scan.SourceRevision(null, "main"), now, now, null, null, null, null, Scan.Trigger.CHAT
+        );
+
+        when(scanService.create(any(), any(CreateScanCommand.class))).thenReturn(scan);
+
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", projectId.id())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\", \"trigger\": \"CHAT\"}")
+        )
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.trigger").value("CHAT"))
+        .andExpect(openApi().isValid(OPENAPI_SPEC));
+
+        verify(scanService).create(any(), eq(new CreateScanCommand(projectId, null, "main", null, null, null, Scan.Trigger.CHAT)));
+    }
+
+    @Test
+    void leavesTheServersTriggersToTheServer() throws Exception {
+        mockMvc.perform(
+            post("/api/v1/projects/{id}/scans", UUID.randomUUID())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"branch\": \"main\", \"trigger\": \"GITHUB_APP\"}")
+        )
+        .andExpect(status().isBadRequest());
+
+        verify(scanService, never()).create(any(), any(CreateScanCommand.class));
+    }
+
     // Choosing enhancers is not in the published OpenAPI spec yet
 
     @Test
