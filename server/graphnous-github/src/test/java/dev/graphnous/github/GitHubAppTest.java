@@ -95,6 +95,7 @@ class GitHubAppTest {
         when(github.startCheckRun(INSTALLATION, "acme/shop", "Graphnous impact: shop", "abc123")).thenReturn(7L);
         when(scanService.create(eq(context), any())).thenReturn(head);
         when(pullRequestScans.claim(any())).thenReturn(true);
+        when(impactAnalysisService.sources(any(), any())).thenReturn(ImpactComment.Sources.STORED);
     }
 
     @Test

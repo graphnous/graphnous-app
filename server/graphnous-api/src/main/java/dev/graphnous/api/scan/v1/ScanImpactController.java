@@ -107,6 +107,6 @@ public class ScanImpactController {
             }
         }
 
-        return ResponseEntity.ok(ImpactComment.render(report, projects, assessment));
+        return ResponseEntity.ok(ImpactComment.render(report, projects, assessment, impactAnalysisService.sources(context, report)));
     }
 }

@@ -87,6 +87,7 @@ class ScanImpactControllerTest {
         when(contextProvider.get()).thenReturn(context);
         when(scanService.getScan(context, head.id())).thenReturn(head);
         when(projectService.getProject(context, project.id())).thenReturn(project);
+        when(impactAnalysisService.sources(any(), any())).thenReturn(ImpactComment.Sources.STORED);
     }
 
     @Test

@@ -38,7 +38,12 @@ public class ImpactAgent implements ImpactAssessor {
           catch these, but not over HTTP or in untyped code.
         - Removed endpoints nothing calls, and changes nothing uses, are
           low risk; say so briefly rather than listing them.
-        A changed Java method signature shows as a removed method.
+        A renamed method or field, and a method whose signature changed,
+        say what replaced them; their usages are of the old one, which
+        still need to change with it. Places in tests are counted apart:
+        what only tests use is lower risk. Endpoints the change leaves
+        without callers break nothing, but may be dead code to remove;
+        mention them briefly.
 
         Look closer, with the tools, at no more than a handful of the
         highest risks, such as to see how a place uses what changed; do
@@ -146,13 +151,17 @@ public class ImpactAgent implements ImpactAssessor {
                     change.type(),
                     change.name(),
                     change.properties(),
+                    change.replacement(),
                     change.usageCount(),
+                    change.testUsageCount(),
                     change.truncated() || change.usages().size() > REPORT_USAGES,
                     change.usages().stream().limit(REPORT_USAGES).toList()
                 ))
                 .toList(),
             report.removedEndpoints(),
             report.addedEndpoints(),
+            report.movedEndpoints(),
+            report.unusedEndpoints(),
             report.brokenCalls(),
             report.projects(),
             report.truncated()

@@ -142,20 +142,162 @@ class ImpactAnalysisServiceTest {
     }
 
     @Test
-    void listsTheEndpointsTheHeadRemovesAndAdds() {
+    void listsTheEndpointsTheHeadRemovesAddsAndMoves() {
         scans();
-        final var removed = snapshot("api|orders|class:com.acme.Orders|method:list()|endpoint:GET /api/orders", "Endpoint", "GET /api/orders");
-        final var added = snapshot("api|orders|class:com.acme.Orders|method:list()|endpoint:GET /api/v2/orders", "Endpoint", "GET /api/v2/orders");
+        final var moved = snapshot("api|orders|class:com.acme.Orders|method:list()|endpoint:GET /api/orders", "Endpoint", "GET /api/orders");
+        final var to = snapshot("api|orders|class:com.acme.Orders|method:list()|endpoint:GET /api/v2/orders", "Endpoint", "GET /api/v2/orders");
+        final var removed = snapshot("api|orders|class:com.acme.Orders|method:delete()|endpoint:DELETE /api/orders", "Endpoint", "DELETE /api/orders");
+        final var added = snapshot("api|orders|class:com.acme.Orders|method:count()|endpoint:GET /api/orders/count", "Endpoint", "GET /api/orders/count");
 
         when(scanGraphService.compare(eq(context), eq(base.id()), eq(head.id()), eq(Set.of("Class", "Method", "Field", "Endpoint")), anyInt()))
-            .thenReturn(new ScanGraph.Comparison(List.of(), List.of(added), List.of(removed), List.of(), false));
+            .thenReturn(new ScanGraph.Comparison(List.of(), List.of(to, added), List.of(moved, removed), List.of(), false));
         noCalls();
 
         final var report = service().analyze(context, base.id(), head.id(), null);
 
-        assertThat(report.endpoints()).isEqualTo(new ImpactReport.Endpoints(List.of(removed), List.of(added)));
+        // Of the same handler, one each: the same endpoint at another path
+        assertThat(report.endpoints()).isEqualTo(new ImpactReport.Endpoints(
+            List.of(removed), List.of(added), List.of(new ImpactReport.Move(moved, to))
+        ));
         // Endpoints are followed through the calls, not their usages
         assertThat(report.changes()).isEmpty();
+    }
+
+    @Test
+    void listsTheEndpointsNothingCalls() {
+        scans();
+        final var handler = "api|orders|class:com.acme.Orders|method:";
+        final var v2 = handler + "list()|endpoint:GET /api/v2/orders";
+
+        when(scanGraphService.compare(eq(context), eq(base.id()), eq(head.id()), any(), anyInt()))
+            .thenReturn(new ScanGraph.Comparison(List.of(), List.of(snapshot(v2, "Endpoint", "GET /api/v2/orders")), List.of(), List.of(), false));
+
+        final var ordersBefore = endpoint(base, handler + "get()|endpoint:GET /api/orders", "/api/orders");
+        final var legacyBefore = endpoint(base, handler + "legacy()|endpoint:GET /api/legacy", "/api/legacy");
+        final var orders = endpoint(head, handler + "get()|endpoint:GET /api/orders", "/api/orders");
+        final var legacy = endpoint(head, handler + "legacy()|endpoint:GET /api/legacy", "/api/legacy");
+        final var added = endpoint(head, v2, "/api/v2/orders");
+        final var admin = endpoint(head, handler + "admin()|endpoint:GET /api/admin", "/api/admin");
+
+        // The web app calls the orders; the api itself called the legacy endpoint, and no longer does
+        final var webCall = new HttpLinks.Call(webScan.id().id() + "|call", webScan.id(), web.id(), "GET", "/api/orders", "fetch");
+        final var legacyCall = new HttpLinks.Call(base.id().id() + "|call", base.id(), api.id(), "GET", "/api/legacy", "fetch");
+
+        when(httpLinkRepository.findCalls(List.of(head, webScan))).thenReturn(List.of(webCall));
+        when(httpLinkRepository.findCalls(List.of(base, webScan))).thenReturn(List.of(webCall, legacyCall));
+        when(httpLinkRepository.findEndpoints(List.of(base))).thenReturn(List.of(ordersBefore, legacyBefore));
+        when(httpLinkRepository.findEndpoints(List.of(head))).thenReturn(List.of(orders, legacy, added, admin));
+
+        final var legacyHandler = new HttpLinks.Source(head.id().id() + "|" + handler + "legacy()", "Method", "legacy", null, "com.acme.Orders", "Orders.java", null);
+        when(httpLinkRepository.findSources(eq(List.of(head)), any())).thenReturn(Map.of(legacy.id(), legacyHandler));
+
+        final var report = service().analyze(context, base.id(), head.id(), null);
+
+        assertThat(report.unused()).isEqualTo(new ImpactReport.UnusedEndpoints(
+            List.of(new ImpactReport.UnusedEndpoint(legacy, legacyHandler)),
+            List.of(new ImpactReport.UnusedEndpoint(added, null)),
+            List.of(new ImpactReport.UnusedEndpoint(admin, null)),
+            1
+        ));
+        assertThat(report.brokenCalls()).isEmpty();
+    }
+
+    @Test
+    void movesNoEndpointWhenItsHandlerServesSeveral() {
+        final var removed = snapshot("h|endpoint:GET /a", "Endpoint", "GET /a");
+        final var first = snapshot("h|endpoint:GET /b", "Endpoint", "GET /b");
+        final var second = snapshot("h|endpoint:GET /c", "Endpoint", "GET /c");
+
+        assertThat(ImpactAnalysisService.endpoints(List.of(removed), List.of(first, second)))
+            .isEqualTo(new ImpactReport.Endpoints(List.of(removed), List.of(first, second)));
+    }
+
+    @Test
+    void saysWhatReplacedARenamedMethodOrOneWhoseSignatureChanged() {
+        scans();
+        final var make = "api|orders|class:com.acme.Orders|method:com.acme.Orders.make(Order)";
+        final var findByText = "api|orders|class:com.acme.Orders|method:com.acme.Orders.find(String)";
+
+        when(scanGraphService.compare(eq(context), eq(base.id()), eq(head.id()), any(), anyInt()))
+            .thenReturn(new ScanGraph.Comparison(
+                List.of(),
+                List.of(method(make, "make", "com.acme.Order"), method(findByText, "find", "java.lang.String")),
+                List.of(method(CREATE, "create", "com.acme.Order"), method(FIND, "find", "java.util.UUID")),
+                List.of(),
+                false
+            ));
+        noCalls();
+        when(scanUsageService.getUsages(eq(context), eq(base.id()), any(), eq(1)))
+            .thenReturn(found(List.of(), Map.of()));
+
+        final var report = service().analyze(context, base.id(), head.id(), null);
+
+        assertThat(report.changes())
+            .extracting(ImpactReport.Change::id, ImpactReport.Change::kind, ImpactReport.Change::replacement)
+            .containsExactlyInAnyOrder(
+                tuple(id(base, CREATE), ImpactReport.Kind.RENAMED, make),
+                tuple(id(base, FIND), ImpactReport.Kind.SIGNATURE_CHANGED, findByText)
+            );
+    }
+
+    @Test
+    void leavesAMethodRemovedWhenWhatReplacedItIsNotClear() {
+        final var removed = method("c|method:a(int)", "a", "int");
+
+        // Two of the same parameters: either could be meant
+        assertThat(ImpactAnalysisService.replacements(
+            List.of(removed),
+            List.of(method("c|method:b(int)", "b", "int"), method("c|method:d(int)", "d", "int"))
+        )).isEmpty();
+        // Another class, or other parameters
+        assertThat(ImpactAnalysisService.replacements(
+            List.of(removed),
+            List.of(method("other|method:b(int)", "b", "int"), method("c|method:b(long)", "b", "long"))
+        )).isEmpty();
+        // Two removed for the one added
+        assertThat(ImpactAnalysisService.replacements(
+            List.of(removed, method("c|method:e(int)", "e", "int")),
+            List.of(method("c|method:b(int)", "b", "int"))
+        )).isEmpty();
+    }
+
+    @Test
+    void renamesAFieldOfTheSameType() {
+        final var removed = new ScanGraph.Snapshot("c|field:total", "Field", "total", Map.of("type", "long"));
+        final var added = new ScanGraph.Snapshot("c|field:sum", "Field", "sum", Map.of("type", "long"));
+
+        assertThat(ImpactAnalysisService.replacements(List.of(removed), List.of(added)))
+            .containsExactly(Map.entry("c|field:total", new ImpactAnalysisService.Replacement(ImpactReport.Kind.RENAMED, "c|field:sum")));
+    }
+
+    @Test
+    void countsThePlacesInTestsApartAndListsTheOthersFirst() {
+        scans();
+        comparison(List.of(snapshot(CREATE, "Method", "create"), snapshot(FIND, "Method", "find")), List.of());
+        noCalls();
+
+        // create: two places in tests and one in code; find: one in code, so it comes first despite fewer
+        when(scanUsageService.getUsages(context, base.id(), id(base, CREATE), 1)).thenReturn(found(
+            List.of(
+                usage("createsAnOrder", base.id(), "src/test/java/com/acme/OrdersTest.java"),
+                usage("checkout", base.id(), "src/main/java/com/acme/Checkout.java"),
+                usage("listsOrders", base.id(), "web/orders.spec.ts")
+            ),
+            Map.of(base.id(), api.id())
+        ));
+        when(scanUsageService.getUsages(context, base.id(), id(base, FIND), 1)).thenReturn(found(
+            List.of(usage("show", base.id(), "src/main/java/com/acme/Show.java"), usage("reload", base.id(), "src/main/java/com/acme/Reload.java")),
+            Map.of(base.id(), api.id())
+        ));
+
+        final var report = service().analyze(context, base.id(), head.id(), null);
+
+        assertThat(report.changes())
+            .extracting(ImpactReport.Change::id, ImpactReport.Change::usageCount, ImpactReport.Change::testUsageCount)
+            .containsExactly(tuple(id(base, FIND), 2, 0), tuple(id(base, CREATE), 3, 2));
+        assertThat(report.changes().get(1).usages())
+            .extracting(usage -> usage.user().name())
+            .containsExactly("checkout", "createsAnOrder", "listsOrders");
     }
 
     @Test
@@ -259,6 +401,21 @@ class ImpactAnalysisServiceTest {
             "CALLS", new ScanUsages.Node(user, "Method", user, null), null, "Caller.java", 1,
             new ScanUsages.Node("target", "Method", "target", null), null, 1, List.of(), scanId, null
         );
+    }
+
+    private static ScanUsages.Usage usage(final String user, final Scan.ScanId scanId, final String file) {
+        return new ScanUsages.Usage(
+            "CALLS", new ScanUsages.Node(user, "Method", user, null), null, file, 1,
+            new ScanUsages.Node("target", "Method", "target", null), null, 1, List.of(), scanId, null
+        );
+    }
+
+    private static HttpLinks.Endpoint endpoint(final Scan scan, final String key, final String url) {
+        return new HttpLinks.Endpoint(scan.id().id() + "|" + key, scan.id(), scan.projectId(), "GET", url);
+    }
+
+    private static ScanGraph.Snapshot method(final String key, final String name, final String... parameterTypes) {
+        return new ScanGraph.Snapshot(key, "Method", name, Map.of("parameterTypes", List.of(parameterTypes)));
     }
 
     private static ScanUsages.Found found(final List<ScanUsages.Usage> usages, final Map<Scan.ScanId, Project.ProjectId> projects) {
