@@ -38,6 +38,10 @@ public class ScanMapper {
             domain.revision().requestedRevision()
         );
 
+        scan.setTrigger(
+            domain.trigger() == null ? null : Scan.TriggerEnum.fromValue(domain.trigger().name())
+        );
+
         scan.setCreatedAt(domain.createdAt().atZone(ZoneId.systemDefault()).toOffsetDateTime());
         scan.setUpdatedAt(domain.updatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime());
 

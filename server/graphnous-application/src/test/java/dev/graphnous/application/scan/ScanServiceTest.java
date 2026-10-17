@@ -179,6 +179,7 @@ class ScanServiceTest {
         assertThat(scan.projectId()).isEqualTo(projectId);
         // The commit is known once the scan has checked it out
         assertThat(scan.revision()).isEqualTo(new Scan.SourceRevision(null, "main", "abc123"));
+        assertThat(scan.trigger()).isEqualTo(Scan.Trigger.MANUAL);
 
         verify(authorizationService).authorize(context, Permission.SCAN_CREATE);
         verify(entitlementService).requireWithinLimit(context.organization(), Entitlement.SCANS, 3);
@@ -511,6 +512,20 @@ class ScanServiceTest {
     }
 
     @Test
+    void recordsWhyAScanStarted() {
+        final var projectId = Project.ProjectId.generate();
+
+        when(scanRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        final var scan = service().create(context, new CreateScanCommand(projectId, null, "main", null, null, null, Scan.Trigger.CHAT));
+
+        assertThat(scan.trigger()).isEqualTo(Scan.Trigger.CHAT);
+        // It stays with the scan as it moves on
+        assertThat(scan.withStatus(Scan.ScanStatus.RUNNING, scan.createdAt()).trigger()).isEqualTo(Scan.Trigger.CHAT);
+        assertThat(scan.withRevision("a".repeat(40)).trigger()).isEqualTo(Scan.Trigger.CHAT);
+    }
+
+    @Test
     void createsAScanFromUploadedResultsWithoutItsFirstSteps() {
         final var projectId = Project.ProjectId.generate();
         final var results = List.of(result("backend"), result("frontend"));
@@ -521,6 +536,7 @@ class ScanServiceTest {
 
         assertThat(scan.status()).isEqualTo(Scan.ScanStatus.PENDING);
         assertThat(scan.revision()).isEqualTo(new Scan.SourceRevision("abc123", "main"));
+        assertThat(scan.trigger()).isEqualTo(Scan.Trigger.UPLOAD);
 
         verify(projectService).getProject(context, projectId);
         verify(scanSteps).create(scan.id());

@@ -25,8 +25,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 /**
  * Creates a scan of the project from { branch, revision?, enhancers?,
- * excludes?, languages? }; 201 with the new scan, which runs in the
- * background.
+ * excludes?, languages?, trigger? }; 201 with the new scan, which runs in
+ * the background.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id: projectId } = await params;
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ code: "MALFORMED_REQUEST", message: "The body must be JSON." }, { status: 400 });
     }
 
-    const { branch, revision, enhancers, excludes, languages } =
+    const { branch, revision, enhancers, excludes, languages, trigger } =
         (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
 
     return forwardApi(
@@ -53,6 +53,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 excludes: Array.isArray(excludes) ? excludes : undefined,
                 // Without languages, the project's own are scanned; with none, every one found is
                 languages: Array.isArray(languages) ? languages : undefined,
+                // Why it starts, of those a request may give; MANUAL without one
+                trigger: trigger === "CHAT" || trigger === "MANUAL" ? trigger : undefined,
             },
         }),
         "create scan",

@@ -16,6 +16,7 @@ import { DotsThreeIcon, TrashIcon } from "@phosphor-icons/react";
 
 import { ScanRevision } from "@/components/ScanRevision/ScanRevision";
 import { ScanStatusBadge } from "@/components/ScanStatusBadge/ScanStatusBadge";
+import { ScanTriggerBadge } from "@/components/ScanTriggerBadge/ScanTriggerBadge";
 import { useDeleteScan } from "@/lib/hooks/scan/useDeleteScan";
 import type { Page, Project, Scan, ScanStatus } from "@/types";
 import { useState } from "react";
@@ -123,6 +124,11 @@ export function ScansTable({
             key: 'status',
             header: 'Status',
             cell: (scan) => <ScanStatusBadge status={scan.status} />
+        },
+        {
+            key: 'trigger',
+            header: 'Trigger',
+            cell: (scan) => <ScanTriggerBadge trigger={scan.trigger} />
         },
         {
             key: 'startedAt',

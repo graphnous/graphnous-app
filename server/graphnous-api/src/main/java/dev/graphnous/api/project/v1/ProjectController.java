@@ -19,6 +19,7 @@ import dev.graphnous.application.scan.UploadScanCommand;
 import dev.graphnous.application.scan.stats.ScanStatService;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project.ProjectId;
+import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.domain.system.System;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -220,14 +221,30 @@ public class ProjectController {
      * @param languages the languages to scan, as GET /scanners lists them,
      *                  such as JAVA; the project's own when missing, every
      *                  language the scan finds when empty
+     * @param trigger   why the scan starts: MANUAL, or CHAT for one the user
+     *                  approved in the assistant's chat; MANUAL when missing.
+     *                  The server sets the other triggers itself
      */
     public record StartScanRequest(
         String branch,
         String revision,
         List<String> enhancers,
         List<String> excludes,
-        List<String> languages
+        List<String> languages,
+        RequestedTrigger trigger
     ) {
+    }
+
+    /**
+     * The triggers a request may give a scan.
+     */
+    public enum RequestedTrigger {
+        MANUAL,
+        CHAT;
+
+        Scan.Trigger toDomain() {
+            return Scan.Trigger.valueOf(name());
+        }
     }
 
     /**
@@ -306,7 +323,8 @@ public class ProjectController {
                 createScanRequest.branch(),
                 createScanRequest.enhancers() == null ? null : Set.copyOf(createScanRequest.enhancers()),
                 createScanRequest.excludes(),
-                createScanRequest.languages() == null ? null : Set.copyOf(createScanRequest.languages())
+                createScanRequest.languages() == null ? null : Set.copyOf(createScanRequest.languages()),
+                createScanRequest.trigger() == null ? Scan.Trigger.MANUAL : createScanRequest.trigger().toDomain()
             )
         );
         // Scans run in the background; their steps show how they go

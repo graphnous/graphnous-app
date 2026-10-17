@@ -269,7 +269,8 @@ public class ScanService {
             Scan.SourceRevision.requested(blankToNull(command.revision()), command.branch()),
             command.enhancers(),
             command.excludes(),
-            command.languages()
+            command.languages(),
+            command.trigger()
         );
 
         this.eventPublisher.publish(
@@ -329,7 +330,8 @@ public class ScanService {
             // Without the files the project leaves out of its scans
             null,
             // Whatever languages were scanned elsewhere
-            Set.of()
+            Set.of(),
+            Scan.Trigger.UPLOAD
         );
 
         for (final var step : List.of(ScanStepType.CHECKOUT, ScanStepType.PLAN, ScanStepType.SCAN)) {
@@ -360,7 +362,8 @@ public class ScanService {
         final Scan.SourceRevision revision,
         final Set<String> enhancers,
         final List<String> excludes,
-        final Set<String> languages
+        final Set<String> languages,
+        final Scan.Trigger trigger
     ) {
         this.authorizationService.authorize(context, Permission.SCAN_CREATE);
         this.entitlementService.require(context.organization(), Entitlement.SCANS);
@@ -400,7 +403,8 @@ public class ScanService {
                 null,
                 enhancers,
                 excluded,
-                scanned
+                scanned,
+                trigger
             )
         );
 

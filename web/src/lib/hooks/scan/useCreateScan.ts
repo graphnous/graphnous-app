@@ -21,6 +21,11 @@ export type CreateScanRequest = {
      * every language the scan finds when empty.
      */
     languages?: string[];
+    /**
+     * Why the scan starts: MANUAL, as when missing, or CHAT for one the
+     * user approved in the assistant's chat.
+     */
+    trigger?: "MANUAL" | "CHAT";
 };
 
 export function useCreateScan({ projectId }: { projectId: string }) {

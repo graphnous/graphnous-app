@@ -74,7 +74,7 @@ export function StartScanCall({ args, status, respond, result }: StartScanCallPr
         setState({ status: "starting" });
 
         try {
-            const scan = await createScan({ branch, revision });
+            const scan = await createScan({ branch, revision, trigger: "CHAT" });
 
             setState({ status: "started", scanId: scan.id, branch, revision });
             await respond?.({ started: true, scanId: scan.id, projectId, branch, revision } satisfies StartScanResult);

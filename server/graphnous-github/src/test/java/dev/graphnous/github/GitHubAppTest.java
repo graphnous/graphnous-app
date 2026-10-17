@@ -104,7 +104,7 @@ class GitHubAppTest {
     void scansAPullRequestsHeadWithACheckRun() {
         app().handle("pull_request", pullRequest("opened"));
 
-        verify(scanService).create(context, new CreateScanCommand(shop.id(), "abc123", "orders-v2", null, null, null));
+        verify(scanService).create(context, new CreateScanCommand(shop.id(), "abc123", "orders-v2", null, null, null, Scan.Trigger.GITHUB_APP));
         verify(github).startCheckRun(INSTALLATION, "acme/shop", "Graphnous impact: shop", "abc123");
         verify(pullRequestScans).save(pullRequestScan);
     }
@@ -134,7 +134,7 @@ class GitHubAppTest {
 
         app().handle("pull_request", pullRequest("opened"));
 
-        verify(scanService).create(context, new CreateScanCommand(shop.id(), "bbb111", "main", null, null, null));
+        verify(scanService).create(context, new CreateScanCommand(shop.id(), "bbb111", "main", null, null, null, Scan.Trigger.GITHUB_APP));
         verify(pullRequestScans).save(withBase(started.id()));
     }
 
@@ -230,7 +230,7 @@ class GitHubAppTest {
     void scansPushesToTheDefaultBranch() {
         app().handle("push", push("refs/heads/main", false));
 
-        verify(scanService).create(context, new CreateScanCommand(shop.id(), "def456", "main", null, null, null));
+        verify(scanService).create(context, new CreateScanCommand(shop.id(), "def456", "main", null, null, null, Scan.Trigger.GITHUB_APP));
     }
 
     @Test

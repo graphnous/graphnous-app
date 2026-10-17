@@ -63,6 +63,22 @@ public class ScanEntity {
     @Column(name = "languages", updatable = false, columnDefinition = "TEXT")
     private List<String> languages;
 
+    /**
+     * Why the scan started; null for the scans from before triggers were
+     * recorded.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scan_trigger", updatable = false)
+    private Scan.Trigger trigger;
+
+    public void setTrigger(final Scan.Trigger trigger) {
+        this.trigger = trigger;
+    }
+
+    public Scan.Trigger getTrigger() {
+        return this.trigger;
+    }
+
     public void setLanguages(final List<String> languages) {
         this.languages = languages;
     }

@@ -35,6 +35,7 @@ import { ProjectDependencies } from "@/components/ProjectDependencies/ProjectDep
 import { ProjectGraph } from "@/components/ProjectGraph/ProjectGraph";
 import { revisionLabel, ScanRevision } from "@/components/ScanRevision/ScanRevision";
 import { ScanStatusBadge } from "@/components/ScanStatusBadge/ScanStatusBadge";
+import { ScanTriggerBadge } from "@/components/ScanTriggerBadge/ScanTriggerBadge";
 import { useEventStream } from "@/lib/hooks";
 import { useGetProject } from "@/lib/hooks/project/useGetProject";
 import { languageLabel } from "@/lib/languages";
@@ -289,6 +290,7 @@ export function ScanDetails({ scanId, via = "scans" }: ScanDetailsProps) {
                                                         />
                                                     ),
                                                 },
+                                                { label: "Trigger", value: <ScanTriggerBadge trigger={scan.trigger} /> },
                                                 { label: "Created", value: <Timestamp value={scan.createdAt} /> },
                                                 {
                                                     label: "Started",

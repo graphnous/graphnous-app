@@ -16,6 +16,8 @@ import java.util.UUID;
  *                  as {@code *.spec.ts}; none when every file is kept
  * @param languages the languages it scans, such as {@code JAVA}; none when
  *                  it scans every language it finds
+ * @param trigger   why it started; null for a scan from before triggers
+ *                  were recorded
  */
 public record Scan(
     ScanId id,
@@ -27,13 +29,32 @@ public record Scan(
     Instant startedAt,
     Set<String> enhancers,
     List<String> excludes,
-    Set<String> languages
+    Set<String> languages,
+    Trigger trigger
 ) {
 
     public Scan {
         enhancers = enhancers == null ? null : Set.copyOf(enhancers);
         excludes = excludes == null ? List.of() : List.copyOf(excludes);
         languages = languages == null ? Set.of() : Set.copyOf(languages);
+    }
+
+    /**
+     * A scan without a trigger, as from before triggers were recorded.
+     */
+    public Scan(
+        final ScanId id,
+        final Project.ProjectId projectId,
+        final ScanStatus status,
+        final SourceRevision revision,
+        final Instant createdAt,
+        final Instant updatedAt,
+        final Instant startedAt,
+        final Set<String> enhancers,
+        final List<String> excludes,
+        final Set<String> languages
+    ) {
+        this(id, projectId, status, revision, createdAt, updatedAt, startedAt, enhancers, excludes, languages, null);
     }
 
     /**
@@ -96,7 +117,7 @@ public record Scan(
             ? at
             : startedAt;
 
-        return new Scan(id, projectId, newStatus, revision, createdAt, at, started, enhancers, excludes, languages);
+        return new Scan(id, projectId, newStatus, revision, createdAt, at, started, enhancers, excludes, languages, trigger);
     }
 
     /**
@@ -114,8 +135,31 @@ public record Scan(
             startedAt,
             enhancers,
             excludes,
-            languages
+            languages,
+            trigger
         );
+    }
+
+    /**
+     * Why a scan started.
+     */
+    public enum Trigger {
+        /**
+         * Started in the app, or through the API.
+         */
+        MANUAL,
+        /**
+         * Started from the assistant's chat, on the user's approval.
+         */
+        CHAT,
+        /**
+         * Started by the GitHub App, for a push or a pull request.
+         */
+        GITHUB_APP,
+        /**
+         * Of results scanned elsewhere and uploaded, such as by a CI job.
+         */
+        UPLOAD
     }
 
     public record ScanId(UUID id) {

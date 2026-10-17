@@ -144,6 +144,7 @@ export const CreateScanModal = forwardRef<
             const scan = await createScan({
                 branch,
                 revision: revision || undefined,
+                trigger: "MANUAL",
                 // Left out while every enhancer runs, as the API does without
                 enhancers: skipped.length > 0
                     ? enhancers.map((enhancer) => enhancer.name).filter((name) => !skipped.includes(name))
