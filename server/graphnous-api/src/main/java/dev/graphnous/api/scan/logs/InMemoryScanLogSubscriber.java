@@ -30,11 +30,15 @@ public class InMemoryScanLogSubscriber implements ScanLogSubscriber, ScanLogPubl
 
     @Override
     public void subscribe(Scan.ScanId scanId, ScanLogListener listener) {
-        this.listeners
-            .computeIfAbsent(
-                scanId.id(),
-                ignored -> new CopyOnWriteArrayList<>()
-            ).add(listener);
+        // Added within the atomic update, as unsubscribe removes the list of
+        // its scan once empty: a listener added to a list after that would
+        // be added to a list no one delivers to
+        this.listeners.compute(scanId.id(), (id, scanListeners) -> {
+            final var subscribed = scanListeners == null ? new CopyOnWriteArrayList<ScanLogListener>() : scanListeners;
+            subscribed.add(listener);
+
+            return subscribed;
+        });
     }
 
     @Override
