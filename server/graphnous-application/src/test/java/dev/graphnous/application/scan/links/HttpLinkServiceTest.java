@@ -70,7 +70,7 @@ class HttpLinkServiceTest {
     void readsTheStoredLinksOfTheLatestCompletedScansOfTheSystemByDefault() {
         final var scans = List.of(frontend, backend);
 
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(scans);
         when(repository.findCalls(scans)).thenReturn(List.of(call));
         when(repository.findEndpoints(scans)).thenReturn(List.of(endpoint, unused));
         when(repository.findLinkedWith(scans)).thenReturn(Map.of(
@@ -92,7 +92,7 @@ class HttpLinkServiceTest {
     void storesTheLinksOfTheLatestScansThatHaveNoneOfThisMatchingFirst() {
         final var scans = List.of(frontend, backend);
 
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(scans);
         when(repository.findCalls(scans)).thenReturn(List.of(call));
         when(repository.findEndpoints(scans)).thenReturn(List.of(endpoint, unused));
         // The backend's are of an earlier version of the matching
@@ -111,7 +111,7 @@ class HttpLinkServiceTest {
 
         when(scanService.getScan(context, frontend.id())).thenReturn(frontend);
         when(scanService.getScan(context, backend.id())).thenReturn(backend);
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(List.of(backend, frontend));
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(List.of(backend, frontend));
         when(repository.findCalls(scans)).thenReturn(List.of(call));
         when(repository.findEndpoints(scans)).thenReturn(List.of(endpoint));
         when(repository.findLinkedWith(scans)).thenReturn(Map.of());
@@ -179,7 +179,7 @@ class HttpLinkServiceTest {
         when(repository.findEndpoints(List.of(frontend, backend))).thenReturn(List.of());
 
         // Not the latest: found anew, not stored
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(List.of(scan(), backend));
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(List.of(scan(), backend));
 
         // Each scan once
         final var found = service()
@@ -318,7 +318,7 @@ class HttpLinkServiceTest {
     private List<Scan> latestScans() {
         final var scans = List.of(frontend, backend);
 
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(scans);
         when(repository.findCalls(scans)).thenReturn(List.of(call));
         when(repository.findEndpoints(scans)).thenReturn(List.of(endpoint, unused));
         when(repository.findLinkedWith(scans)).thenReturn(Map.of(

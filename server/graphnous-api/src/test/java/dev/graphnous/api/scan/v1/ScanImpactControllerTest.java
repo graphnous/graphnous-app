@@ -94,7 +94,7 @@ class ScanImpactControllerTest {
         when(scanService.getLatestCompletedScan(context, project.id(), "main")).thenReturn(Optional.of(base));
         when(impactAnalysisService.analyze(context, base.id(), head.id(), null)).thenReturn(report);
 
-        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()))
+        mockMvc.perform(get("/api/v1/scans/{head}/pull-request-comment", head.id().id()))
             .andExpect(status().isOk())
             .andExpect(content().contentTypeCompatibleWith("text/markdown"))
             .andExpect(content().string(startsWith(ImpactComment.MARKER)))
@@ -112,11 +112,11 @@ class ScanImpactControllerTest {
         when(impactAnalysisService.analyze(context, develop.id(), head.id(), null)).thenReturn(report);
         when(impactAnalysisService.analyze(context, base.id(), head.id(), null)).thenReturn(report);
 
-        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()).queryParam("baseBranch", "develop"))
+        mockMvc.perform(get("/api/v1/scans/{head}/pull-request-comment", head.id().id()).queryParam("baseBranch", "develop"))
             .andExpect(status().isOk());
         verify(impactAnalysisService).analyze(context, develop.id(), head.id(), null);
 
-        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()).queryParam("base", base.id().id().toString()))
+        mockMvc.perform(get("/api/v1/scans/{head}/pull-request-comment", head.id().id()).queryParam("base", base.id().id().toString()))
             .andExpect(status().isOk());
         verify(impactAnalysisService).analyze(context, base.id(), head.id(), null);
         verify(scanService, never()).getLatestCompletedScan(context, project.id(), "main");
@@ -126,7 +126,7 @@ class ScanImpactControllerTest {
     void needsACompletedScanOfTheBaseBranch() throws Exception {
         when(scanService.getLatestCompletedScan(context, project.id(), "main")).thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()))
+        mockMvc.perform(get("/api/v1/scans/{head}/pull-request-comment", head.id().id()))
             .andExpect(status().isNotFound())
             .andExpect(content().string(containsString("No completed scan of branch main")));
     }
@@ -137,7 +137,7 @@ class ScanImpactControllerTest {
         when(impactAnalysisService.analyze(context, base.id(), head.id(), null)).thenReturn(report);
         when(impactAgent.assess(context, report)).thenReturn("**Risk: low**, nothing uses what changed.");
 
-        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()).queryParam("assess", "true"))
+        mockMvc.perform(get("/api/v1/scans/{head}/pull-request-comment", head.id().id()).queryParam("assess", "true"))
             .andExpect(status().isOk())
             .andExpect(content().string(containsString("#### Assessment\n\n**Risk: low**, nothing uses what changed.")));
     }
@@ -148,7 +148,7 @@ class ScanImpactControllerTest {
         when(impactAnalysisService.analyze(context, base.id(), head.id(), null)).thenReturn(report);
         when(impactAgent.assess(context, report)).thenThrow(new IllegalStateException("The assistant is not configured"));
 
-        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()).queryParam("assess", "true"))
+        mockMvc.perform(get("/api/v1/scans/{head}/pull-request-comment", head.id().id()).queryParam("assess", "true"))
             .andExpect(status().isOk())
             .andExpect(content().string(containsString("_The assessment could not be written: The assistant is not configured_")))
             .andExpect(content().string(containsString("#### Projects affected")));

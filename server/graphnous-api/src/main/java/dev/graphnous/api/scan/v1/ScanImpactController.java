@@ -69,7 +69,7 @@ public class ScanImpactController {
      *                   comment says when it could not be written
      * @return 404 when the base branch has no completed scan
      */
-    @GetMapping(value = "/{head}/impact-comment", produces = MARKDOWN)
+    @GetMapping(value = "/{head}/pull-request-comment", produces = MARKDOWN)
     public ResponseEntity<String> impactComment(
         @PathVariable("head") final UUID head,
         @RequestParam(value = "base", required = false) final UUID base,

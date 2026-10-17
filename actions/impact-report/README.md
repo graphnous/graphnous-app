@@ -76,7 +76,7 @@ the results:
 
 ## Without the Action
 
-The comment is `GET /api/v1/scans/{head}/impact-comment` on the server, in
+The comment is `GET /api/v1/scans/{head}/pull-request-comment` on the server, in
 Markdown, with the query parameters `baseBranch` (`main` by default),
 `base` (a scan id, instead of the branch's newest completed scan) and
 `assess`.

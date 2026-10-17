@@ -86,7 +86,7 @@ public class HttpLinkService {
 
         if (scanIds == null || scanIds.isEmpty()) {
             latest = true;
-            scans = scanService.getLatestCompletedScans(context, systemId);
+            scans = scanService.getNewestCompletedScans(context, systemId);
         } else {
             if (scanIds.size() > MAX_SCANS) {
                 throw new ValidationException("At most " + MAX_SCANS + " scans can be linked at once");
@@ -96,7 +96,7 @@ public class HttpLinkService {
             scanIds.stream().distinct().forEach(scanId -> scans.add(scanService.getScan(context, scanId)));
 
             // The scans a graph shows by default are the latest ones, whose links are stored
-            latest = ids(scans).equals(ids(scanService.getLatestCompletedScans(context, systemId)));
+            latest = ids(scans).equals(ids(scanService.getNewestCompletedScans(context, systemId)));
         }
 
         final var linked = link(scans, latest);
@@ -128,7 +128,7 @@ public class HttpLinkService {
         final HttpLinks.EndpointFilter filter,
         final int limit
     ) {
-        final var scans = scanService.getLatestCompletedScans(context, systemId);
+        final var scans = scanService.getNewestCompletedScans(context, systemId);
         final var linked = link(scans, true);
 
         final var callsOf = new HashMap<String, List<HttpLinks.Link>>();
@@ -183,7 +183,7 @@ public class HttpLinkService {
         final HttpLinks.CallFilter filter,
         final int limit
     ) {
-        final var scans = scanService.getLatestCompletedScans(context, systemId);
+        final var scans = scanService.getNewestCompletedScans(context, systemId);
         final var linked = link(scans, true);
 
         final var matched = new HashSet<String>();

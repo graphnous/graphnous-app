@@ -225,7 +225,7 @@ class ImpactAnalysisServiceTest {
         when(scanService.getScan(context, head.id())).thenReturn(head);
         when(projectService.getProject(context, api.id())).thenReturn(api);
         // The api's latest is main, which the head stands in for
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(List.of(base, webScan));
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(List.of(base, webScan));
     }
 
     private void comparison(final List<ScanGraph.Snapshot> removed, final List<ScanGraph.Change> changed) {

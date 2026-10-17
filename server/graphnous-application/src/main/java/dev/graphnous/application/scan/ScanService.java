@@ -151,7 +151,7 @@ public class ScanService {
      * The latest completed scan of each project of the system: the scans
      * whose results show what the system is like now.
      */
-    public List<Scan> getLatestCompletedScans(
+    public List<Scan> getNewestCompletedScans(
         final RequestContext context,
         final System.SystemId systemId
     ) {

@@ -87,7 +87,7 @@ while :; do
 done
 
 comment=$(mktemp)
-graphnous -G "$api/scans/$scan_id/impact-comment" -H "Accept: text/markdown" \
+graphnous -G "$api/scans/$scan_id/pull-request-comment" -H "Accept: text/markdown" \
   --data-urlencode "baseBranch=$BASE_BRANCH" --data-urlencode "assess=${ASSESS:-false}" >"$comment"
 
 cat "$comment" >>"$GITHUB_STEP_SUMMARY"

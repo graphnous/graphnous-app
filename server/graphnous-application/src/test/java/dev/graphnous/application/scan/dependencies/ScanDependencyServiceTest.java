@@ -88,7 +88,7 @@ class ScanDependencyServiceTest {
         ));
         final var found = new Page<SystemDependency>(List.of(), 0, 20, 0, 0);
 
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(scans);
         when(repository.findDependencies(scans, new ScanDependencyFilter("slf4j", null, null), page)).thenReturn(found);
 
         assertThat(service().getSystemDependencies(context, systemId, new ScanDependencyFilter("slf4j", null, null), page))
@@ -99,7 +99,7 @@ class ScanDependencyServiceTest {
     void doesNotListDependenciesOfASystemTheUserMayNotRead() {
         final var systemId = System.SystemId.generate();
 
-        when(scanService.getLatestCompletedScans(context, systemId)).thenThrow(new AuthorizationException("Not allowed"));
+        when(scanService.getNewestCompletedScans(context, systemId)).thenThrow(new AuthorizationException("Not allowed"));
 
         assertThatThrownBy(() -> service().getSystemDependencies(context, systemId, ScanDependencyFilter.none(), page))
             .isInstanceOf(AuthorizationException.class);
@@ -118,7 +118,7 @@ class ScanDependencyServiceTest {
         final var byVersions = new PageQuery(0, 20, new Sort("versions", Sort.Direction.DESC));
         final var found = new Page<SystemLibrary>(List.of(), 0, 20, 0, 0);
 
-        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(scanService.getNewestCompletedScans(context, systemId)).thenReturn(scans);
         when(repository.findLibraries(scans, "slf4j", true, byVersions)).thenReturn(found);
 
         assertThat(service().getSystemLibraries(context, systemId, " slf4j ", true, byVersions)).isSameAs(found);

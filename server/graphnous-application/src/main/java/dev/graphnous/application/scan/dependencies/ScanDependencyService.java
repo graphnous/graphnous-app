@@ -64,7 +64,7 @@ public class ScanDependencyService {
         final var sorted = ScanListing.sorted(page, SORTS);
 
         return scanDependencyRepository.findDependencies(
-            scanService.getLatestCompletedScans(context, systemId),
+            scanService.getNewestCompletedScans(context, systemId),
             filter,
             sorted
         );
@@ -88,7 +88,7 @@ public class ScanDependencyService {
         final var sorted = ScanListing.sorted(page, LIBRARY_SORTS);
 
         return scanDependencyRepository.findLibraries(
-            scanService.getLatestCompletedScans(context, systemId),
+            scanService.getNewestCompletedScans(context, systemId),
             ScanListing.filter(search),
             driftOnly,
             sorted

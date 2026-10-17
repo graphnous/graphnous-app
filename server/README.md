@@ -293,7 +293,7 @@ branch's from main's, endpoints included; and what that change affects
 of the system, and the calls that no longer reach an endpoint. The chat
 assistant asks an impact agent of its own, on
 `graphnous.ai.openai.impact-model`, to rank those risks. The same report is
-a pull request comment at `GET /api/v1/scans/{head}/impact-comment`, which
+a pull request comment at `GET /api/v1/scans/{head}/pull-request-comment`, which
 the [impact report Action](../actions/impact-report) posts. With Claude Code, against a server on this machine:
 
 ```sh

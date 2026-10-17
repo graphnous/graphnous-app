@@ -200,7 +200,7 @@ public class ImpactAnalysisService {
 
         final var callers = new ArrayList<Scan>();
         callers.add(head);
-        scanService.getLatestCompletedScans(context, systemId).stream()
+        scanService.getNewestCompletedScans(context, systemId).stream()
             .filter(scan -> !scan.projectId().equals(head.projectId()))
             .forEach(callers::add);
 

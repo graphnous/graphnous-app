@@ -392,7 +392,7 @@ class ScanServiceTest {
 
         when(scanRepository.findLatestCompletedInSystem(systemId)).thenReturn(scans);
 
-        assertThat(service().getLatestCompletedScans(context, systemId)).isEqualTo(scans);
+        assertThat(service().getNewestCompletedScans(context, systemId)).isEqualTo(scans);
 
         verify(authorizationService).authorize(context, Permission.SCAN_READ);
         verify(systemService).getSystem(context, systemId);
