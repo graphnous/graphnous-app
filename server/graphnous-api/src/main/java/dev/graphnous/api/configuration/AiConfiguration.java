@@ -9,9 +9,8 @@ import dev.graphnous.application.chat.ChatService;
 import dev.graphnous.application.chat.ChatThreadRepository;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.project.ProjectService;
-import dev.graphnous.application.scan.ScanService;
-import dev.graphnous.application.scan.graph.ScanGraphService;
 import dev.graphnous.application.system.SystemService;
+import dev.graphnous.mcp.GraphnousTools;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,10 +27,7 @@ public class AiConfiguration {
     Agent assistant(
         final AiApiTokenRetriever tokenRetriever,
         final RequestContextProvider contextProvider,
-        final SystemService systemService,
-        final ProjectService projectService,
-        final ScanService scanService,
-        final ScanGraphService scanGraphService,
+        final GraphnousTools tools,
         final ChatService chatService,
         final Serializer serializer,
         @Value("${graphnous.ai.openai.model}") final String model
@@ -39,10 +35,7 @@ public class AiConfiguration {
         return new GraphnousAgent(
             tokenRetriever,
             contextProvider,
-            systemService,
-            projectService,
-            scanService,
-            scanGraphService,
+            tools,
             chatService,
             serializer,
             model

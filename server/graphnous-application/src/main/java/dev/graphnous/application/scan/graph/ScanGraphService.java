@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -194,6 +195,25 @@ public class ScanGraphService {
         final Scan.ScanId base,
         final Scan.ScanId head
     ) {
+        return compare(context, base, head, Set.of(), MAX_CHANGES);
+    }
+
+    /**
+     * How the head scan's graph differs from the base scan's, listing only
+     * the nodes of some types; the summary counts every type.
+     *
+     * @param types the types of node to list, such as Method or File; every
+     *              type when empty
+     * @param limit the most nodes each of added, removed and changed lists,
+     *              at most {@link #MAX_CHANGES}
+     */
+    public ScanGraph.Comparison compare(
+        final RequestContext context,
+        final Scan.ScanId base,
+        final Scan.ScanId head,
+        final Set<String> types,
+        final int limit
+    ) {
         scanService.getScan(context, base);
         scanService.getScan(context, head);
 
@@ -207,7 +227,8 @@ public class ScanGraphService {
         return ScanComparison.compare(
             scanGraphRepository.findSnapshots(base),
             scanGraphRepository.findSnapshots(head),
-            MAX_CHANGES
+            types,
+            Math.clamp(limit, 1, MAX_CHANGES)
         );
     }
 

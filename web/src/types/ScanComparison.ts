@@ -1,6 +1,6 @@
 /**
- * What a compared node is: a node of a scan's graph, or a module's
- * dependency on a library.
+ * What a compared node is: a node of a scan's graph, an endpoint an
+ * enhancer found, or a module's dependency on a library.
  */
 export type ComparedNodeType =
   | "ScanTarget"
@@ -10,6 +10,7 @@ export type ComparedNodeType =
   | "Class"
   | "Method"
   | "Field"
+  | "Endpoint"
   | "Dependency";
 
 /**

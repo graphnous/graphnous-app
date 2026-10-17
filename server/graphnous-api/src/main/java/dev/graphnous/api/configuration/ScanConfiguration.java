@@ -38,6 +38,8 @@ import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.result.ScanResultRepository;
+import dev.graphnous.application.scan.source.ScanSourceRepository;
+import dev.graphnous.application.scan.source.ScanSourceService;
 import dev.graphnous.application.scan.stats.ScanStatRepository;
 import dev.graphnous.application.scan.stats.ScanStatService;
 import dev.graphnous.application.scan.usages.ScanUsageRepository;
@@ -173,6 +175,16 @@ public class ScanConfiguration {
         final ScanUsageRepository scanUsageRepository
     ) {
         return new ScanUsageService(scanService, scanUsageRepository);
+    }
+
+    @Bean
+    ScanSourceService scanSourceService(
+        final SystemService systemService,
+        final ProjectService projectService,
+        final ScanService scanService,
+        final ScanSourceRepository scanSourceRepository
+    ) {
+        return new ScanSourceService(systemService, projectService, scanService, scanSourceRepository);
     }
 
     @Bean

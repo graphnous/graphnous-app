@@ -28,6 +28,7 @@
         <module>graphnous-persistence</module>
         <module>graphnous-scanner</module>
         <module>graphnous-enhancer</module>
+        <module>graphnous-mcp</module>
     </modules>
 
     <!-- Published by .github/workflows/publish.yml -->

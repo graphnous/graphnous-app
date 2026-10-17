@@ -8,10 +8,7 @@ import dev.graphnous.application.ai.AiApiTokenRetriever;
 import dev.graphnous.application.ai.ApiToken;
 import dev.graphnous.application.chat.ChatService;
 import dev.graphnous.application.context.RequestContextProvider;
-import dev.graphnous.application.project.ProjectService;
-import dev.graphnous.application.scan.ScanService;
-import dev.graphnous.application.scan.graph.ScanGraphService;
-import dev.graphnous.application.system.SystemService;
+import dev.graphnous.mcp.GraphnousTools;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -35,16 +32,7 @@ class GraphnousAgentTest {
     private RequestContextProvider contextProvider;
 
     @Mock
-    private SystemService systemService;
-
-    @Mock
-    private ProjectService projectService;
-
-    @Mock
-    private ScanService scanService;
-
-    @Mock
-    private ScanGraphService scanGraphService;
+    private GraphnousTools tools;
 
     @Mock
     private ChatService chatService;
@@ -123,10 +111,7 @@ class GraphnousAgentTest {
         return new GraphnousAgent(
             tokenRetriever,
             contextProvider,
-            systemService,
-            projectService,
-            scanService,
-            scanGraphService,
+            tools,
             chatService,
             new JacksonSerializer(),
             "gpt-5"

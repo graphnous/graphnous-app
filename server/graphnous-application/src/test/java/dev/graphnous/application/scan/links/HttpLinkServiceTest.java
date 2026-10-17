@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -206,6 +207,127 @@ class HttpLinkServiceTest {
             .isInstanceOf(ValidationException.class);
 
         verifyNoInteractions(scanService, repository);
+    }
+
+    @Test
+    void listsTheEndpointsOfTheSystemWithWhatServesAndCallsThem() {
+        final var scans = latestScans();
+        final var handler = new HttpLinks.Source("m1", "Method", "list", "com.acme.Orders.list()", "com.acme.Orders", "Orders.java", null);
+        final var caller = new HttpLinks.Source("f1", "Method", "loadOrders", "loadOrders", null, "src/orders.ts", 12);
+
+        when(repository.findSources(eq(scans), any())).thenReturn(Map.of("endpoint", handler, "call", caller));
+
+        final var found = service().getEndpoints(context, systemId, HttpLinks.EndpointFilter.none(), 50);
+
+        assertThat(found.total()).isEqualTo(2);
+        assertThat(found.truncated()).isFalse();
+        assertThat(found.endpoints()).containsExactly(
+            new HttpLinks.EndpointCalls(unused, null, List.of()),
+            new HttpLinks.EndpointCalls(endpoint, handler, List.of(new HttpLinks.CallSite(call, caller, HttpLinks.Match.PATH)))
+        );
+        verify(repository).findSources(scans, Set.of("endpoint", "unused", "call"));
+    }
+
+    @Test
+    void listsOnlyTheEndpointsNoCallRequests() {
+        latestScans();
+        when(repository.findSources(any(), any())).thenReturn(Map.of());
+
+        assertThat(service().getEndpoints(context, systemId, new HttpLinks.EndpointFilter(null, null, true), 50).endpoints())
+            .extracting(HttpLinks.EndpointCalls::endpoint)
+            .containsExactly(unused);
+    }
+
+    @Test
+    void filtersTheEndpointsByUrlAndProject() {
+        latestScans();
+        when(repository.findSources(any(), any())).thenReturn(Map.of());
+
+        assertThat(service().getEndpoints(context, systemId, new HttpLinks.EndpointFilter(" ORDERS ", null, false), 50).endpoints())
+            .extracting(HttpLinks.EndpointCalls::endpoint)
+            .containsExactly(endpoint);
+        assertThat(service().getEndpoints(context, systemId, new HttpLinks.EndpointFilter(null, frontend.projectId(), false), 50).total())
+            .isZero();
+    }
+
+    @Test
+    void listsAtMostTheLimit() {
+        latestScans();
+        when(repository.findSources(any(), any())).thenReturn(Map.of());
+
+        final var found = service().getEndpoints(context, systemId, HttpLinks.EndpointFilter.none(), 1);
+
+        assertThat(found.endpoints()).extracting(HttpLinks.EndpointCalls::endpoint).containsExactly(unused);
+        assertThat(found.total()).isEqualTo(2);
+        assertThat(found.truncated()).isTrue();
+    }
+
+    @Test
+    void listsTheCallsOfNoEndpointWithWhereTheyAre() {
+        final var scans = latestScans();
+        final var external = new HttpLinks.Call("external", frontend.id(), frontend.projectId(), "GET", "https://api.stripe.com/v1/charges", "fetch");
+        final var unknown = new HttpLinks.Call("unknown", frontend.id(), frontend.projectId(), "GET", null, "fetch");
+        final var wrapper = new HttpLinks.Call("wrapper", frontend.id(), frontend.projectId(), null, "{baseUrl}/{path}", "fetch");
+        final var caller = new HttpLinks.Source("f1", "Method", "charge", "charge", null, "src/pay.ts", 4);
+
+        when(repository.findCalls(scans)).thenReturn(List.of(call, external, unknown, wrapper));
+        when(repository.findSources(scans, List.of("external"))).thenReturn(Map.of("external", caller));
+
+        final var found = service().getUnmatchedCalls(context, systemId, HttpLinks.CallFilter.none(), 50);
+
+        // Not the call of the orders, which has an endpoint, nor those of no known url
+        assertThat(found.calls()).containsExactly(new HttpLinks.CallSite(external, caller, null));
+        assertThat(found.total()).isEqualTo(1);
+        assertThat(found.truncated()).isFalse();
+    }
+
+    @Test
+    void filtersTheCallsOfNoEndpointAndListsAtMostTheLimit() {
+        final var scans = latestScans();
+        final var first = new HttpLinks.Call("a", frontend.id(), frontend.projectId(), "GET", "/api/invoices", "fetch");
+        final var second = new HttpLinks.Call("b", frontend.id(), frontend.projectId(), "GET", "/api/payments", "fetch");
+
+        when(repository.findCalls(scans)).thenReturn(List.of(call, second, first));
+        when(repository.findSources(any(), any())).thenReturn(Map.of());
+
+        final var limited = service().getUnmatchedCalls(context, systemId, HttpLinks.CallFilter.none(), 1);
+
+        assertThat(limited.calls()).extracting(site -> site.call().id()).containsExactly("a");
+        assertThat(limited.total()).isEqualTo(2);
+        assertThat(limited.truncated()).isTrue();
+        assertThat(service().getUnmatchedCalls(context, systemId, new HttpLinks.CallFilter("PAYMENTS", null), 50).calls())
+            .extracting(site -> site.call().id())
+            .containsExactly("b");
+        assertThat(service().getUnmatchedCalls(context, systemId, new HttpLinks.CallFilter(null, backend.projectId()), 50).total())
+            .isZero();
+    }
+
+    @Test
+    void knowsAUrlOfOnlyVariablesHasNoText() {
+        assertThat(HttpLinkService.hasText("{graphnousApiUrl}{path}")).isFalse();
+        assertThat(HttpLinkService.hasText("/{id}/")).isFalse();
+        assertThat(HttpLinkService.hasText(null)).isFalse();
+        assertThat(HttpLinkService.hasText("{api}/orders")).isTrue();
+        assertThat(HttpLinkService.hasText("https://api.stripe.com/v1/charges")).isTrue();
+    }
+
+    /**
+     * The frontend calls the backend's orders, and nothing its customers;
+     * the links are stored with this matching.
+     */
+    private List<Scan> latestScans() {
+        final var scans = List.of(frontend, backend);
+
+        when(scanService.getLatestCompletedScans(context, systemId)).thenReturn(scans);
+        when(repository.findCalls(scans)).thenReturn(List.of(call));
+        when(repository.findEndpoints(scans)).thenReturn(List.of(endpoint, unused));
+        when(repository.findLinkedWith(scans)).thenReturn(Map.of(
+            frontend.id(), HttpLinkMatcher.VERSION,
+            backend.id(), HttpLinkMatcher.VERSION
+        ));
+        when(repository.findStoredLinks(scans)).thenReturn(List.of(link));
+
+        return scans;
     }
 
     private HttpLinkService service() {

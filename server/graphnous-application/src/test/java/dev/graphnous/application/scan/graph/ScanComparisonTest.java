@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -86,6 +87,40 @@ class ScanComparisonTest {
         assertThat(comparison.added()).hasSize(3);
         assertThat(comparison.summary()).containsExactly(new ScanGraph.TypeChanges("Class", 5, 0, 0));
         assertThat(comparison.truncated()).isTrue();
+    }
+
+    @Test
+    void listsOnlyTheTypesAskedForButCountsEvery() {
+        final var head = new ArrayList<ScanGraph.Snapshot>();
+        head.add(node("orders|file:Order.java", "File"));
+
+        for (int i = 0; i < 3; i++) {
+            head.add(node("orders|class:Order|method:m" + i, "Method"));
+        }
+
+        final var comparison = ScanComparison.compare(List.of(node("orders|class:Legacy", "Class")), head, Set.of("Method"), 2);
+
+        assertThat(comparison.added()).extracting(ScanGraph.Snapshot::key)
+            .containsExactly("orders|class:Order|method:m0", "orders|class:Order|method:m1");
+        assertThat(comparison.removed()).isEmpty();
+        assertThat(comparison.summary()).containsExactly(
+            new ScanGraph.TypeChanges("File", 1, 0, 0),
+            new ScanGraph.TypeChanges("Class", 0, 1, 0),
+            new ScanGraph.TypeChanges("Method", 3, 0, 0)
+        );
+        // Of the methods asked for
+        assertThat(comparison.truncated()).isTrue();
+    }
+
+    @Test
+    void listsTheEndpointsAfterTheFieldsAndBeforeTheDependencies() {
+        final var comparison = ScanComparison.compare(List.of(), List.of(
+            node("orders|dependency:slf4j", "Dependency"),
+            node("orders|class:A|method:a|endpoint:GET /a", "Endpoint"),
+            node("orders|class:A|field:f", "Field")
+        ), 10);
+
+        assertThat(comparison.added()).extracting(ScanGraph.Snapshot::type).containsExactly("Field", "Endpoint", "Dependency");
     }
 
     @Test

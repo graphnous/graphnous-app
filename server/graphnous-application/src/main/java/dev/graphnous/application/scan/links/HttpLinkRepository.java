@@ -2,6 +2,7 @@ package dev.graphnous.application.scan.links;
 
 import dev.graphnous.domain.scan.Scan;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -20,6 +21,12 @@ public interface HttpLinkRepository {
      * The endpoints of the scans, each with the project of its scan.
      */
     List<HttpLinks.Endpoint> findEndpoints(List<Scan> scans);
+
+    /**
+     * Where each of the calls and endpoints with these ids was found, by
+     * their id: what an enhancer found it in.
+     */
+    Map<String, HttpLinks.Source> findSources(List<Scan> scans, Collection<String> ids);
 
     /**
      * The links stored between the scans: of a call of one of them to an

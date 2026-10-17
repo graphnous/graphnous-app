@@ -16,6 +16,7 @@ persistence. Its web app is in [`../web`](../web). See the
 | `graphnous-security` | Who may call the API (see Security below), authorization, entitlements and capabilities. Authorization and entitlements currently allow everything, and the local deployment has every capability and reports authorization as disabled. |
 | `graphnous-scanner` | The scanner framework: target detection, scan planning, the scanner definitions, the Docker sandbox that runs the scanner images, and `graphnous-scanner-cli`, which scans a repository from the command line. |
 | `graphnous-enhancer` | The enhancers, which add to what a scan found before it is stored. `graphnous-enhancer-core` holds the `Enhancer` interface, what enhancers return, and the provider that runs them; `graphnous-enhancer-spring` adds the controllers and endpoints of Spring web applications; `graphnous-enhancer-angular` the components, directives, services and modules (`NgModule`) of Angular applications and the HTTP calls they make with `HttpClient`. |
+| `graphnous-mcp` | The tools AI agents may use to look up systems, projects, scans and what the scans found, read-only and as the user they run for: the assistant's, and those of the MCP server for coding agents (see MCP below). |
 
 The relational database is PostgreSQL. Flyway creates and migrates its
 schema on startup from `graphnous-api/src/main/resources/db/migration`, and
@@ -252,6 +253,31 @@ the token's signature with the platform's keys, its issuer, its expiry,
 that it is for `graphnous-api`, and that it has an organization; it knows
 nothing else of the platform, and fetches its keys on the first request,
 so the platform need not be up when the server starts.
+
+## MCP
+
+The server is an [MCP](https://modelcontextprotocol.io) server at `/mcp`
+(streamable HTTP, stateless), so coding agents such as Claude Code can look
+things up in Graphnous before they change code: a file they work on, by
+the repository's git url and the file's path in it, and what it declares;
+the systems, projects and scans, a scan's classes, methods, annotations and
+dependencies; what uses a class, method or field, in its project and over
+HTTP in the other projects of its system; a system's HTTP endpoints, with
+the method that serves each and every call of it, and the calls that reach
+none; and what one scan of a project changes from another, such as a
+branch's from main's, endpoints included. With Claude Code, against a server on this machine:
+
+```sh
+claude mcp add --transport http graphnous http://localhost:1337/mcp
+```
+
+With security on, `/mcp` needs an access token as the rest of the API does;
+an agent can use an API key's (see Security), passed with
+`--header "Authorization: Bearer <token>"`. The tools are read-only, and
+each call is made as the caller of its request. `graphnous-mcp.properties`
+in `graphnous-mcp` sets the server's defaults, such as its name and the
+instructions it gives agents; `spring.ai.mcp.server.*` overrides them, and
+`spring.ai.mcp.server.enabled=false` turns it off.
 
 ## Tests
 
