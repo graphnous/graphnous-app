@@ -8,6 +8,7 @@ import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,49 @@ public class HttpLinkRepositoryImpl implements HttpLinkRepository {
                 string(record.get("httpMethod")),
                 string(record.get("url"))
             ));
+    }
+
+    @Override
+    public Map<String, HttpLinks.Source> findSources(final List<Scan> scans, final Collection<String> ids) {
+        if (scans.isEmpty() || ids.isEmpty()) {
+            return Map.of();
+        }
+
+        final var sources = new HashMap<String, HttpLinks.Source>();
+
+        try (final var session = driver.session()) {
+            session.executeRead(tx -> tx.run(
+                """
+                    UNWIND $ids AS id
+                    MATCH (source)-[:ENHANCE]->(node:%s {id: id})
+                    WHERE node.scanId IN $scanIds AND (source:Method OR source:Class)
+                    OPTIONAL MATCH (owner:Class)-[:HAS_METHOD]->(source)
+                    RETURN node.id AS id, source.id AS sourceId, labels(source)[0] AS type, source.name AS name,
+                           source.qualifiedName AS qualifiedName, owner.qualifiedName AS className,
+                           // A method's file declares its class; a function's or a class's declares it
+                           head(COLLECT {
+                               MATCH (file:File)-[:DECLARES]->(declared)
+                               WHERE declared = source OR declared = owner
+                               RETURN file.path
+                           }) AS file,
+                           coalesce(node.line, node.startLine) AS line
+                    """.formatted(EnhancementRepositoryImpl.ENHANCED),
+                Map.of("ids", List.copyOf(ids), "scanIds", scans.stream().map(scan -> scan.id().id().toString()).toList())
+            ).list()).forEach(record -> sources.putIfAbsent(
+                record.get("id").asString(),
+                new HttpLinks.Source(
+                    string(record.get("sourceId")),
+                    string(record.get("type")),
+                    string(record.get("name")),
+                    string(record.get("qualifiedName")),
+                    string(record.get("className")),
+                    string(record.get("file")),
+                    record.get("line").isNull() ? null : record.get("line").asInt()
+                )
+            ));
+        }
+
+        return sources;
     }
 
     @Override

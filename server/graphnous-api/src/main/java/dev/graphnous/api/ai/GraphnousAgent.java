@@ -9,10 +9,7 @@ import dev.graphnous.application.ai.AiApiTokenRetriever;
 import dev.graphnous.application.chat.ChatService;
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.context.RequestContextProvider;
-import dev.graphnous.application.project.ProjectService;
-import dev.graphnous.application.scan.ScanService;
-import dev.graphnous.application.scan.graph.ScanGraphService;
-import dev.graphnous.application.system.SystemService;
+import dev.graphnous.mcp.GraphnousTools;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -55,15 +52,16 @@ public class GraphnousAgent implements Agent {
         outline, then find the classes, annotations or dependencies the
         question is about. Answer briefly. When a tool fails, say what you
         could not look up.
+
+        Your tools only look things up. To scan a project, as when a branch
+        has no completed scan to look at yet, ask the user with startScan:
+        it starts nothing until they agree.
         """;
 
     private final AiApiTokenRetriever tokenRetriever;
     private final RequestContextProvider contextProvider;
 
-    private final SystemService systemService;
-    private final ProjectService projectService;
-    private final ScanService scanService;
-    private final ScanGraphService scanGraphService;
+    private final GraphnousTools tools;
 
     private final ChatThreadRecorder recorder;
 
@@ -76,10 +74,7 @@ public class GraphnousAgent implements Agent {
     public GraphnousAgent(
         final AiApiTokenRetriever tokenRetriever,
         final RequestContextProvider contextProvider,
-        final SystemService systemService,
-        final ProjectService projectService,
-        final ScanService scanService,
-        final ScanGraphService scanGraphService,
+        final GraphnousTools tools,
         final ChatService chatService,
         final Serializer serializer,
         final String model
@@ -87,10 +82,7 @@ public class GraphnousAgent implements Agent {
         this.tokenRetriever = tokenRetriever;
         this.contextProvider = contextProvider;
 
-        this.systemService = systemService;
-        this.projectService = projectService;
-        this.scanService = scanService;
-        this.scanGraphService = scanGraphService;
+        this.tools = tools;
 
         this.recorder = new ChatThreadRecorder(chatService, serializer);
 
@@ -119,20 +111,17 @@ public class GraphnousAgent implements Agent {
         final RunAgentInput input,
         final RequestContext context
     ) {
-        final var tools = new GraphnousTools(
-            context,
-            systemService,
-            projectService,
-            scanService,
-            scanGraphService
-        );
-
         final var chatClient = ChatClient.builder(chatModel())
             .defaultSystem(systemPrompt(input))
             .build();
 
+        final var callbacks = MethodToolCallbackProvider.builder()
+            .toolObjects(tools.forContext(context))
+            .build()
+            .getToolCallbacks();
+
         return SpringAiAgent.builder(chatClient)
-            .tools(List.of(MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks()))
+            .tools(List.of(callbacks))
             .build();
     }
 

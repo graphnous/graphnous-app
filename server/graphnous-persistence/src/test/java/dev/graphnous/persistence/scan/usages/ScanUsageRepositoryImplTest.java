@@ -1,6 +1,10 @@
 package dev.graphnous.persistence.scan.usages;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.graphnous.application.pagination.PageQuery;
+import dev.graphnous.application.pagination.Sort;
+import dev.graphnous.application.scan.exports.ScanPackageExport;
+import dev.graphnous.application.scan.exports.ScanPackageExportFilter;
 import dev.graphnous.application.scan.graph.ScanGraph;
 import dev.graphnous.application.scan.usages.ScanUsages;
 import dev.graphnous.core.model.Call;
@@ -11,6 +15,7 @@ import dev.graphnous.enhancer.Enhancement;
 import dev.graphnous.enhancer.Enhancements;
 import dev.graphnous.enhancer.Node;
 import dev.graphnous.enhancer.angular.AngularEnhancer;
+import dev.graphnous.persistence.scan.exports.ScanPackageExportRepositoryImpl;
 import dev.graphnous.persistence.scan.graph.ScanGraphRepositoryImpl;
 import dev.graphnous.persistence.scan.result.EnhancementRepositoryImpl;
 import dev.graphnous.persistence.scan.result.ScanResultRepositoryImpl;
@@ -80,8 +85,11 @@ class ScanUsageRepositoryImplTest {
         withArguments.getArguments().add(argument(null, "options", true));
         ngOnInit.getCalls().add(withArguments);
         ngOnInit.getCalls().add(call(ORDERS + "totals:Totals.constructor", Call.Kind.CONSTRUCTOR, 23));
-        // Not of the scan, so not a usage
-        ngOnInit.getCalls().add(call("rxjs:Subject.constructor", Call.Kind.CONSTRUCTOR, 24));
+        // Not of the scan, so a usage of what the package exports
+        final var subject = call("rxjs:Subject.constructor", Call.Kind.CONSTRUCTOR, 24);
+        subject.setModule("rxjs");
+        subject.setResolved(false);
+        ngOnInit.getCalls().add(subject);
 
         method(result, ORDERS + "invoice.service:InvoiceService.refresh")
             .getCalls().add(call(ORDERS + "order-list.component:OrderListComponent.ngOnInit", Call.Kind.METHOD, 15));
@@ -433,6 +441,43 @@ class ScanUsageRepositoryImplTest {
     }
 
     @Test
+    void findsWhereWhatAPackageExportsIsUsed() {
+        final var subject = scanId.id() + "|.|export:rxjs:Subject";
+
+        final var found = repository.findUsages(scanId, subject, 2, 100).orElseThrow();
+
+        assertThat(found.subject()).isEqualTo(new ScanUsages.Node(subject, "PackageExport", "Subject", "rxjs:Subject"));
+        // And on, to what calls what constructs it
+        assertThat(found.usages())
+            .extracting(
+                ScanUsages.Usage::relationship, ScanUsages.Usage::depth, usage -> usage.user().name(),
+                ScanUsages.Usage::file, ScanUsages.Usage::line
+            )
+            .containsExactly(
+                tuple("INSTANTIATES", 1, "ngOnInit", ORDERS + "order-list.component.ts", 24),
+                tuple("CALLS", 2, "refresh", ORDERS + "invoice.service.ts", 15)
+            );
+    }
+
+    @Test
+    void listsWhatTheScanUsesOfPackages() {
+        final var exports = new ScanPackageExportRepositoryImpl(driver).findPackageExports(
+            scanId,
+            new ScanPackageExportFilter("subj", "rxjs"),
+            new PageQuery(0, 10, new Sort("usages", Sort.Direction.DESC))
+        );
+
+        assertThat(exports.content()).containsExactly(new ScanPackageExport(
+            scanId.id() + "|.|export:rxjs:Subject", "rxjs", "rxjs", "Subject", "rxjs:Subject", 1, 1
+        ));
+        assertThat(new ScanPackageExportRepositoryImpl(driver).findPackageExports(
+            scanId,
+            new ScanPackageExportFilter(null, "@angular/core"),
+            new PageQuery(0, 10, new Sort("qualifiedName", Sort.Direction.ASC))
+        ).content()).isEmpty();
+    }
+
+    @Test
     void saysWhenThereAreMoreUsagesThanFit() {
         final var found = repository.findUsages(scanId, classId("order.service:OrderService"), 1, 2).orElseThrow();
 
@@ -476,11 +521,12 @@ class ScanUsageRepositoryImplTest {
 
         assertThat(graph.nodes()).extracting(ScanGraph.Node::type, ScanGraph.Node::name)
             .contains(tuple("Method", "list"), tuple("Class", "Totals"), tuple("Field", "orders"));
-        // Once for both places it constructs Totals, which it counts
+        // Once for both places it constructs Totals, which it counts, and
+        // once for the Subject of rxjs
         assertThat(graph.edges())
             .filteredOn(edge -> edge.type().equals("INSTANTIATES"))
             .extracting(edge -> edge.properties().get("places"))
-            .containsExactly(2);
+            .containsExactlyInAnyOrder(2, 1);
         assertThat(graph.edges()).extracting(ScanGraph.Edge::type).contains("CALLS", "READS", "WRITES");
 
         // Alone, it is drawn on every layer

@@ -19,6 +19,8 @@ import dev.graphnous.application.scan.classes.ScanClassRepository;
 import dev.graphnous.application.scan.classes.ScanClassService;
 import dev.graphnous.application.scan.dependencies.ScanDependencyRepository;
 import dev.graphnous.application.scan.dependencies.ScanDependencyService;
+import dev.graphnous.application.scan.exports.ScanPackageExportRepository;
+import dev.graphnous.application.scan.exports.ScanPackageExportService;
 import dev.graphnous.application.scan.files.ScanFileRepository;
 import dev.graphnous.application.scan.files.ScanFileService;
 import dev.graphnous.application.scan.graph.ScanGraphRepository;
@@ -36,6 +38,8 @@ import dev.graphnous.application.scan.log.ScanLogRepository;
 import dev.graphnous.application.scan.log.ScanLogService;
 import dev.graphnous.application.scan.result.ScanResultArchive;
 import dev.graphnous.application.scan.result.ScanResultRepository;
+import dev.graphnous.application.scan.source.ScanSourceRepository;
+import dev.graphnous.application.scan.source.ScanSourceService;
 import dev.graphnous.application.scan.stats.ScanStatRepository;
 import dev.graphnous.application.scan.stats.ScanStatService;
 import dev.graphnous.application.scan.usages.ScanUsageRepository;
@@ -126,6 +130,14 @@ public class ScanConfiguration {
     }
 
     @Bean
+    ScanPackageExportService scanPackageExportService(
+        final ScanService scanService,
+        final ScanPackageExportRepository scanPackageExportRepository
+    ) {
+        return new ScanPackageExportService(scanService, scanPackageExportRepository);
+    }
+
+    @Bean
     ScanFileService scanFileService(
         final ScanService scanService,
         final ScanFileRepository scanFileRepository
@@ -163,6 +175,16 @@ public class ScanConfiguration {
         final ScanUsageRepository scanUsageRepository
     ) {
         return new ScanUsageService(scanService, scanUsageRepository);
+    }
+
+    @Bean
+    ScanSourceService scanSourceService(
+        final SystemService systemService,
+        final ProjectService projectService,
+        final ScanService scanService,
+        final ScanSourceRepository scanSourceRepository
+    ) {
+        return new ScanSourceService(systemService, projectService, scanService, scanSourceRepository);
     }
 
     @Bean

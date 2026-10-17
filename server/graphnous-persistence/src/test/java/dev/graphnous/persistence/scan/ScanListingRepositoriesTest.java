@@ -19,6 +19,7 @@ import dev.graphnous.application.scan.packages.ScanPackage;
 import dev.graphnous.application.scan.packages.ScanPackageFilter;
 import dev.graphnous.core.model.ScanResult;
 import dev.graphnous.domain.project.Project;
+import dev.graphnous.application.scan.source.ScanSource;
 import dev.graphnous.domain.scan.Scan;
 import dev.graphnous.persistence.scan.classes.ScanClassRepositoryImpl;
 import dev.graphnous.persistence.scan.dependencies.ScanDependencyRepositoryImpl;
@@ -27,6 +28,7 @@ import dev.graphnous.persistence.scan.methods.ScanMethodRepositoryImpl;
 import dev.graphnous.persistence.scan.modules.ScanModuleRepositoryImpl;
 import dev.graphnous.persistence.scan.packages.ScanPackageRepositoryImpl;
 import dev.graphnous.persistence.scan.result.ScanResultRepositoryImpl;
+import dev.graphnous.persistence.scan.source.ScanSourceRepositoryImpl;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -347,6 +349,47 @@ class ScanListingRepositoriesTest {
         assertThat(repository.findLibraries(scans, null, false, new PageQuery(0, 1, new Sort("versions", Sort.Direction.DESC))).content())
             .extracting(SystemLibrary::name).containsExactly("org.slf4j:slf4j-api");
         assertThat(repository.findLibraries(List.of(), null, false, sortedBy("name")).content()).isEmpty();
+    }
+
+    @Test
+    void findsTheFilesAPathEndsWithWithWhatTheyDeclare() {
+        final var files = new ScanSourceRepositoryImpl(driver)
+            .findFilesEndingPath(scanId, "backend/orders/src/main/java/com/example/Order.java");
+
+        assertThat(files)
+            .extracting(ScanSource.File::target, ScanSource.File::module, ScanSource.File::path, ScanSource.File::language)
+            .containsExactly(tuple("backend", "orders", "src/main/java/com/example/Order.java", "JAVA"));
+        assertThat(files.getFirst().id()).isEqualTo(scan() + "|backend|orders|file:src/main/java/com/example/Order.java");
+        assertThat(files.getFirst().declarations())
+            .extracting(
+                ScanSource.Declaration::type, ScanSource.Declaration::kind, ScanSource.Declaration::name,
+                ScanSource.Declaration::className
+            )
+            .containsExactlyInAnyOrder(
+                tuple("CLASS", "CLASS", "Order", null),
+                tuple("METHOD", "CONSTRUCTOR", "Order", "com.example.Order"),
+                tuple("METHOD", "METHOD", "compareTo", "com.example.Order"),
+                tuple("FIELD", null, "total", "com.example.Order")
+            );
+    }
+
+    @Test
+    void findsTheFunctionsAndVariablesOfAFile() {
+        final var files = new ScanSourceRepositoryImpl(driver).findFilesEndingPath(scanId, "shop/app/orders.py");
+
+        assertThat(files).singleElement().satisfies(file -> assertThat(file.declarations())
+            .extracting(ScanSource.Declaration::type, ScanSource.Declaration::name, ScanSource.Declaration::className)
+            .containsExactlyInAnyOrder(
+                tuple("CLASS", "Order", null),
+                tuple("METHOD", "add", "app.orders.Order"),
+                tuple("METHOD", "total", null),
+                tuple("FIELD", "TAX_RATE", null)
+            ));
+    }
+
+    @Test
+    void findsNoFileForAPathItDoesNotEndWith() {
+        assertThat(new ScanSourceRepositoryImpl(driver).findFilesEndingPath(scanId, "shop/app/payments.py")).isEmpty();
     }
 
     /**

@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 
 /**
@@ -17,10 +18,11 @@ final class ScanComparison {
 
     /**
      * The order the types are listed in: from the targets down to the
-     * fields, then the dependencies; any other type after those.
+     * fields, then the endpoints enhancers found, then the dependencies; any
+     * other type after those.
      */
     static final List<String> TYPES = List.of(
-        "ScanTarget", "Module", "Package", "File", "Class", "Method", "Field", "Dependency"
+        "ScanTarget", "Module", "Package", "File", "Class", "Method", "Field", "Endpoint", "Dependency"
     );
 
     private static final Comparator<String> BY_TYPE = Comparator.comparingInt(type -> {
@@ -38,6 +40,20 @@ final class ScanComparison {
     static ScanGraph.Comparison compare(
         final List<ScanGraph.Snapshot> base,
         final List<ScanGraph.Snapshot> head,
+        final int limit
+    ) {
+        return compare(base, head, Set.of(), limit);
+    }
+
+    /**
+     * @param types the types of node to list, such as Method; every type
+     *              when empty. The summary counts every type
+     * @param limit the most nodes each of added, removed and changed holds
+     */
+    static ScanGraph.Comparison compare(
+        final List<ScanGraph.Snapshot> base,
+        final List<ScanGraph.Snapshot> head,
+        final Set<String> types,
         final int limit
     ) {
         final var before = byKey(base);
@@ -75,8 +91,16 @@ final class ScanComparison {
         removed.sort(snapshotOrder);
         changed.sort(Comparator.comparing(ScanGraph.Change::type, BY_TYPE).thenComparing(ScanGraph.Change::key));
 
+        final var summary = summary(added, removed, changed);
+
+        if (!types.isEmpty()) {
+            added.removeIf(node -> !types.contains(node.type()));
+            removed.removeIf(node -> !types.contains(node.type()));
+            changed.removeIf(node -> !types.contains(node.type()));
+        }
+
         return new ScanGraph.Comparison(
-            summary(added, removed, changed),
+            summary,
             first(added, limit),
             first(removed, limit),
             first(changed, limit),

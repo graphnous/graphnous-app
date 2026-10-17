@@ -13,8 +13,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +42,8 @@ public class HttpLinkService {
      * How many scans can be linked at once.
      */
     public static final int MAX_SCANS = 50;
+
+    private static final Pattern VARIABLES = Pattern.compile("\\{[^}]*}");
 
     private static final Logger log = LoggerFactory.getLogger(HttpLinkService.class);
 
@@ -91,37 +99,154 @@ public class HttpLinkService {
             latest = ids(scans).equals(ids(scanService.getLatestCompletedScans(context, systemId)));
         }
 
-        final var calls = httpLinkRepository.findCalls(scans);
-        final var endpoints = httpLinkRepository.findEndpoints(scans);
-        final List<HttpLinks.Link> links;
-
-        if (latest) {
-            // Stored, once those not stored with this matching are found again
-            final var linkedWith = httpLinkRepository.findLinkedWith(scans);
-
-            for (final var scan : scans) {
-                if (!HttpLinkMatcher.VERSION.equals(linkedWith.get(scan.id()))) {
-                    store(scan, scans, calls, endpoints);
-                }
-            }
-
-            links = httpLinkRepository.findStoredLinks(scans);
-        } else {
-            links = HttpLinkMatcher.match(calls, endpoints);
-        }
+        final var linked = link(scans, latest);
 
         log.debug(
             "Linked scans organizationId={} systemId={} scans={} calls={} endpoints={} links={} stored={}",
             context.organization().id(),
             systemId.id(),
             scans.size(),
-            calls.size(),
-            endpoints.size(),
-            links.size(),
+            linked.calls().size(),
+            linked.endpoints().size(),
+            linked.links().size(),
             latest
         );
 
-        return new HttpLinks.Found(links, calls.size(), endpoints.size());
+        return new HttpLinks.Found(linked.links(), linked.calls().size(), linked.endpoints().size());
+    }
+
+    /**
+     * The endpoints of the latest completed scan of each project of the
+     * system that pass the filter, with what serves each and the calls of
+     * the system that request it, sorted by project, url and method.
+     *
+     * @param limit how many endpoints to list at most
+     */
+    public HttpLinks.Endpoints getEndpoints(
+        final RequestContext context,
+        final System.SystemId systemId,
+        final HttpLinks.EndpointFilter filter,
+        final int limit
+    ) {
+        final var scans = scanService.getLatestCompletedScans(context, systemId);
+        final var linked = link(scans, true);
+
+        final var callsOf = new HashMap<String, List<HttpLinks.Link>>();
+        linked.links().forEach(link -> callsOf.computeIfAbsent(link.endpoint().id(), id -> new ArrayList<>()).add(link));
+
+        final var search = filter.search() == null ? null : filter.search().toLowerCase(Locale.ROOT);
+        final var matching = linked.endpoints().stream()
+            .filter(endpoint -> search == null || (endpoint.url() != null && endpoint.url().toLowerCase(Locale.ROOT).contains(search)))
+            .filter(endpoint -> filter.projectId() == null || filter.projectId().equals(endpoint.projectId()))
+            .filter(endpoint -> !filter.uncalled() || !callsOf.containsKey(endpoint.id()))
+            .sorted(Comparator.comparing((HttpLinks.Endpoint endpoint) -> endpoint.projectId().id())
+                .thenComparing(HttpLinks.Endpoint::url, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(HttpLinks.Endpoint::httpMethod, Comparator.nullsLast(Comparator.naturalOrder())))
+            .toList();
+        final var listed = matching.stream().limit(Math.max(limit, 0)).toList();
+
+        // Where the listed endpoints and their calls are, read only for those
+        final var ids = new HashSet<String>();
+        listed.forEach(endpoint -> {
+            ids.add(endpoint.id());
+            callsOf.getOrDefault(endpoint.id(), List.of()).forEach(link -> ids.add(link.call().id()));
+        });
+        final var sources = ids.isEmpty() ? Map.<String, HttpLinks.Source>of() : httpLinkRepository.findSources(scans, ids);
+
+        final var endpoints = listed.stream()
+            .map(endpoint -> new HttpLinks.EndpointCalls(
+                endpoint,
+                sources.get(endpoint.id()),
+                callsOf.getOrDefault(endpoint.id(), List.of()).stream()
+                    .map(link -> new HttpLinks.CallSite(link.call(), sources.get(link.call().id()), link.match()))
+                    .toList()
+            ))
+            .toList();
+
+        return new HttpLinks.Endpoints(endpoints, matching.size(), matching.size() > listed.size());
+    }
+
+    /**
+     * The calls of the latest completed scan of each project of the system
+     * that request none of its endpoints and pass the filter, with where
+     * each is, sorted by project and url: calls of another system or an API
+     * outside, or of an endpoint that was renamed or removed. Calls whose
+     * url the scan does not know are left out, as they cannot be matched,
+     * as are those whose url is only variables, such as {@code {baseUrl}{path}}
+     * in a wrapper of fetch: where they go is only known when they run.
+     *
+     * @param limit how many calls to list at most
+     */
+    public HttpLinks.Calls getUnmatchedCalls(
+        final RequestContext context,
+        final System.SystemId systemId,
+        final HttpLinks.CallFilter filter,
+        final int limit
+    ) {
+        final var scans = scanService.getLatestCompletedScans(context, systemId);
+        final var linked = link(scans, true);
+
+        final var matched = new HashSet<String>();
+        linked.links().forEach(link -> matched.add(link.call().id()));
+
+        final var search = filter.search() == null ? null : filter.search().toLowerCase(Locale.ROOT);
+        final var unmatched = linked.calls().stream()
+            .filter(call -> hasText(call.url()) && !matched.contains(call.id()))
+            .filter(call -> search == null || call.url().toLowerCase(Locale.ROOT).contains(search))
+            .filter(call -> filter.projectId() == null || filter.projectId().equals(call.projectId()))
+            .sorted(Comparator.comparing((HttpLinks.Call call) -> call.projectId().id())
+                .thenComparing(HttpLinks.Call::url)
+                .thenComparing(HttpLinks.Call::id))
+            .toList();
+        final var listed = unmatched.stream().limit(Math.max(limit, 0)).toList();
+
+        final var sources = listed.isEmpty()
+            ? Map.<String, HttpLinks.Source>of()
+            : httpLinkRepository.findSources(scans, listed.stream().map(HttpLinks.Call::id).toList());
+
+        return new HttpLinks.Calls(
+            listed.stream().map(call -> new HttpLinks.CallSite(call, sources.get(call.id()), null)).toList(),
+            unmatched.size(),
+            unmatched.size() > listed.size()
+        );
+    }
+
+    /**
+     * The calls and endpoints of the scans and the links between them:
+     * stored for the latest scans, once those not stored with this
+     * matching are found again; otherwise found anew.
+     */
+    private Linked link(final List<Scan> scans, final boolean latest) {
+        final var calls = httpLinkRepository.findCalls(scans);
+        final var endpoints = httpLinkRepository.findEndpoints(scans);
+
+        if (!latest) {
+            return new Linked(calls, endpoints, HttpLinkMatcher.match(calls, endpoints));
+        }
+
+        final var linkedWith = httpLinkRepository.findLinkedWith(scans);
+
+        for (final var scan : scans) {
+            if (!HttpLinkMatcher.VERSION.equals(linkedWith.get(scan.id()))) {
+                store(scan, scans, calls, endpoints);
+            }
+        }
+
+        return new Linked(calls, endpoints, httpLinkRepository.findStoredLinks(scans));
+    }
+
+    private record Linked(
+        List<HttpLinks.Call> calls,
+        List<HttpLinks.Endpoint> endpoints,
+        List<HttpLinks.Link> links
+    ) {
+    }
+
+    /**
+     * Whether the url has any fixed text, besides its variables and slashes.
+     */
+    static boolean hasText(final String url) {
+        return url != null && !VARIABLES.matcher(url).replaceAll("").replace("/", "").isBlank();
     }
 
     private static Set<Scan.ScanId> ids(final List<Scan> scans) {

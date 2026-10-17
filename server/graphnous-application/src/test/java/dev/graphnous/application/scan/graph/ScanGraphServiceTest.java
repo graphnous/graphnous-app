@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -167,6 +168,24 @@ class ScanGraphServiceTest {
         assertThat(comparison.removed()).extracting(ScanGraph.Snapshot::key).containsExactly("backend|orders");
         verify(scanService).getScan(context, scanId);
         verify(scanService).getScan(context, head);
+    }
+
+    @Test
+    void comparesOnlyTheTypesAskedForUpToTheLimit() {
+        final var head = Scan.ScanId.generate();
+
+        when(scanGraphRepository.findSnapshots(scanId)).thenReturn(List.of());
+        when(scanGraphRepository.findSnapshots(head)).thenReturn(List.of(
+            new ScanGraph.Snapshot("backend|orders", "Module", "orders", Map.of()),
+            new ScanGraph.Snapshot("backend|orders|class:A", "Class", "A", Map.of()),
+            new ScanGraph.Snapshot("backend|orders|class:B", "Class", "B", Map.of())
+        ));
+
+        final var comparison = service().compare(context, scanId, head, Set.of("Class"), 1);
+
+        assertThat(comparison.added()).extracting(ScanGraph.Snapshot::key).containsExactly("backend|orders|class:A");
+        assertThat(comparison.truncated()).isTrue();
+        assertThat(service().compare(context, scanId, head, Set.of(), 0).added()).hasSize(1);
     }
 
     @Test

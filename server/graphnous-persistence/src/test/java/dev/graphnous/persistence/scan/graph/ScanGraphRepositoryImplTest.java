@@ -207,6 +207,32 @@ class ScanGraphRepositoryImplTest {
     }
 
     @Test
+    void comparesTheEndpointsEnhancersFoundByMethodAndUrl() {
+        final var compareTo = "backend|orders|class:com.example.Order|method:com.example.Order.compareTo(com.example.Order)";
+
+        new EnhancementRepositoryImpl(driver).save(scanId, List.of(new Enhancements("spring", "1.0.0", List.of(
+            new Enhancement(
+                List.of(
+                    new Node(compareTo + "|endpoint:GET /orders/{id}", compareTo, List.of("Endpoint"),
+                        Map.of("httpMethod", "GET", "url", "/orders/{id}")),
+                    new Node(compareTo + "|httpCall:0", compareTo, List.of("HttpCall"), Map.of("url", "/customers"))
+                ),
+                List.of()
+            )
+        ))));
+
+        // Not the calls: their keys are where they are, which moves with every line above
+        assertThat(repository.findSnapshots(scanId))
+            .filteredOn(snapshot -> snapshot.type().equals("Endpoint") || snapshot.type().equals("HttpCall"))
+            .singleElement()
+            .satisfies(endpoint -> {
+                assertThat(endpoint.key()).isEqualTo(compareTo + "|endpoint:GET /orders/{id}");
+                assertThat(endpoint.name()).isEqualTo("GET /orders/{id}");
+                assertThat(endpoint.properties()).containsEntry("url", "/orders/{id}").doesNotContainKeys("id", "scanId");
+            });
+    }
+
+    @Test
     void keysTheSameNodesOfAnotherScanOfTheRepositoryAlike() throws IOException {
         final var other = createScan();
         new ScanResultRepositoryImpl(driver).save(other, List.of(orders()));

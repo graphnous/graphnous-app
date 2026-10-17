@@ -90,6 +90,11 @@
         </dependency>
         <dependency>
             <groupId>dev.graphnous</groupId>
+            <artifactId>graphnous-mcp</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.graphnous</groupId>
             <artifactId>graphnous-persistence</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
@@ -160,6 +165,16 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <!--
+                    The version Spring AI and the MCP SDK are built for. Without
+                    it, Maven takes the older one of openapi-request-validator,
+                    a test dependency, and the MCP server fails to start
+                -->
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>3.0.3</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
@@ -363,6 +378,22 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!--
+                        openapi-request-validator needs the json-schema-validator
+                        it was built for, which the MCP server cannot run with:
+                        the tests here run without the MCP server (see
+                        application.properties), and graphnous-mcp tests it
+                    -->
+                    <classpathDependencyExcludes>
+                        <classpathDependencyExclude>com.networknt:json-schema-validator</classpathDependencyExclude>
+                    </classpathDependencyExcludes>
+                    <additionalClasspathDependencies>
+                        <additionalClasspathDependency>
+                            <groupId>com.networknt</groupId>
+                            <artifactId>json-schema-validator</artifactId>
+                            <version>2.0.1</version>
+                        </additionalClasspathDependency>
+                    </additionalClasspathDependencies>
                     <systemPropertyVariables>
                         <!-- Controller tests check against the spec the API is generated from -->
                         <graphnous.openapi.spec>${graphnous.openapi.spec}</graphnous.openapi.spec>

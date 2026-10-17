@@ -559,9 +559,9 @@ public class AngularEnhancer implements Enhancer {
      */
     static Optional<String> entryName(final Object entry) {
         if (entry instanceof Map<?, ?> provider) {
-            return Optional.ofNullable(provider.get("useClass"))
-                .or(() -> Optional.ofNullable(provider.get("useExisting")))
-                .or(() -> Optional.ofNullable(provider.get("provide")))
+            return Optional.<Object>ofNullable(provider.get("useClass"))
+                .or(() -> Optional.<Object>ofNullable(provider.get("useExisting")))
+                .or(() -> Optional.<Object>ofNullable(provider.get("provide")))
                 .flatMap(AngularEnhancer::entryName);
         }
 

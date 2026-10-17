@@ -53,7 +53,7 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
      * what enhancers added.
      */
     private static final List<String> COMPARED_LABELS = List.of(
-        "ScanTarget", "Module", "Package", "File", "Class", "Method", "Field"
+        "ScanTarget", "Module", "Package", "File", "Class", "Method", "Field", "Endpoint"
     );
 
     /**
@@ -435,6 +435,10 @@ public class ScanGraphRepositoryImpl implements ScanGraphRepository {
             case "ScanTarget", "File" -> properties.get("path");
             case "Package" -> properties.getOrDefault("qualifiedName", properties.get("name"));
             case "Annotation" -> "@" + properties.get("name");
+            // As an enhancer found it, such as GET /api/orders/{id}
+            case "Endpoint" -> properties.get("url") == null
+                ? null
+                : (properties.get("httpMethod") == null ? "" : properties.get("httpMethod") + " ") + properties.get("url");
             default -> properties.get("name");
         };
 

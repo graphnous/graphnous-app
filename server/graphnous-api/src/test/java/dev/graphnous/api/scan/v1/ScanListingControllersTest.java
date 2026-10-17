@@ -15,6 +15,9 @@ import dev.graphnous.application.scan.classes.ScanClassService;
 import dev.graphnous.application.scan.dependencies.ScanDependency;
 import dev.graphnous.application.scan.dependencies.ScanDependencyFilter;
 import dev.graphnous.application.scan.dependencies.ScanDependencyService;
+import dev.graphnous.application.scan.exports.ScanPackageExport;
+import dev.graphnous.application.scan.exports.ScanPackageExportFilter;
+import dev.graphnous.application.scan.exports.ScanPackageExportService;
 import dev.graphnous.application.scan.files.ScanFile;
 import dev.graphnous.application.scan.files.ScanFileFilter;
 import dev.graphnous.application.scan.files.ScanFileService;
@@ -47,7 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * The modules, packages, files, classes, methods and dependencies of a scan,
+ * The modules, packages, package exports, files, classes, methods and dependencies of a scan,
  * a page at a time.
  */
 @SpringBootTest
@@ -76,6 +79,9 @@ class ScanListingControllersTest {
 
     @MockitoBean
     private ScanPackageService scanPackageService;
+
+    @MockitoBean
+    private ScanPackageExportService scanPackageExportService;
 
     @MockitoBean
     private ScanFileService scanFileService;
@@ -140,6 +146,36 @@ class ScanListingControllersTest {
             .andExpect(jsonPath("$.content[0].qualifiedName").value("com.example"))
             .andExpect(jsonPath("$.content[0].module").value("orders"))
             .andExpect(jsonPath("$.content[0].classes").value(3));
+    }
+
+    @Test
+    void listsWhatAScanUsesOfPackagesMostUsedFirst() throws Exception {
+        final var button = scanId.id() + "|web|export:@acme/theme:Button";
+
+        when(scanPackageExportService.getPackageExports(
+            any(),
+            eq(scanId),
+            eq(new ScanPackageExportFilter("but", "@acme/theme")),
+            eq(new PageQuery(0, 50, new Sort("usages", Sort.Direction.DESC)))
+        )).thenReturn(new Page<>(
+            List.of(new ScanPackageExport(button, "@acme/theme", "@acme/theme", "Button", "@acme/theme:Button", 21, 9)),
+            0, 50, 1, 1
+        ));
+
+        mockMvc.perform(get("/api/v1/scans/{id}/package-exports", scanId.id())
+                .queryParam("query", "but")
+                .queryParam("package", "@acme/theme")
+                .queryParam("sort", "usages")
+                .queryParam("direction", "desc"))
+            .andExpect(status().isOk())
+            .andExpect(openApi().isValid(OPENAPI_SPEC))
+            .andExpect(jsonPath("$.content[0].id").value(button))
+            .andExpect(jsonPath("$.content[0].package").value("@acme/theme"))
+            .andExpect(jsonPath("$.content[0].module").value("@acme/theme"))
+            .andExpect(jsonPath("$.content[0].name").value("Button"))
+            .andExpect(jsonPath("$.content[0].qualifiedName").value("@acme/theme:Button"))
+            .andExpect(jsonPath("$.content[0].usages").value(21))
+            .andExpect(jsonPath("$.content[0].files").value(9));
     }
 
     @Test
@@ -262,6 +298,7 @@ class ScanListingControllersTest {
         for (final var request : List.of(
             get("/api/v1/scans/{id}/modules", scanId.id()).queryParam("sort", "files"),
             get("/api/v1/scans/{id}/packages", scanId.id()).queryParam("size", "0"),
+            get("/api/v1/scans/{id}/package-exports", scanId.id()).queryParam("sort", "module"),
             get("/api/v1/scans/{id}/files", scanId.id()).queryParam("sort", "name"),
             get("/api/v1/scans/{id}/files", scanId.id()).queryParam("sourceSet", "both"),
             get("/api/v1/scans/{id}/classes", scanId.id()).queryParam("size", "101"),
@@ -275,7 +312,7 @@ class ScanListingControllersTest {
         }
 
         verifyNoInteractions(
-            scanModuleService, scanPackageService, scanFileService, scanClassService, scanMethodService, scanDependencyService
+            scanModuleService, scanPackageService, scanPackageExportService, scanFileService, scanClassService, scanMethodService, scanDependencyService
         );
     }
 }

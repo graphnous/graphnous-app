@@ -111,8 +111,8 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
     }
 
     /**
-     * The class, method or field with the id; for a node an enhancer
-     * added, the one it enhances.
+     * The class, method, field or package export with the id; for a node
+     * an enhancer added, the one it enhances.
      */
     private static Optional<ScanUsages.Node> subject(
         final TransactionContext tx,
@@ -126,6 +126,8 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
                     MATCH (node:Method {id: $id}) RETURN node
                     UNION
                     MATCH (node:Field {id: $id}) RETURN node
+                    UNION
+                    MATCH (node:PackageExport {id: $id}) RETURN node
                     UNION
                     MATCH (source)-[:ENHANCE]->(:%s {id: $id})
                     WHERE source:Class OR source:Method OR source:Field
@@ -251,7 +253,8 @@ public class ScanUsageRepositoryImpl implements ScanUsageRepository {
         final int limit
     ) {
         return tx.run("""
-                MATCH (target) WHERE target.id IN $targets AND (target:Class OR target:Method OR target:Field)
+                MATCH (target) WHERE target.id IN $targets
+                    AND (target:Class OR target:Method OR target:Field OR target:PackageExport)
                 MATCH (user)-[usage:%s]->(target)
                 OPTIONAL MATCH (owner:Class)-[:HAS_METHOD]->(user)
                 OPTIONAL MATCH (targetOwner:Class)-[:HAS_METHOD|HAS_FIELD]->(target)

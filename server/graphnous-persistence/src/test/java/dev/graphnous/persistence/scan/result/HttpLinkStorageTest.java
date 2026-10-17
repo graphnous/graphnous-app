@@ -36,6 +36,10 @@ class HttpLinkStorageTest {
     private static final Neo4jContainer NEO4J = new Neo4jContainer("neo4j:5-community")
         .withoutAuthentication();
 
+    private static final String ORDER = "backend|orders|class:com.example.Order";
+
+    private static final String COMPARE_TO = ORDER + "|method:com.example.Order.compareTo(com.example.Order)";
+
     private static Driver driver;
 
     private EnhancementRepositoryImpl enhancements;
@@ -68,11 +72,14 @@ class HttpLinkStorageTest {
         }
 
         enhancements.save(frontend.id(), List.of(new Enhancements("fetch-browser", "1.1.0", List.of(new Enhancement(
-            List.of(new Node("web|call", null, List.of("HttpCall"), Map.of("client", "fetch", "httpMethod", "GET", "url", "/orders"))),
+            List.of(new Node(
+                "web|call", COMPARE_TO, List.of("HttpCall"),
+                Map.of("client", "fetch", "httpMethod", "GET", "url", "/orders", "startLine", 12)
+            )),
             List.of()
         )))));
         enhancements.save(backend.id(), List.of(new Enhancements("spring", "1.0.0", List.of(new Enhancement(
-            List.of(new Node("api|endpoint", null, List.of("Endpoint"), Map.of("httpMethod", "GET", "url", "/orders"))),
+            List.of(new Node("api|endpoint", ORDER, List.of("Endpoint"), Map.of("httpMethod", "GET", "url", "/orders"))),
             List.of()
         )))));
     }
@@ -122,6 +129,29 @@ class HttpLinkStorageTest {
         // Gone with the call's node, and to be found again
         assertThat(repository.findStoredLinks(List.of(frontend, backend))).isEmpty();
         assertThat(repository.findLinkedWith(List.of(frontend, backend))).isEmpty();
+    }
+
+    @Test
+    void findsWhereCallsAndEndpointsAre() {
+        final var call = frontend.id().id() + "|web|call";
+        final var endpoint = backend.id().id() + "|api|endpoint";
+
+        assertThat(repository.findSources(List.of(frontend, backend), List.of(call, endpoint, "unknown"))).isEqualTo(Map.of(
+            call, new HttpLinks.Source(
+                frontend.id().id() + "|" + COMPARE_TO, "Method", "compareTo",
+                "com.example.Order.compareTo(com.example.Order)", "com.example.Order",
+                "src/main/java/com/example/Order.java", 12
+            ),
+            endpoint, new HttpLinks.Source(
+                backend.id().id() + "|" + ORDER, "Class", "Order", "com.example.Order", null,
+                "src/main/java/com/example/Order.java", null
+            )
+        ));
+    }
+
+    @Test
+    void findsNoSourcesOfOtherScans() {
+        assertThat(repository.findSources(List.of(frontend), List.of(backend.id().id() + "|api|endpoint"))).isEmpty();
     }
 
     private HttpLinks.Link link() {
