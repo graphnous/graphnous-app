@@ -278,11 +278,15 @@ public class GraphnousTools {
     /**
      * A removed or changed class, method or field, with what uses it.
      *
-     * @param kind       REMOVED or CHANGED
-     * @param id         its id: in the base scan for a removed one, in the
-     *                   head scan for a changed one, as are its usages
-     * @param usageCount how many places use it, of which usages lists the
-     *                   first
+     * @param kind           REMOVED, CHANGED, RENAMED or SIGNATURE_CHANGED
+     * @param id             its id: in the base scan for a removed, renamed
+     *                       or re-signed one, in the head scan for a
+     *                       changed one, as are its usages
+     * @param replacement    for a renamed one, or a method whose signature
+     *                       changed, the key of what the head has instead
+     * @param usageCount     how many places use it, of which usages lists
+     *                       the first, those outside tests first
+     * @param testUsageCount how many of those places are in tests
      */
     public record ImpactChange(
         String kind,
@@ -290,7 +294,9 @@ public class GraphnousTools {
         String type,
         String name,
         List<ScanGraph.PropertyChange> properties,
+        String replacement,
         int usageCount,
+        int testUsageCount,
         boolean truncated,
         List<UsageSummary> usages
     ) {
@@ -321,6 +327,10 @@ public class GraphnousTools {
      *
      * @param removedEndpoints the endpoints the head no longer serves
      * @param addedEndpoints   the endpoints only the head serves
+     * @param movedEndpoints   the endpoints whose path or method the head
+     *                         changed, as {@code GET /a -> GET /b}
+     * @param unusedEndpoints  the endpoints of the head no call of the
+     *                         system reaches
      * @param truncated        whether there are more changes than it
      *                         follows
      */
@@ -331,9 +341,29 @@ public class GraphnousTools {
         List<ImpactChange> changes,
         List<String> removedEndpoints,
         List<String> addedEndpoints,
+        List<String> movedEndpoints,
+        UnusedEndpointsSummary unusedEndpoints,
         List<BrokenCallSummary> brokenCalls,
         List<AffectedProjectSummary> projects,
         boolean truncated
+    ) {
+    }
+
+    /**
+     * Endpoints no call Graphnous found reaches: possibly unused, as
+     * clients outside the system may still call them.
+     *
+     * @param noLongerCalled those calls reached in the base, and none in
+     *                       the head
+     * @param notCalledYet   those the head adds or moves
+     * @param others         the rest, the first of them
+     * @param otherCount     how many the rest are
+     */
+    public record UnusedEndpointsSummary(
+        List<String> noLongerCalled,
+        List<String> notCalledYet,
+        List<String> others,
+        int otherCount
     ) {
     }
 
@@ -468,13 +498,22 @@ public class GraphnousTools {
                     change.type(),
                     change.name(),
                     change.properties(),
+                    change.replacement(),
                     change.usageCount(),
+                    change.testUsageCount(),
                     change.truncated(),
                     change.usages().stream().map(usage -> summary(usage, change.projects())).toList()
                 ))
                 .toList(),
             report.endpoints().removed().stream().map(ScanGraph.Snapshot::name).toList(),
             report.endpoints().added().stream().map(ScanGraph.Snapshot::name).toList(),
+            report.endpoints().moved().stream().map(move -> move.from().name() + " -> " + move.to().name()).toList(),
+            new UnusedEndpointsSummary(
+                endpointNames(report.unused().noLongerCalled()),
+                endpointNames(report.unused().notCalledYet()),
+                endpointNames(report.unused().others()),
+                report.unused().otherCount()
+            ),
             report.brokenCalls()
                 .stream()
                 .map(broken -> new BrokenCallSummary(
@@ -786,6 +825,12 @@ public class GraphnousTools {
             .forEach(project -> names.put(project.id().id(), project.name()));
 
         return names;
+    }
+
+    private static List<String> endpointNames(final List<ImpactReport.UnusedEndpoint> endpoints) {
+        return endpoints.stream()
+            .map(unused -> (unused.endpoint().httpMethod() == null ? "" : unused.endpoint().httpMethod() + " ") + unused.endpoint().url())
+            .toList();
     }
 
     private static UsageSummary summary(final ScanUsages.Usage usage, final Map<Scan.ScanId, Project.ProjectId> projects) {

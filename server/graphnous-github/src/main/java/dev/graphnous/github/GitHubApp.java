@@ -234,7 +234,12 @@ public class GitHubApp {
             }
 
             final var report = impactAnalysisService.analyze(context, base.get().id(), scan.scanId(), null);
-            final var comment = ImpactComment.render(report, projectNames(context, scan, report), assessment(context, scan, report));
+            final var comment = ImpactComment.render(
+                report,
+                projectNames(context, scan, report),
+                assessment(context, scan, report),
+                impactAnalysisService.sources(context, report)
+            );
             final var marker = marker(scan.projectId());
 
             github.findComment(scan.installation(), scan.repository(), scan.pullRequest(), marker).ifPresentOrElse(

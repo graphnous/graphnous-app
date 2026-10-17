@@ -196,12 +196,12 @@ class ImpactAgentTest {
             "CALLS", null, null, "Caller.java", 1, null, null, 1, List.of(), null, null, null
         );
         final var change = new GraphnousTools.ImpactChange(
-            "CHANGED", "m1", "Method", "find", List.of(), 9, false,
+            "CHANGED", "m1", "Method", "find", List.of(), null, 9, 0, false,
             IntStream.range(0, 9).mapToObj(i -> usage).toList()
         );
 
         final var compact = ImpactAgent.compact(new GraphnousTools.ImpactSummary(
-            null, null, List.of(), List.of(change), List.of(), List.of(), List.of(), List.of(), false
+            null, null, List.of(), List.of(change), List.of(), List.of(), List.of(), null, List.of(), List.of(), false
         ));
 
         assertThat(compact.changes()).singleElement().satisfies(cut -> {

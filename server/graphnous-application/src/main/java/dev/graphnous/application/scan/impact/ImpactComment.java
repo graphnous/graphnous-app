@@ -40,6 +40,42 @@ public final class ImpactComment {
     }
 
     /**
+     * Where the places a comment names are: their files' paths in their
+     * repositories, and links to them.
+     */
+    public interface Sources {
+
+        /**
+         * The files as the scans stored them, without links.
+         */
+        Sources STORED = new Sources() {
+            @Override
+            public String path(final Scan.ScanId scanId, final String nodeId, final String file) {
+                return file;
+            }
+
+            @Override
+            public String link(final Scan.ScanId scanId, final String path, final Integer line) {
+                return null;
+            }
+        };
+
+        /**
+         * @param scanId the scan the node is of
+         * @param nodeId what the file declares, such as the method that
+         *               uses a change
+         * @param file   the file's path as the scan stored it
+         */
+        String path(Scan.ScanId scanId, String nodeId, String file);
+
+        /**
+         * A link to the file of the scan, at the line if known; null when
+         * there is none.
+         */
+        String link(Scan.ScanId scanId, String path, Integer line);
+    }
+
+    /**
      * @param projects   the name of each project the report names
      * @param assessment what to head the comment with, in Markdown; none
      *                   when null or blank
@@ -49,15 +85,28 @@ public final class ImpactComment {
         final Map<Project.ProjectId, String> projects,
         final String assessment
     ) {
-        final var comment = render(report, projects, assessment, true);
+        return render(report, projects, assessment, Sources.STORED);
+    }
 
-        return comment.length() <= MAX_LENGTH ? comment : render(report, projects, assessment, false);
+    /**
+     * @param sources where the places it names are
+     */
+    public static String render(
+        final ImpactReport report,
+        final Map<Project.ProjectId, String> projects,
+        final String assessment,
+        final Sources sources
+    ) {
+        final var comment = render(report, projects, assessment, sources, true);
+
+        return comment.length() <= MAX_LENGTH ? comment : render(report, projects, assessment, sources, false);
     }
 
     private static String render(
         final ImpactReport report,
         final Map<Project.ProjectId, String> projects,
         final String assessment,
+        final Sources sources,
         final boolean usages
     ) {
         final var out = new StringBuilder();
@@ -70,7 +119,7 @@ public final class ImpactComment {
         final var unused = report.changes().stream().filter(change -> change.usageCount() == 0).toList();
 
         if (report.changes().isEmpty() && report.brokenCalls().isEmpty() && report.endpoints().removed().isEmpty()
-            && report.endpoints().added().isEmpty()) {
+            && report.endpoints().added().isEmpty() && report.endpoints().moved().isEmpty()) {
             out.append("No class, method, field or endpoint changed.\n");
             return out.toString();
         }
@@ -79,8 +128,13 @@ public final class ImpactComment {
             .append(" · ")
             .append(count(used.size(), "change", "changes")).append(" in use, in ")
             .append(count(used.stream().mapToInt(ImpactReport.Change::usageCount).sum(), "place", "places"))
+            .append(inTests(used.stream().mapToInt(ImpactReport.Change::testUsageCount).sum()))
             .append(" · ")
-            .append(count(report.projects().size(), "project", "projects")).append(" affected\n\n");
+            .append(count(report.projects().size(), "project", "projects")).append(" affected")
+            .append(report.unused().noLongerCalled().isEmpty()
+                ? ""
+                : " · " + count(report.unused().noLongerCalled().size(), "endpoint", "endpoints") + " no longer called")
+            .append("\n\n");
 
         if (assessment != null && !assessment.isBlank()) {
             out.append("#### Assessment\n\n");
@@ -97,7 +151,7 @@ public final class ImpactComment {
             report.brokenCalls().forEach(broken -> out
                 .append("| ").append(code(request(broken.call().httpMethod(), broken.call().url())))
                 .append(" | ").append(cell(name(projects, broken.call().projectId())))
-                .append(" | ").append(where(broken.caller()))
+                .append(" | ").append(where(broken.caller(), broken.call().scanId(), sources))
                 .append(" | ").append(broken.endpoints().stream()
                     .map(endpoint -> code(request(endpoint.httpMethod(), endpoint.url())))
                     .collect(Collectors.joining(", ")))
@@ -112,8 +166,8 @@ public final class ImpactComment {
 
             used.forEach(change -> out
                 .append("| ").append(change.type()).append(" ").append(code(label(change.id(), change.name())))
-                .append(" | ").append(change.kind() == ImpactReport.Kind.REMOVED ? "removed" : "changed")
-                .append(" | ").append(change.usageCount()).append(change.truncated() ? "+" : "")
+                .append(" | ").append(how(change))
+                .append(" | ").append(change.usageCount()).append(change.truncated() ? "+" : "").append(inTests(change.testUsageCount()))
                 .append(" | ").append(cell(usageProjects(change, projects)))
                 .append(" |\n"));
 
@@ -125,7 +179,7 @@ public final class ImpactComment {
                         .append(" is used</summary>\n\n");
 
                     change.usages().stream().limit(LISTED_USAGES).forEach(usage -> out
-                        .append("- ").append(where(usage))
+                        .append("- ").append(where(usage, change, sources))
                         .append(" (").append(name(projects, project(change, usage))).append(")\n"));
 
                     if (change.usageCount() > LISTED_USAGES) {
@@ -137,12 +191,16 @@ public final class ImpactComment {
             }
         }
 
-        if (!report.endpoints().removed().isEmpty() || !report.endpoints().added().isEmpty()) {
+        if (!report.endpoints().removed().isEmpty() || !report.endpoints().added().isEmpty() || !report.endpoints().moved().isEmpty()) {
             out.append("#### Endpoints\n\n");
+            report.endpoints().moved().forEach(move -> out
+                .append("- Moved ").append(code(move.from().name())).append(" to ").append(code(move.to().name())).append("\n"));
             report.endpoints().removed().forEach(endpoint -> out.append("- Removed ").append(code(endpoint.name())).append("\n"));
             report.endpoints().added().forEach(endpoint -> out.append("- Added ").append(code(endpoint.name())).append("\n"));
             out.append("\n");
         }
+
+        unused(out, report, sources);
 
         if (!report.projects().isEmpty()) {
             out.append("#### Projects affected\n\n");
@@ -161,8 +219,8 @@ public final class ImpactComment {
             out.append("<details><summary>").append(count(unused.size(), "change", "changes"))
                 .append(" nothing uses</summary>\n\n");
             unused.forEach(change -> out
-                .append("- ").append(change.kind() == ImpactReport.Kind.REMOVED ? "Removed " : "Changed ")
-                .append(change.type().toLowerCase()).append(" ").append(code(label(change.id(), change.name()))).append("\n"));
+                .append("- ").append(change.type()).append(" ").append(code(label(change.id(), change.name())))
+                .append(", ").append(how(change)).append("\n"));
             out.append("\n</details>\n\n");
         }
 
@@ -199,7 +257,69 @@ public final class ImpactComment {
         return qualified.replaceAll("\\b[a-z_][\\w$]*\\.", "");
     }
 
-    private static String where(final HttpLinks.Source caller) {
+    /**
+     * The endpoints of the head nothing calls: those the change leaves
+     * without callers, and those it adds, as a section; the rest of the
+     * project's, folded away.
+     */
+    private static void unused(final StringBuilder out, final ImpactReport report, final Sources sources) {
+        final var unused = report.unused();
+
+        if (!unused.noLongerCalled().isEmpty() || !unused.notCalledYet().isEmpty()) {
+            out.append("#### Endpoints nothing calls\n\n");
+            out.append("No call Graphnous found, in this project or the others of its system, reaches these. ")
+                .append("Clients outside the system may still call them.\n\n");
+
+            if (!unused.noLongerCalled().isEmpty()) {
+                out.append("**No longer called** after this change:\n\n");
+                unused.noLongerCalled().forEach(endpoint -> out.append("- ").append(endpoint(endpoint, report, sources)).append("\n"));
+                out.append("\n");
+            }
+
+            if (!unused.notCalledYet().isEmpty()) {
+                out.append("**Not called yet**, added by this change:\n\n");
+                unused.notCalledYet().forEach(endpoint -> out.append("- ").append(endpoint(endpoint, report, sources)).append("\n"));
+                out.append("\n");
+            }
+        }
+
+        if (unused.otherCount() > 0) {
+            out.append("<details><summary>").append(count(unused.otherCount(), "other endpoint", "other endpoints"))
+                .append(" of the project nothing calls</summary>\n\n");
+            unused.others().forEach(endpoint -> out.append("- ").append(endpoint(endpoint, report, sources)).append("\n"));
+
+            if (unused.otherCount() > unused.others().size()) {
+                out.append("- and ").append(unused.otherCount() - unused.others().size()).append(" more\n");
+            }
+
+            out.append("\n</details>\n\n");
+        }
+    }
+
+    private static String endpoint(final ImpactReport.UnusedEndpoint unused, final ImpactReport report, final Sources sources) {
+        final var endpoint = unused.endpoint();
+        final var handler = where(unused.handler(), endpoint.scanId() == null ? report.head().id() : endpoint.scanId(), sources);
+
+        return code(request(endpoint.httpMethod(), endpoint.url())) + (handler.isEmpty() ? "" : ", served by " + handler);
+    }
+
+    /**
+     * How the change changed, such as "renamed to `OrderService.make()`".
+     */
+    private static String how(final ImpactReport.Change change) {
+        return switch (change.kind()) {
+            case REMOVED -> "removed";
+            case CHANGED -> "changed";
+            case RENAMED -> "renamed to " + code(label(change.replacement(), null));
+            case SIGNATURE_CHANGED -> "signature changed to " + code(label(change.replacement(), null));
+        };
+    }
+
+    private static String inTests(final int count) {
+        return count == 0 ? "" : " (" + count + " in tests)";
+    }
+
+    private static String where(final HttpLinks.Source caller, final Scan.ScanId scanId, final Sources sources) {
         if (caller == null) {
             return "";
         }
@@ -208,10 +328,27 @@ public final class ImpactComment {
             ? caller.name()
             : simple(caller.className()) + "." + caller.name();
 
-        return code(name) + (caller.file() == null ? "" : " in " + code(location(caller.file(), caller.line())));
+        return code(name) + (caller.file() == null ? "" : " in " + file(sources, scanId, caller.id(), caller.file(), caller.line()));
     }
 
-    private static String where(final ScanUsages.Usage usage) {
+    /**
+     * The file, at the line, as code, linked when the sources can.
+     */
+    private static String file(
+        final Sources sources,
+        final Scan.ScanId scanId,
+        final String nodeId,
+        final String stored,
+        final Integer line
+    ) {
+        final var path = Objects.requireNonNullElse(sources.path(scanId, nodeId, stored), stored);
+        final var link = sources.link(scanId, path, line);
+        final var shown = code(location(path, line));
+
+        return link == null ? shown : "[" + shown + "](" + link + ")";
+    }
+
+    private static String where(final ScanUsages.Usage usage, final ImpactReport.Change change, final Sources sources) {
         final var name = usage.owner() == null ? usage.user().name() : simple(usage.owner()) + "." + usage.user().name();
         final var how = switch (usage.relationship()) {
             case "CALLS" -> "calls it";
@@ -225,7 +362,11 @@ public final class ImpactComment {
             default -> "uses it";
         };
 
-        return code(name) + " " + how + (usage.file() == null ? "" : ", in " + code(location(usage.file(), usage.line())));
+        final var scanId = usage.scanId() == null ? change.scanId() : usage.scanId();
+
+        return code(name) + " " + how + (usage.file() == null
+            ? ""
+            : ", in " + file(sources, scanId, usage.user() == null ? null : usage.user().id(), usage.file(), usage.line()));
     }
 
     private static Project.ProjectId project(final ImpactReport.Change change, final ScanUsages.Usage usage) {
