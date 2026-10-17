@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -166,6 +167,30 @@ public class ScanService {
         );
 
         return scanRepository.findLatestCompletedInSystem(systemId);
+    }
+
+    /**
+     * The most recently created completed scan of the project's branch, if
+     * it has one: what the branch is like now, such as main before a pull
+     * request merges into it.
+     */
+    public Optional<Scan> getLatestCompletedScan(
+        final RequestContext context,
+        final Project.ProjectId projectId,
+        final String branch
+    ) {
+        authorizationService.authorize(
+            context,
+            Permission.SCAN_READ
+        );
+
+        // Only the scans of a project of the caller's organization
+        this.projectService.getProject(
+            context,
+            projectId
+        );
+
+        return scanRepository.findLatestCompleted(projectId, branch);
     }
 
     public Scan getScan(

@@ -10,6 +10,8 @@ import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.graph.ScanGraph;
 import dev.graphnous.application.scan.graph.ScanGraphService;
+import dev.graphnous.application.scan.impact.ImpactAnalysisService;
+import dev.graphnous.application.scan.impact.ImpactReport;
 import dev.graphnous.application.scan.links.HttpLinkService;
 import dev.graphnous.application.scan.links.HttpLinks;
 import dev.graphnous.application.scan.methods.ScanMethod;
@@ -72,6 +74,9 @@ class GraphnousToolsTest {
     @Mock
     private HttpLinkService httpLinkService;
 
+    @Mock
+    private ImpactAnalysisService impactAnalysisService;
+
     // The user the agent runs for
     private final RequestContext context = context();
 
@@ -88,6 +93,7 @@ class GraphnousToolsTest {
                 "listSystems",
                 "listProjects",
                 "listScans",
+                "analyzeImpact",
                 "compareScans",
                 "getScanGraph",
                 "findClasses",
@@ -222,6 +228,61 @@ class GraphnousToolsTest {
     }
 
     @Test
+    void analyzesTheImpactOfAChangeWithTheProjectsByName() {
+        final var systemId = System.SystemId.generate();
+        final var api = new Project(Project.ProjectId.generate(), "api", null, null, null, systemId, NOW, NOW);
+        final var web = new Project(Project.ProjectId.generate(), "web", null, null, null, systemId, NOW, NOW);
+        final var base = new Scan(Scan.ScanId.generate(), api.id(), Scan.ScanStatus.COMPLETED, new Scan.SourceRevision("a1", "main"), NOW, NOW, NOW);
+        final var head = new Scan(Scan.ScanId.generate(), api.id(), Scan.ScanStatus.COMPLETED, new Scan.SourceRevision("b2", "feature"), NOW, NOW, NOW);
+        final var webScan = Scan.ScanId.generate();
+        final var usage = new ScanUsages.Usage(
+            "CALLS", new ScanUsages.Node("u1", "Method", "load", null), null, "load.ts", 3,
+            new ScanUsages.Node("m1", "Method", "create", null), null, 1, List.of(), webScan, null
+        );
+        final var caller = new HttpLinks.Source("f1", "Method", "loadOrders", "loadOrders", null, "src/orders.ts", 12);
+        final var call = new HttpLinks.Call("call", webScan, web.id(), "GET", "/api/orders", "fetch");
+        final var endpoint = new HttpLinks.Endpoint("e1", base.id(), api.id(), "GET", "/api/orders");
+
+        when(impactAnalysisService.analyze(context, base.id(), head.id(), 2)).thenReturn(new ImpactReport(
+            base,
+            head,
+            List.of(new ScanGraph.TypeChanges("Method", 0, 1, 0)),
+            List.of(new ImpactReport.Change(
+                ImpactReport.Kind.REMOVED, base.id().id() + "|m1", base.id(), "Method", "create", List.of(),
+                List.of(usage), 1, false, Map.of(webScan, web.id())
+            )),
+            new ImpactReport.Endpoints(
+                List.of(new ScanGraph.Snapshot("e1", "Endpoint", "GET /api/orders", Map.of())),
+                List.of(new ScanGraph.Snapshot("e2", "Endpoint", "GET /api/v2/orders", Map.of()))
+            ),
+            List.of(new ImpactReport.BrokenCall(call, caller, List.of(endpoint))),
+            List.of(new ImpactReport.AffectedProject(web.id(), 1, 1)),
+            false
+        ));
+        when(projectService.getProject(context, api.id())).thenReturn(api);
+        when(projectService.getProjects(eq(context), any(), eq(systemId))).thenReturn(new Page<>(List.of(api, web), 0, 100, 2, 1));
+
+        final var impact = tools().analyzeImpact(base.id().id().toString(), head.id().id().toString(), 2);
+
+        assertThat(impact.base().branch()).isEqualTo("main");
+        assertThat(impact.head().branch()).isEqualTo("feature");
+        assertThat(impact.changes()).singleElement().satisfies(change -> {
+            assertThat(change.kind()).isEqualTo("REMOVED");
+            assertThat(change.id()).isEqualTo(base.id().id() + "|m1");
+            assertThat(change.usages()).singleElement().satisfies(found -> {
+                assertThat(found.file()).isEqualTo("load.ts");
+                assertThat(found.projectId()).isEqualTo(web.id().id());
+            });
+        });
+        assertThat(impact.removedEndpoints()).containsExactly("GET /api/orders");
+        assertThat(impact.addedEndpoints()).containsExactly("GET /api/v2/orders");
+        assertThat(impact.brokenCalls()).containsExactly(new GraphnousTools.BrokenCallSummary(
+            "GET", "/api/orders", "fetch", web.id().id(), "web", caller, List.of("GET /api/orders")
+        ));
+        assertThat(impact.projects()).containsExactly(new GraphnousTools.AffectedProjectSummary(web.id().id(), "web", 1, 1));
+    }
+
+    @Test
     void getsTheGraphOfAScanWithItsStatus() {
         final var scan = scan(Scan.ScanStatus.COMPLETED);
         final var target = new ScanGraph.Target(
@@ -264,7 +325,7 @@ class GraphnousToolsTest {
         final var other = context();
         final var contexts = List.of(context, other).iterator();
         final var tools = new GraphnousTools(
-            contexts::next, systemService, projectService, scanService, scanGraphService, scanMethodService, scanUsageService, scanSourceService, httpLinkService
+            contexts::next, systemService, projectService, scanService, scanGraphService, scanMethodService, scanUsageService, scanSourceService, httpLinkService, impactAnalysisService
         );
 
         when(systemService.getSystems(any(), any())).thenReturn(new Page<>(List.of(), 0, 50, 0, 0));
@@ -282,7 +343,7 @@ class GraphnousToolsTest {
             () -> {
                 throw new AssertionError("Asked for the user of the request");
             },
-            systemService, projectService, scanService, scanGraphService, scanMethodService, scanUsageService, scanSourceService, httpLinkService
+            systemService, projectService, scanService, scanGraphService, scanMethodService, scanUsageService, scanSourceService, httpLinkService, impactAnalysisService
         ).forContext(context);
 
         when(systemService.getSystems(eq(context), any())).thenReturn(new Page<>(List.of(), 0, 50, 0, 0));
@@ -464,7 +525,7 @@ class GraphnousToolsTest {
 
     private GraphnousTools tools() {
         return new GraphnousTools(
-            () -> context, systemService, projectService, scanService, scanGraphService, scanMethodService, scanUsageService, scanSourceService, httpLinkService
+            () -> context, systemService, projectService, scanService, scanGraphService, scanMethodService, scanUsageService, scanSourceService, httpLinkService, impactAnalysisService
         );
     }
 

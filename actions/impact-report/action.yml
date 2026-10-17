@@ -1,0 +1,74 @@
+# Comments on a pull request what its change affects: Graphnous scans the
+# pull request's head commit, compares it with the newest completed scan of
+# the base branch, and the job comments the impact report on the pull
+# request, editing its last one on every new push. See README.md.
+
+name: Graphnous impact report
+description: Comments what a pull request's change affects, across projects and over HTTP
+
+inputs:
+  graphnous-url:
+    description: The Graphnous server, such as https://graphnous.example.com; GitHub's runners must reach it
+    required: true
+  project-id:
+    description: The id of the repository's project in Graphnous
+    required: true
+  token:
+    description: An access token for the server's API, when its security is on
+    required: false
+  client-id:
+    description: Instead of a token, the client id of an API key of the organization, exchanged at the platform for a token
+    required: false
+  client-secret:
+    description: The API key's client secret
+    required: false
+  platform-url:
+    description: The Graphnous platform that issues tokens for an API key
+    required: false
+  base-branch:
+    description: The branch whose newest completed scan to compare with; the pull request's base when left out
+    required: false
+  scan-results:
+    description: >
+      A directory of result files the job scanned itself, with graphnous-scanner, to upload; when left
+      out, the server checks the head commit out and scans it
+    required: false
+  assess:
+    description: Whether the server's impact agent heads the comment with its assessment; needs an OpenAI key on the server
+    required: false
+    default: "false"
+  timeout-minutes:
+    description: How long to wait for the scan
+    required: false
+    default: "30"
+  github-token:
+    description: The token to comment with; it needs pull-requests write
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  scan-id:
+    description: The id of the pull request's scan
+    value: ${{ steps.report.outputs.scan-id }}
+
+runs:
+  using: composite
+  steps:
+    - id: report
+      shell: bash
+      run: "$GITHUB_ACTION_PATH/impact-report.sh"
+      env:
+        GRAPHNOUS_URL: ${{ inputs.graphnous-url }}
+        PROJECT_ID: ${{ inputs.project-id }}
+        GRAPHNOUS_TOKEN: ${{ inputs.token }}
+        CLIENT_ID: ${{ inputs.client-id }}
+        CLIENT_SECRET: ${{ inputs.client-secret }}
+        PLATFORM_URL: ${{ inputs.platform-url }}
+        BASE_BRANCH: ${{ inputs.base-branch || github.event.pull_request.base.ref }}
+        HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        SCAN_RESULTS: ${{ inputs.scan-results }}
+        ASSESS: ${{ inputs.assess }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        GH_TOKEN: ${{ inputs.github-token }}

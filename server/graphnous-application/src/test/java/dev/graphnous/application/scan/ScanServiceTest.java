@@ -36,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -395,6 +396,18 @@ class ScanServiceTest {
 
         verify(authorizationService).authorize(context, Permission.SCAN_READ);
         verify(systemService).getSystem(context, systemId);
+    }
+
+    @Test
+    void getsTheLatestCompletedScanOfABranch() {
+        final var scan = scan(Scan.ScanStatus.COMPLETED);
+
+        when(scanRepository.findLatestCompleted(scan.projectId(), "main")).thenReturn(Optional.of(scan));
+
+        assertThat(service().getLatestCompletedScan(context, scan.projectId(), "main")).contains(scan);
+
+        verify(authorizationService).authorize(context, Permission.SCAN_READ);
+        verify(projectService).getProject(context, scan.projectId());
     }
 
     @Test

@@ -9,6 +9,7 @@ import dev.graphnous.application.pagination.Page;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.graph.ScanGraphService;
+import dev.graphnous.application.scan.impact.ImpactAnalysisService;
 import dev.graphnous.application.scan.links.HttpLinkService;
 import dev.graphnous.application.scan.methods.ScanMethodService;
 import dev.graphnous.application.scan.source.ScanSourceService;
@@ -86,6 +87,9 @@ class McpEndpointTest {
     @MockitoBean
     private HttpLinkService httpLinkService;
 
+    @MockitoBean
+    private ImpactAnalysisService impactAnalysisService;
+
     @Test
     void introducesItself() throws Exception {
         mockMvc.perform(mcp("""
@@ -108,7 +112,7 @@ class McpEndpointTest {
                 """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.result.tools[*].name").value(hasItems(
-                "listSystems", "listProjects", "listScans", "compareScans", "findFile", "listEndpoints", "listUnmatchedCalls", "findMethods", "findUsages"
+                "listSystems", "listProjects", "listScans", "analyzeImpact", "compareScans", "findFile", "listEndpoints", "listUnmatchedCalls", "findMethods", "findUsages"
             )));
     }
 

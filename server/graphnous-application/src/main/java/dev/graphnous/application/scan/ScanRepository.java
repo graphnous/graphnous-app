@@ -8,6 +8,7 @@ import dev.graphnous.domain.system.System;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ScanRepository {
@@ -35,6 +36,15 @@ public interface ScanRepository {
      */
     List<Scan> findLatestCompletedInSystem(
         final System.SystemId systemId
+    );
+
+    /**
+     * The most recently created completed scan of the project's branch, if
+     * it has one.
+     */
+    Optional<Scan> findLatestCompleted(
+        final Project.ProjectId projectId,
+        final String branch
     );
 
     Scan findById(

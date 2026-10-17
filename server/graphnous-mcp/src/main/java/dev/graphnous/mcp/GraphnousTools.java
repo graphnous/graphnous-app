@@ -8,6 +8,8 @@ import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.ScanService;
 import dev.graphnous.application.scan.graph.ScanGraph;
 import dev.graphnous.application.scan.graph.ScanGraphService;
+import dev.graphnous.application.scan.impact.ImpactAnalysisService;
+import dev.graphnous.application.scan.impact.ImpactReport;
 import dev.graphnous.application.scan.links.HttpLinkService;
 import dev.graphnous.application.scan.links.HttpLinks;
 import dev.graphnous.application.scan.methods.ScanMethod;
@@ -96,6 +98,7 @@ public class GraphnousTools {
     private final ScanUsageService scanUsageService;
     private final ScanSourceService scanSourceService;
     private final HttpLinkService httpLinkService;
+    private final ImpactAnalysisService impactAnalysisService;
 
     public GraphnousTools(
         final RequestContextProvider contextProvider,
@@ -106,7 +109,8 @@ public class GraphnousTools {
         final ScanMethodService scanMethodService,
         final ScanUsageService scanUsageService,
         final ScanSourceService scanSourceService,
-        final HttpLinkService httpLinkService
+        final HttpLinkService httpLinkService,
+        final ImpactAnalysisService impactAnalysisService
     ) {
         this.contextProvider = contextProvider;
 
@@ -118,6 +122,7 @@ public class GraphnousTools {
         this.scanUsageService = scanUsageService;
         this.scanSourceService = scanSourceService;
         this.httpLinkService = httpLinkService;
+        this.impactAnalysisService = impactAnalysisService;
     }
 
     /**
@@ -133,7 +138,8 @@ public class GraphnousTools {
             scanMethodService,
             scanUsageService,
             scanSourceService,
-            httpLinkService
+            httpLinkService,
+            impactAnalysisService
         );
     }
 
@@ -269,6 +275,68 @@ public class GraphnousTools {
     ) {
     }
 
+    /**
+     * A removed or changed class, method or field, with what uses it.
+     *
+     * @param kind       REMOVED or CHANGED
+     * @param id         its id: in the base scan for a removed one, in the
+     *                   head scan for a changed one, as are its usages
+     * @param usageCount how many places use it, of which usages lists the
+     *                   first
+     */
+    public record ImpactChange(
+        String kind,
+        String id,
+        String type,
+        String name,
+        List<ScanGraph.PropertyChange> properties,
+        int usageCount,
+        boolean truncated,
+        List<UsageSummary> usages
+    ) {
+    }
+
+    /**
+     * A call that reached an endpoint of the project in the base scan, and
+     * reaches none in the head.
+     *
+     * @param endpoints the endpoints it reached, such as GET /api/orders
+     */
+    public record BrokenCallSummary(
+        String httpMethod,
+        String url,
+        String client,
+        UUID projectId,
+        String project,
+        HttpLinks.Source caller,
+        List<String> endpoints
+    ) {
+    }
+
+    public record AffectedProjectSummary(UUID projectId, String project, int usages, int brokenCalls) {
+    }
+
+    /**
+     * What a change of a project affects, from the base scan to the head.
+     *
+     * @param removedEndpoints the endpoints the head no longer serves
+     * @param addedEndpoints   the endpoints only the head serves
+     * @param truncated        whether there are more changes than it
+     *                         follows
+     */
+    public record ImpactSummary(
+        ScanSummary base,
+        ScanSummary head,
+        List<ScanGraph.TypeChanges> summary,
+        List<ImpactChange> changes,
+        List<String> removedEndpoints,
+        List<String> addedEndpoints,
+        List<BrokenCallSummary> brokenCalls,
+        List<AffectedProjectSummary> projects,
+        boolean truncated
+    ) {
+    }
+
     public record ScanGraphSummary(String status, List<ScanGraph.Target> targets) {
     }
 
@@ -360,6 +428,79 @@ public class GraphnousTools {
         }
 
         return scans;
+    }
+
+    @Tool(
+        name = "analyzeImpact",
+        description = "Analyzes what a change of a project affects, from one of its scans (base, e.g. the newest "
+            + "COMPLETED scan of main) to another (head, e.g. of a branch), from listScans: the classes, methods "
+            + "and fields the head removes or changes, most used first, each with how many places use it and the "
+            + "first of them, in this project and the others of the system; the endpoints it removes and adds; "
+            + "the HTTP calls of the system that reached an endpoint of the project and reach none in the head, "
+            + "with where each is; and the projects affected. A changed Java method signature is a removed method. "
+            + "Start here before changing or merging a branch; follow an id further with findUsages."
+    )
+    public ImpactSummary analyzeImpact(
+        @ToolParam(description = "The id of the scan to compare from, e.g. of main, from listScans") final String baseScanId,
+        @ToolParam(description = "The id of the scan to compare to, e.g. of the branch, from listScans") final String headScanId,
+        @ToolParam(description = "How far out to follow the usages of each change, 1 to " + ScanUsageService.MAX_DEPTH
+            + "; 1, only what uses it itself, when left out", required = false) final Integer depth
+    ) {
+        return impactSummary(impactAnalysisService.analyze(context(), scanId(baseScanId), scanId(headScanId), depth));
+    }
+
+    /**
+     * The report as analyzeImpact gives it, with the names of the projects.
+     */
+    public ImpactSummary impactSummary(final ImpactReport report) {
+        final var context = context();
+        final var projects = projectNames(context, projectService.getProject(context, report.head().projectId()).systemId());
+
+        return new ImpactSummary(
+            summary(report.base()),
+            summary(report.head()),
+            report.summary(),
+            report.changes()
+                .stream()
+                .map(change -> new ImpactChange(
+                    change.kind().name(),
+                    change.id(),
+                    change.type(),
+                    change.name(),
+                    change.properties(),
+                    change.usageCount(),
+                    change.truncated(),
+                    change.usages().stream().map(usage -> summary(usage, change.projects())).toList()
+                ))
+                .toList(),
+            report.endpoints().removed().stream().map(ScanGraph.Snapshot::name).toList(),
+            report.endpoints().added().stream().map(ScanGraph.Snapshot::name).toList(),
+            report.brokenCalls()
+                .stream()
+                .map(broken -> new BrokenCallSummary(
+                    broken.call().httpMethod(),
+                    broken.call().url(),
+                    broken.call().client(),
+                    broken.call().projectId().id(),
+                    projects.get(broken.call().projectId().id()),
+                    broken.caller(),
+                    broken.endpoints()
+                        .stream()
+                        .map(endpoint -> (endpoint.httpMethod() == null ? "" : endpoint.httpMethod() + " ") + endpoint.url())
+                        .toList()
+                ))
+                .toList(),
+            report.projects()
+                .stream()
+                .map(project -> new AffectedProjectSummary(
+                    project.projectId().id(),
+                    projects.get(project.projectId().id()),
+                    project.usages(),
+                    project.brokenCalls()
+                ))
+                .toList(),
+            report.truncated()
+        );
     }
 
     @Tool(
@@ -602,22 +743,7 @@ public class GraphnousTools {
         final var usages = found.usages()
             .stream()
             .limit(USAGE_LIMIT)
-            .map(usage -> new UsageSummary(
-                usage.relationship(),
-                usage.user(),
-                usage.owner(),
-                usage.file(),
-                usage.line(),
-                usage.target(),
-                usage.targetOwner(),
-                usage.depth(),
-                usage.arguments(),
-                usage.scanId() == null ? null : usage.scanId().id(),
-                usage.scanId() == null || !found.projects().containsKey(usage.scanId())
-                    ? null
-                    : found.projects().get(usage.scanId()).id(),
-                usage.request()
-            ))
+            .map(usage -> summary(usage, found.projects()))
             .toList();
 
         return new UsagesSummary(found.subject(), usages, found.truncated() || found.usages().size() > USAGE_LIMIT);
@@ -660,6 +786,23 @@ public class GraphnousTools {
             .forEach(project -> names.put(project.id().id(), project.name()));
 
         return names;
+    }
+
+    private static UsageSummary summary(final ScanUsages.Usage usage, final Map<Scan.ScanId, Project.ProjectId> projects) {
+        return new UsageSummary(
+            usage.relationship(),
+            usage.user(),
+            usage.owner(),
+            usage.file(),
+            usage.line(),
+            usage.target(),
+            usage.targetOwner(),
+            usage.depth(),
+            usage.arguments(),
+            usage.scanId() == null ? null : usage.scanId().id(),
+            usage.scanId() == null || !projects.containsKey(usage.scanId()) ? null : projects.get(usage.scanId()).id(),
+            usage.request()
+        );
     }
 
     private static CallSummary summary(final HttpLinks.CallSite site, final Map<UUID, String> projects) {

@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ScanJpaRepository extends JpaRepository<ScanEntity, UUID> {
@@ -48,6 +49,12 @@ public interface ScanJpaRepository extends JpaRepository<ScanEntity, UUID> {
     List<ScanEntity> findLatestBySystemIdAndStatus(
         @Param("systemId") final UUID systemId,
         @Param("status") final Scan.ScanStatus status
+    );
+
+    Optional<ScanEntity> findFirstByProjectIdAndBranchAndStatusOrderByCreatedAtDesc(
+        final UUID projectId,
+        final String branch,
+        final Scan.ScanStatus status
     );
 
     List<ScanEntity> findAllByStatusIn(

@@ -5,15 +5,11 @@ import com.agui.community.core.agent.RunAgentInput;
 import com.agui.community.core.event.Event;
 import com.agui.community.core.serialization.Serializer;
 import com.agui.community.spring.ai.SpringAiAgent;
-import dev.graphnous.application.ai.AiApiTokenRetriever;
 import dev.graphnous.application.chat.ChatService;
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.mcp.GraphnousTools;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 import java.util.List;
@@ -27,9 +23,10 @@ import java.util.stream.Collectors;
  * <p>
  * Each run is set up when it starts, on the request's thread: the user is
  * only known there, as the agent runs on after the request returns, and the
- * API key comes from the {@link AiApiTokenRetriever} each time, so a changed
- * key is used without a restart. Without a key the run fails with an AG-UI
- * error rather than the server failing to start.
+ * model comes from {@link ChatModels} each time, so a changed key is used
+ * without a restart. Without a key the run fails with an AG-UI error rather
+ * than the server failing to start. What a change risks breaking it leaves
+ * to the {@link ImpactAgent}, a tool of its own.
  * <p>
  * The conversation is not kept in the run's chat thread: ag-ui 2.0.0 ends a
  * run without the snapshot of its messages that {@link ChatThreadRecorder}
@@ -55,34 +52,36 @@ public class GraphnousAgent implements Agent {
 
         Your tools only look things up. To scan a project, as when a branch
         has no completed scan to look at yet, ask the user with startScan:
-        it starts nothing until they agree.
+        it starts nothing until they agree. When the user asks what a branch
+        or change affects or risks breaking, compare the newest completed
+        scans of main and of the branch with assessImpact, and give them its
+        assessment.
         """;
 
-    private final AiApiTokenRetriever tokenRetriever;
+    private final ChatModels chatModels;
     private final RequestContextProvider contextProvider;
 
     private final GraphnousTools tools;
+    private final ImpactAgent impactAgent;
 
     private final ChatThreadRecorder recorder;
 
     private final String model;
 
-    // The chat model of the last key, reused while the key stays the same
-    private String chatModelKey;
-    private ChatModel chatModel;
-
     public GraphnousAgent(
-        final AiApiTokenRetriever tokenRetriever,
+        final ChatModels chatModels,
         final RequestContextProvider contextProvider,
         final GraphnousTools tools,
+        final ImpactAgent impactAgent,
         final ChatService chatService,
         final Serializer serializer,
         final String model
     ) {
-        this.tokenRetriever = tokenRetriever;
+        this.chatModels = chatModels;
         this.contextProvider = contextProvider;
 
         this.tools = tools;
+        this.impactAgent = impactAgent;
 
         this.recorder = new ChatThreadRecorder(chatService, serializer);
 
@@ -111,12 +110,12 @@ public class GraphnousAgent implements Agent {
         final RunAgentInput input,
         final RequestContext context
     ) {
-        final var chatClient = ChatClient.builder(chatModel())
+        final var chatClient = ChatClient.builder(chatModels.get(model))
             .defaultSystem(systemPrompt(input))
             .build();
 
         final var callbacks = MethodToolCallbackProvider.builder()
-            .toolObjects(tools.forContext(context))
+            .toolObjects(tools.forContext(context), new ImpactTools(impactAgent, context))
             .build()
             .getToolCallbacks();
 
@@ -141,32 +140,6 @@ public class GraphnousAgent implements Agent {
             .collect(Collectors.joining("\n"));
 
         return SYSTEM_PROMPT + "\nWhat the user is looking at:\n" + context + "\n";
-    }
-
-    private synchronized ChatModel chatModel() {
-        final var token = tokenRetriever.retreive();
-
-        if (token == null || token.token() == null || token.token().isBlank()) {
-            throw new IllegalStateException(
-                "The assistant is not configured: set an OpenAI API key (graphnous.ai.openai.api-key)"
-            );
-        }
-
-        if (!"openai".equalsIgnoreCase(token.provider())) {
-            throw new IllegalStateException("The assistant does not support AI provider '" + token.provider() + "'");
-        }
-
-        if (!token.token().equals(chatModelKey)) {
-            chatModel = OpenAiChatModel.builder()
-                .options(OpenAiChatOptions.builder()
-                    .apiKey(token.token())
-                    .model(model)
-                    .build())
-                .build();
-            chatModelKey = token.token();
-        }
-
-        return chatModel;
     }
 
     /**
