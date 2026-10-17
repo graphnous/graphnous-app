@@ -32,10 +32,11 @@ import java.util.Set;
  *     current scan to compare with;</li>
  *     <li>a pull request opened, pushed to or reopened scans its head, with
  *     a check run on the commit while it runs;</li>
- *     <li>once that scan is done, its impact report, compared with the
- *     newest completed scan of the branch it merges into, completes the
- *     check run and goes to the pull request as a comment, edited on every
- *     new push; headed, with an assessor, by its assessment.</li>
+ *     <li>once that scan is done, its impact report, compared with a scan
+ *     of the commit its branch started from, which it scans too when there
+ *     is none, completes the check run and goes to the pull request as a
+ *     comment, edited on every new push; headed, with an assessor, by its
+ *     assessment.</li>
  * </ul>
  * It acts without a user, for the organization, as an API key does.
  */
@@ -126,8 +127,15 @@ public class GitHubApp {
         final var headBranch = pullRequest.path("head").path("ref").asString();
         final var baseBranch = pullRequest.path("base").path("ref").asString();
         final var context = context(payload);
+        final var projects = projects(context, repository);
 
-        for (final var project : projects(context, repository)) {
+        if (projects.isEmpty()) {
+            return;
+        }
+
+        final var mergeBase = mergeBase(installation, name, pullRequest.path("base").path("sha").asString(), headSha);
+
+        for (final var project : projects) {
             final var checkRun = github.startCheckRun(installation, name, checkRunName(project), headSha);
 
             final Scan scan;
@@ -141,27 +149,79 @@ public class GitHubApp {
                 continue;
             }
 
+            final var baseScan = mergeBase.flatMap(revision -> baseScan(context, project, revision, baseBranch)).orElse(null);
+
             pullRequestScans.save(new PullRequestScan(
-                scan.id(), project.id(), installation, name, number, headSha, baseBranch, checkRun, clock.instant()
+                scan.id(), project.id(), installation, name, number, headSha, baseBranch, checkRun, clock.instant(), baseScan
             ));
 
-            log.info("Scanning pull request {}#{} at {} for project {}: scan {}", name, number, headSha, project.name(), scan.id().id());
+            log.info("Scanning pull request {}#{} at {} for project {}: scan {}, compared with {}", name, number, headSha,
+                project.name(), scan.id().id(), baseScan == null ? "the newest scan of " + baseBranch : "scan " + baseScan.id());
         }
     }
 
     /**
-     * Reports on a pull request's scan that completed, if it is one.
+     * The commit the pull request's branch started from, if GitHub says.
      */
-    void completed(final Scan.ScanId scanId) {
-        claimed(scanId).ifPresent(this::report);
+    private Optional<String> mergeBase(final long installation, final String repository, final String base, final String head) {
+        try {
+            return github.mergeBase(installation, repository, base, head);
+        } catch (final RuntimeException e) {
+            log.warn("Finding where the branch of {} at {} started failed", repository, head, e);
+            return Optional.empty();
+        }
     }
 
     /**
-     * Fails the check run of a pull request's scan that failed, if it is
-     * one.
+     * A scan of the project at the commit: one done or under way, or else a
+     * new one, of the base branch; none when it cannot start.
+     */
+    private Optional<Scan.ScanId> baseScan(
+        final RequestContext context,
+        final Project project,
+        final String revision,
+        final String baseBranch
+    ) {
+        try {
+            final var scans = scanService.getScansOfRevision(context, project.id(), revision);
+            final var reusable = scans.stream()
+                .filter(scan -> scan.status() == Scan.ScanStatus.COMPLETED)
+                .findFirst()
+                .or(() -> scans.stream().filter(scan -> !scan.status().isEndState()).findFirst());
+
+            if (reusable.isPresent()) {
+                return reusable.map(Scan::id);
+            }
+
+            return Optional.of(scanService.create(context, new CreateScanCommand(project.id(), revision, baseBranch, null, null, null)).id());
+        } catch (final RuntimeException e) {
+            log.warn("Scanning {} of project {} to compare with failed", revision, project.name(), e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Reports on the pull requests whose head or base the scan is, once
+     * both are done.
+     */
+    void completed(final Scan.ScanId scanId) {
+        pullRequestScans.findByScan(scanId).forEach(this::proceed);
+    }
+
+    /**
+     * Fails the check run of a pull request whose head the scan is; reports
+     * on one whose base it is against the newest scan of its base branch.
      */
     void failed(final Scan.ScanId scanId, final String reason) {
-        claimed(scanId).ifPresent(scan -> fail(scan, reason));
+        for (final var scan : pullRequestScans.findByScan(scanId)) {
+            if (scan.scanId().equals(scanId)) {
+                if (pullRequestScans.claim(scanId)) {
+                    fail(scan, reason);
+                }
+            } else {
+                proceed(scan);
+            }
+        }
     }
 
     /**
@@ -172,19 +232,30 @@ public class GitHubApp {
     void sweep() {
         for (final var scan : pullRequestScans.findAll()) {
             try {
-                sweep(scan);
+                proceed(scan);
             } catch (final RuntimeException e) {
                 log.warn("Checking scan {} of {}#{} failed", scan.scanId().id(), scan.repository(), scan.pullRequest(), e);
             }
         }
     }
 
-    private void sweep(final PullRequestScan scan) {
-        final Scan.ScanStatus status;
+    /**
+     * What to compare a pull request's head with: a scan, with what to say
+     * about it; none while it is not done.
+     */
+    private record Base(Scan scan, String note) {
+    }
 
-        try {
-            status = scanService.getScan(context(scan.installation()), scan.scanId()).status();
-        } catch (final NotFoundException e) {
+    /**
+     * Reports on the pull request's scan once its head and its base are
+     * done, fails it when its head failed, and ends it when its head was
+     * deleted: whichever this caller is the one to do.
+     */
+    private void proceed(final PullRequestScan scan) {
+        final var context = context(scan.installation());
+        final var head = find(context, scan.scanId());
+
+        if (head.isEmpty()) {
             if (pullRequestScans.claim(scan.scanId())) {
                 github.completeCheckRun(scan.installation(), scan.repository(), scan.checkRun(), "neutral",
                     new GitHubClient.Output("The scan was deleted", "The scan was deleted before it was done, so there is no report."));
@@ -192,18 +263,69 @@ public class GitHubApp {
             return;
         }
 
-        if (status == Scan.ScanStatus.COMPLETED && pullRequestScans.claim(scan.scanId())) {
-            report(scan);
-        } else if (status == Scan.ScanStatus.FAILED && pullRequestScans.claim(scan.scanId())) {
-            fail(scan, null);
+        if (head.get().status() == Scan.ScanStatus.FAILED) {
+            if (pullRequestScans.claim(scan.scanId())) {
+                fail(scan, null);
+            }
+            return;
+        }
+
+        if (head.get().status() != Scan.ScanStatus.COMPLETED) {
+            return;
+        }
+
+        final Base base;
+
+        try {
+            base = base(context, scan);
+        } catch (final RuntimeException e) {
+            if (pullRequestScans.claim(scan.scanId())) {
+                failReport(scan, e);
+            }
+            return;
+        }
+
+        if (base != null && pullRequestScans.claim(scan.scanId())) {
+            report(scan, base);
         }
     }
 
     /**
-     * The pull request's scan, for this caller alone to report on.
+     * The scan of where the branch started, once done; or, without one,
+     * the newest completed scan of the base branch, with a note why; null
+     * while the scan of where the branch started is under way.
      */
-    private Optional<PullRequestScan> claimed(final Scan.ScanId scanId) {
-        return pullRequestScans.find(scanId).filter(scan -> pullRequestScans.claim(scanId));
+    private Base base(final RequestContext context, final PullRequestScan scan) {
+        if (scan.baseScan() != null) {
+            final var started = find(context, scan.baseScan());
+
+            if (started.isPresent() && !started.get().status().isEndState()) {
+                return null;
+            }
+
+            if (started.isPresent() && started.get().status() == Scan.ScanStatus.COMPLETED) {
+                return new Base(started.get(), "Compared with the commit the branch started from, so what `"
+                    + scan.baseBranch() + "` got since is left out.");
+            }
+        }
+
+        final var why = scan.baseScan() == null
+            ? "Graphnous could not tell where the branch started"
+            : "The scan of the commit the branch started from failed";
+
+        return new Base(
+            scanService.getLatestCompletedScan(context, scan.projectId(), scan.baseBranch()).orElse(null),
+            why + ", so this compares with the newest completed scan of `" + scan.baseBranch()
+                + "`: what that has and the branch does not shows as removed."
+        );
+    }
+
+    private Optional<Scan> find(final RequestContext context, final Scan.ScanId scanId) {
+        try {
+            return Optional.of(scanService.getScan(context, scanId));
+        } catch (final NotFoundException e) {
+            return Optional.empty();
+        }
     }
 
     private void fail(final PullRequestScan scan, final String reason) {
@@ -213,7 +335,13 @@ public class GitHubApp {
         ));
     }
 
-    private void report(final PullRequestScan scan) {
+    private void failReport(final PullRequestScan scan, final RuntimeException e) {
+        log.warn("Reporting scan {} on {}#{} failed", scan.scanId().id(), scan.repository(), scan.pullRequest(), e);
+        github.completeCheckRun(scan.installation(), scan.repository(), scan.checkRun(), "failure",
+            new GitHubClient.Output("The impact report failed", e.getMessage() == null ? e.toString() : e.getMessage()));
+    }
+
+    private void report(final PullRequestScan scan, final Base base) {
         try {
             if (pullRequestScans.isSuperseded(scan)) {
                 github.completeCheckRun(scan.installation(), scan.repository(), scan.checkRun(), "neutral",
@@ -221,24 +349,24 @@ public class GitHubApp {
                 return;
             }
 
-            final var context = context(scan.installation());
-            final var base = scanService.getLatestCompletedScan(context, scan.projectId(), scan.baseBranch());
-
-            if (base.isEmpty()) {
+            if (base.scan() == null) {
                 github.completeCheckRun(scan.installation(), scan.repository(), scan.checkRun(), "neutral", new GitHubClient.Output(
                     "No scan of " + scan.baseBranch() + " to compare with",
-                    "Graphnous compares a pull request with the newest completed scan of the branch it merges into. Scan `"
-                        + scan.baseBranch() + "` first; with the App, a push to the default branch scans it."
+                    "Graphnous compares a pull request with the commit its branch started from, or else the newest completed scan "
+                        + "of the branch it merges into. Scan `" + scan.baseBranch() + "` first; with the App, a push to the "
+                        + "default branch scans it."
                 ));
                 return;
             }
 
-            final var report = impactAnalysisService.analyze(context, base.get().id(), scan.scanId(), null);
+            final var context = context(scan.installation());
+            final var report = impactAnalysisService.analyze(context, base.scan().id(), scan.scanId(), null);
             final var comment = ImpactComment.render(
                 report,
                 projectNames(context, scan, report),
                 assessment(context, scan, report),
-                impactAnalysisService.sources(context, report)
+                impactAnalysisService.sources(context, report),
+                base.note()
             );
             final var marker = marker(scan.projectId());
 
@@ -256,9 +384,7 @@ public class GitHubApp {
                 new GitHubClient.Output(title(report), comment)
             );
         } catch (final RuntimeException e) {
-            log.warn("Reporting scan {} on {}#{} failed", scan.scanId().id(), scan.repository(), scan.pullRequest(), e);
-            github.completeCheckRun(scan.installation(), scan.repository(), scan.checkRun(), "failure",
-                new GitHubClient.Output("The impact report failed", e.getMessage() == null ? e.toString() : e.getMessage()));
+            failReport(scan, e);
         }
     }
 

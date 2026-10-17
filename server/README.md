@@ -259,8 +259,9 @@ so the platform need not be up when the server starts.
 ## GitHub App
 
 The server can be a GitHub App that reports on every pull request what its
-change affects: it scans the pull request's head, compares it with the
-newest completed scan of the branch it merges into, and posts the impact
+change affects: it scans the pull request's head, compares it with a scan
+of the commit its branch started from, which it scans too when there is
+none, and posts the impact
 report as a check run and a comment, edited on every new push. A push to
 the default branch scans it, and the repositories the App is installed on
 are checked out with its token. It is off unless `graphnous.github.enabled`

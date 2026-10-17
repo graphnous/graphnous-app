@@ -78,6 +78,14 @@ public class ScanRepositoryImpl implements ScanRepository {
             .map(this.scanMapper::toDomain);
     }
 
+    @Override
+    public List<Scan> findOfRevision(final Project.ProjectId projectId, final String revision) {
+        return this.jpaRepository.findAllOfRevision(projectId.id(), revision)
+            .stream()
+            .map(this.scanMapper::toDomain)
+            .toList();
+    }
+
     private static org.springframework.data.domain.Pageable pageable(final PageQuery pageQuery) {
         final var sort = switch (pageQuery.sort().direction()) {
             case ASC -> org.springframework.data.domain.Sort

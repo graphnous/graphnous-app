@@ -61,6 +61,13 @@ public class GitHubClient {
     record Installation(long id) {
     }
 
+    // As GitHub names its fields
+    private record Comparison(Commit merge_base_commit) {
+    }
+
+    private record Commit(String sha) {
+    }
+
     /**
      * The App as GitHub has it.
      */
@@ -193,6 +200,22 @@ public class GitHubClient {
         }
 
         return variables;
+    }
+
+    /**
+     * The commit a branch started from: the merge base of the base and the
+     * head commits, as GitHub compares them.
+     */
+    Optional<String> mergeBase(final long installation, final String repository, final String base, final String head) {
+        final var comparison = rest.get()
+            .uri("/repos/{owner}/{repo}/compare/{basehead}", repository(repository, "basehead", base + "..." + head))
+            .header(HttpHeaders.AUTHORIZATION, bearer(installation))
+            .retrieve()
+            .body(Comparison.class);
+
+        return Optional.ofNullable(comparison)
+            .map(Comparison::merge_base_commit)
+            .map(Commit::sha);
     }
 
     /**

@@ -6,11 +6,17 @@ that reports on every pull request what its change affects:
 - A pull request opened, pushed to or reopened scans its head commit, with
   a check run, `Graphnous impact: <project>`, on the commit while it runs.
 - Once the scan is done, its impact report completes the check run and goes
-  to the pull request as a comment. The report compares the scan with the
-  newest completed scan of the branch the pull request merges into. Every
-  new push edits that comment instead of adding one.
-- A push to a repository's default branch scans it, so pull requests always
-  have a current scan to compare with.
+  to the pull request as a comment. Every new push edits that comment
+  instead of adding one.
+- The report compares the pull request with the commit its branch started
+  from, so what the base branch got since does not show as removed. The App
+  scans that commit too when it has no scan of it, and reports once both
+  scans are done. When GitHub cannot say where the branch started, or that
+  scan fails, the report compares with the newest completed scan of the base
+  branch, and the comment says so.
+- A push to a repository's default branch scans it, so pull requests have a
+  current scan to compare with, and most branches start from a commit that
+  already has a scan.
 - The server checks out the repositories the App is installed on with the
   App's own token, so it needs no SSH key for them.
 
@@ -185,7 +191,8 @@ again from there.
 | Deliveries answered `503` | The server is not an App yet: create it, or configure it. |
 | Deliveries answered `401` | The delivery is not signed with the webhook secret the server has. Check `GRAPHNOUS_GITHUB_WEBHOOK_SECRET`, or that the App set up from the settings page is the one GitHub delivers for. |
 | Deliveries answered `202`, but no check run | No Graphnous project has the repository's git url. The server logs `No project is repository acme/shop`. |
-| The check run says "No scan of main to compare with" | The base branch has no completed scan yet. Push to it, which scans it, or scan it from Graphnous, then push to the pull request again. |
+| The check run says "No scan of main to compare with" | The commit the branch started from could not be scanned, and the base branch has no completed scan either. Push to it, which scans it, or scan it from Graphnous, then push to the pull request again. |
+| The comment says it compares with the newest scan of `main` | The scan of the commit the branch started from failed, or GitHub could not say where the branch started; what `main` got since shows as removed. The scan's steps in Graphnous say why it failed. |
 | The check run says "The scan failed" | The scan's steps in Graphnous say why, such as a checkout that failed. |
 | Settings shows the App as **Not answering** | GitHub refused the App's key: it was revoked, or the App was deleted on GitHub. Generate a new key, or create the App again. |
 | Settings asks for a secrets key | Set `GRAPHNOUS_SECRETS_KEY`, as in [step 1](#create-it-from-graphnouss-settings), and restart. |

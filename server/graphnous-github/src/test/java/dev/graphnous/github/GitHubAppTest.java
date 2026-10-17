@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
@@ -96,6 +97,7 @@ class GitHubAppTest {
         when(scanService.create(eq(context), any())).thenReturn(head);
         when(pullRequestScans.claim(any())).thenReturn(true);
         when(impactAnalysisService.sources(any(), any())).thenReturn(ImpactComment.Sources.STORED);
+        when(scanService.getScan(context, head.id())).thenReturn(head);
     }
 
     @Test
@@ -105,6 +107,104 @@ class GitHubAppTest {
         verify(scanService).create(context, new CreateScanCommand(shop.id(), "abc123", "orders-v2", null, null, null));
         verify(github).startCheckRun(INSTALLATION, "acme/shop", "Graphnous impact: shop", "abc123");
         verify(pullRequestScans).save(pullRequestScan);
+    }
+
+    @Test
+    void comparesWithTheScanOfWhereTheBranchStarted() {
+        final var started = scan("main", "bbb111");
+
+        when(github.mergeBase(INSTALLATION, "acme/shop", "def456", "abc123")).thenReturn(Optional.of("bbb111"));
+        when(scanService.getScansOfRevision(context, shop.id(), "bbb111")).thenReturn(List.of(started));
+
+        app().handle("pull_request", pullRequest("opened"));
+
+        verify(pullRequestScans).save(withBase(started.id()));
+        // Its scan is reused
+        verify(scanService).create(eq(context), any());
+    }
+
+    @Test
+    void scansWhereTheBranchStartedWhenItHasNoScan() {
+        final var started = scan("main", "bbb111");
+
+        when(github.mergeBase(INSTALLATION, "acme/shop", "def456", "abc123")).thenReturn(Optional.of("bbb111"));
+        when(scanService.getScansOfRevision(context, shop.id(), "bbb111"))
+            .thenReturn(List.of(withStatus(Scan.ScanId.generate(), Scan.ScanStatus.FAILED)));
+        when(scanService.create(eq(context), any())).thenReturn(head, started);
+
+        app().handle("pull_request", pullRequest("opened"));
+
+        verify(scanService).create(context, new CreateScanCommand(shop.id(), "bbb111", "main", null, null, null));
+        verify(pullRequestScans).save(withBase(started.id()));
+    }
+
+    @Test
+    void waitsForAScanOfWhereTheBranchStartedThatIsUnderWay() {
+        final var running = withStatus(Scan.ScanId.generate(), Scan.ScanStatus.RUNNING);
+
+        when(github.mergeBase(INSTALLATION, "acme/shop", "def456", "abc123")).thenReturn(Optional.of("bbb111"));
+        when(scanService.getScansOfRevision(context, shop.id(), "bbb111")).thenReturn(List.of(running));
+
+        app().handle("pull_request", pullRequest("opened"));
+
+        verify(pullRequestScans).save(withBase(running.id()));
+        verify(scanService).create(eq(context), any());
+    }
+
+    @Test
+    void comparesWithTheLatestScanWhenGitHubCannotTellWhereTheBranchStarted() {
+        when(github.mergeBase(anyLong(), anyString(), anyString(), anyString())).thenThrow(new IllegalStateException("502 Bad Gateway"));
+
+        app().handle("pull_request", pullRequest("opened"));
+
+        verify(pullRequestScans).save(pullRequestScan);
+    }
+
+    @Test
+    void reportsOnceTheScanOfWhereTheBranchStartedIsDone() {
+        final var started = withStatus(Scan.ScanId.generate(), Scan.ScanStatus.RUNNING);
+        final var pending = withBase(started.id());
+        final var done = new Scan(started.id(), shop.id(), Scan.ScanStatus.COMPLETED, new Scan.SourceRevision("bbb111", "main"), NOW, NOW, NOW);
+
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pending));
+        when(pullRequestScans.findByScan(started.id())).thenReturn(List.of(pending));
+        when(scanService.getScan(context, started.id())).thenReturn(started, done);
+        when(impactAnalysisService.analyze(context, started.id(), head.id(), null)).thenReturn(report(List.of()));
+        when(github.findComment(anyLong(), anyString(), anyInt(), anyString())).thenReturn(Optional.empty());
+
+        // The head is done first: the report waits for the base
+        app().completed(head.id());
+
+        verify(pullRequestScans, never()).claim(any());
+        verifyNoInteractions(impactAnalysisService);
+
+        app().completed(started.id());
+
+        verify(impactAnalysisService).analyze(context, started.id(), head.id(), null);
+        verify(github).comment(eq(INSTALLATION), eq("acme/shop"), eq(3), contains(
+            "<sub>Compared with the commit the branch started from, so what `main` got since is left out.</sub>"
+        ));
+        verify(github, never()).completeCheckRun(anyLong(), anyString(), anyLong(), eq("failure"), any());
+    }
+
+    @Test
+    void comparesWithTheLatestScanWhenTheScanOfWhereTheBranchStartedFails() {
+        final var started = withStatus(Scan.ScanId.generate(), Scan.ScanStatus.FAILED);
+        final var pending = withBase(started.id());
+
+        when(pullRequestScans.findByScan(started.id())).thenReturn(List.of(pending));
+        when(scanService.getScan(context, started.id())).thenReturn(started);
+        when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
+        when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report(List.of()));
+        when(github.findComment(anyLong(), anyString(), anyInt(), anyString())).thenReturn(Optional.empty());
+
+        app().failed(started.id(), "Checking out bbb111 failed");
+
+        verify(github).comment(eq(INSTALLATION), eq("acme/shop"), eq(3), contains(
+            "The scan of the commit the branch started from failed, so this compares with the newest completed scan of `main`"
+        ));
+        // The head did not fail
+        verify(github).completeCheckRun(eq(INSTALLATION), eq("acme/shop"), eq(7L), eq("success"), any());
     }
 
     @Test
@@ -146,7 +246,7 @@ class GitHubAppTest {
     void reportsACompletedScanOnThePullRequest() {
         final var report = report(List.of());
 
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
         when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report);
         when(github.findComment(INSTALLATION, "acme/shop", 3, GitHubApp.marker(shop.id()))).thenReturn(Optional.empty());
@@ -175,7 +275,7 @@ class GitHubAppTest {
             List.of(new HttpLinks.Endpoint("e", main.id(), shop.id(), "GET", "/api/orders"))
         )));
 
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
         when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report);
         when(github.findComment(INSTALLATION, "acme/shop", 3, GitHubApp.marker(shop.id()))).thenReturn(Optional.of(501L));
@@ -184,15 +284,15 @@ class GitHubAppTest {
 
         verify(github).editComment(eq(INSTALLATION), eq("acme/shop"), eq(501L), startsWith(GitHubApp.marker(shop.id())));
         verify(github, never()).comment(anyLong(), anyString(), anyInt(), anyString());
-        verify(github).completeCheckRun(eq(INSTALLATION), eq("acme/shop"), eq(7L), eq("neutral"),
-            eq(new GitHubClient.Output("1 broken call, 0 changes in use", ImpactComment.render(report, java.util.Map.of(shop.id(), "shop"), null))));
+        verify(github).completeCheckRun(eq(INSTALLATION), eq("acme/shop"), eq(7L), eq("neutral"), argThat(output ->
+            output.title().equals("1 broken call, 0 changes in use") && output.summary().contains("**1 broken call**")));
     }
 
     @Test
     void headsTheReportWithTheAssessment() {
         final var report = report(List.of());
 
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
         when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report);
         when(github.findComment(anyLong(), anyString(), anyInt(), anyString())).thenReturn(Optional.empty());
@@ -208,7 +308,7 @@ class GitHubAppTest {
 
     @Test
     void reportsWithoutTheAssessmentWhenItFails() {
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
         when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report(List.of()));
         when(github.findComment(anyLong(), anyString(), anyInt(), anyString())).thenReturn(Optional.empty());
@@ -223,7 +323,7 @@ class GitHubAppTest {
 
     @Test
     void saysWhenThereIsNoScanToCompareWith() {
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.empty());
 
         app().completed(head.id());
@@ -235,7 +335,7 @@ class GitHubAppTest {
 
     @Test
     void leavesTheCommentToTheScanOfANewerPush() {
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(pullRequestScans.isSuperseded(pullRequestScan)).thenReturn(true);
 
         app().completed(head.id());
@@ -248,7 +348,7 @@ class GitHubAppTest {
 
     @Test
     void failsTheCheckRunWhenTheReportFails() {
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
         when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenThrow(new IllegalStateException("Neo4j unavailable"));
 
@@ -261,7 +361,7 @@ class GitHubAppTest {
 
     @Test
     void failsTheCheckRunOfAScanThatFailed() {
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
 
         app().failed(head.id(), "Checking out abc123 failed");
 
@@ -272,7 +372,7 @@ class GitHubAppTest {
 
     @Test
     void leavesScansOfNoPullRequest() {
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.empty());
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of());
 
         app().completed(head.id());
         app().failed(head.id(), "Failed");
@@ -282,7 +382,7 @@ class GitHubAppTest {
 
     @Test
     void leavesAScanAnotherCallerReportsOn() {
-        when(pullRequestScans.find(head.id())).thenReturn(Optional.of(pullRequestScan));
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
         when(pullRequestScans.claim(head.id())).thenReturn(false);
 
         app().completed(head.id());
@@ -329,6 +429,10 @@ class GitHubAppTest {
         app().sweep();
 
         verify(github).completeCheckRun(eq(INSTALLATION), eq("acme/shop"), eq(8L), eq("neutral"), any());
+    }
+
+    private PullRequestScan withBase(final Scan.ScanId baseScan) {
+        return new PullRequestScan(head.id(), shop.id(), INSTALLATION, "acme/shop", 3, "abc123", "main", 7, NOW, baseScan);
     }
 
     private PullRequestScan pullRequestScan(final Scan.ScanId scanId, final long checkRun) {

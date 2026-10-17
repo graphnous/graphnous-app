@@ -193,6 +193,29 @@ public class ScanService {
         return scanRepository.findLatestCompleted(projectId, branch);
     }
 
+    /**
+     * The scans of the project of the commit, newest first, whatever their
+     * status: such as one to compare a pull request with, of the commit its
+     * branch started from.
+     */
+    public List<Scan> getScansOfRevision(
+        final RequestContext context,
+        final Project.ProjectId projectId,
+        final String revision
+    ) {
+        authorizationService.authorize(
+            context,
+            Permission.SCAN_READ
+        );
+
+        this.projectService.getProject(
+            context,
+            projectId
+        );
+
+        return scanRepository.findOfRevision(projectId, revision);
+    }
+
     public Scan getScan(
         final RequestContext context,
         final Scan.ScanId id

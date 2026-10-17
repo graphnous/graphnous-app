@@ -124,6 +124,30 @@ class ScanImpactControllerTest {
     }
 
     @Test
+    void comparesWithTheScanOfTheCommitTheBranchStartedFrom() throws Exception {
+        final var started = scan("main", "bbb1111cccc");
+
+        when(scanService.getScansOfRevision(context, project.id(), "bbb1111cccc")).thenReturn(List.of(started));
+        when(impactAnalysisService.analyze(context, started.id(), head.id(), null)).thenReturn(report);
+
+        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()).queryParam("baseRevision", "bbb1111cccc"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("<sub>Compared with the commit the branch started from")));
+        verify(scanService, never()).getLatestCompletedScan(any(), any(), any());
+    }
+
+    @Test
+    void saysWhenTheCommitTheBranchStartedFromHasNoScan() throws Exception {
+        when(scanService.getScansOfRevision(context, project.id(), "bbb1111cccc")).thenReturn(List.of());
+        when(scanService.getLatestCompletedScan(context, project.id(), "main")).thenReturn(Optional.of(base));
+        when(impactAnalysisService.analyze(context, base.id(), head.id(), null)).thenReturn(report);
+
+        mockMvc.perform(get("/api/v1/scans/{head}/impact-comment", head.id().id()).queryParam("baseRevision", "bbb1111cccc"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("There is no completed scan of `bbb1111`, where the branch started")));
+    }
+
+    @Test
     void needsACompletedScanOfTheBaseBranch() throws Exception {
         when(scanService.getLatestCompletedScan(context, project.id(), "main")).thenReturn(Optional.empty());
 

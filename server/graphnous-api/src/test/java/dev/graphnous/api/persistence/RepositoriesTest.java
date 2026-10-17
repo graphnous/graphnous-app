@@ -259,6 +259,27 @@ class RepositoriesTest {
     }
 
     @Test
+    void findsTheScansOfACommitAlsoBeforeTheyCheckedItOut() {
+        final var backend = project(system("Shop"), "backend");
+        final var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        final var checkedOut = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.COMPLETED,
+            new Scan.SourceRevision("bbb111", "main", "main"), now.minusSeconds(60), now, null
+        ));
+        final var asked = scanRepository.save(new Scan(
+            Scan.ScanId.generate(), backend.id(), Scan.ScanStatus.QUEUED,
+            Scan.SourceRevision.requested("bbb111", "main"), now, now, null
+        ));
+        scan(backend, Scan.ScanStatus.COMPLETED);
+
+        assertThat(scanRepository.findOfRevision(backend.id(), "bbb111"))
+            .extracting(Scan::id)
+            .containsExactly(asked.id(), checkedOut.id());
+        assertThat(scanRepository.findOfRevision(backend.id(), "ccc222")).isEmpty();
+    }
+
+    @Test
     void tellsWhetherAProjectHasActiveScans() {
         final var shop = system("Shop");
         final var idle = project(shop, "idle");

@@ -1,7 +1,8 @@
 # Comments on a pull request what its change affects: Graphnous scans the
-# pull request's head commit, compares it with the newest completed scan of
-# the base branch, and the job comments the impact report on the pull
-# request, editing its last one on every new push. See README.md.
+# pull request's head commit, compares it with the scan of the commit its
+# branch started from, or else the newest completed scan of the base branch,
+# and the job comments the impact report on the pull request, editing its
+# last one on every new push. See README.md.
 
 name: Graphnous impact report
 description: Comments what a pull request's change affects, across projects and over HTTP
@@ -67,6 +68,7 @@ runs:
         BASE_BRANCH: ${{ inputs.base-branch || github.event.pull_request.base.ref }}
         HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         SCAN_RESULTS: ${{ inputs.scan-results }}
         ASSESS: ${{ inputs.assess }}

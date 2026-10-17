@@ -115,6 +115,16 @@ class GitHubAppServerTest {
         assertThat(pullRequestScans.isSuperseded(first)).isTrue();
         assertThat(pullRequestScans.isSuperseded(second)).isFalse();
 
+        // By its head, or its base
+        final var withBase = new PullRequestScan(
+            Scan.ScanId.generate(), project, 42, "acme/shop", 4, "abc123", "main", 8, now, Scan.ScanId.generate()
+        );
+        pullRequestScans.save(withBase);
+
+        assertThat(pullRequestScans.findByScan(withBase.scanId())).containsExactly(withBase);
+        assertThat(pullRequestScans.findByScan(withBase.baseScan())).containsExactly(withBase);
+        assertThat(pullRequestScans.claim(withBase.scanId())).isTrue();
+
         // Once, to one caller
         assertThat(pullRequestScans.claim(first.scanId())).isTrue();
         assertThat(pullRequestScans.claim(first.scanId())).isFalse();

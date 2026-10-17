@@ -399,6 +399,18 @@ class ScanServiceTest {
     }
 
     @Test
+    void getsTheScansOfACommit() {
+        final var scan = scan(Scan.ScanStatus.COMPLETED);
+
+        when(scanRepository.findOfRevision(scan.projectId(), "bbb111")).thenReturn(List.of(scan));
+
+        assertThat(service().getScansOfRevision(context, scan.projectId(), "bbb111")).containsExactly(scan);
+
+        verify(authorizationService).authorize(context, Permission.SCAN_READ);
+        verify(projectService).getProject(context, scan.projectId());
+    }
+
+    @Test
     void getsTheLatestCompletedScanOfABranch() {
         final var scan = scan(Scan.ScanStatus.COMPLETED);
 

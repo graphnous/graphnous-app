@@ -108,6 +108,21 @@ class GitHubClientTest {
     }
 
     @Test
+    void findsTheCommitABranchStartedFrom() {
+        expectToken("tok-1", NOW.plusSeconds(3600));
+        server.expect(requestTo(API + "/repos/acme/shop/compare/def456...abc123"))
+            .andExpect(header("Authorization", "Bearer tok-1"))
+            .andRespond(withSuccess(
+                "{\"status\": \"diverged\", \"merge_base_commit\": {\"sha\": \"bbb111\"}, \"commits\": []}",
+                MediaType.APPLICATION_JSON
+            ));
+
+        assertThat(client(Clock.fixed(NOW, ZoneOffset.UTC)).mergeBase(42, "acme/shop", "def456", "abc123")).contains("bbb111");
+
+        server.verify();
+    }
+
+    @Test
     void editsAComment() {
         expectToken("tok-1", NOW.plusSeconds(3600));
         server.expect(requestTo(API + "/repos/acme/shop/issues/comments/501"))

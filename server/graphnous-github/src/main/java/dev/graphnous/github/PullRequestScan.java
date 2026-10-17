@@ -14,6 +14,9 @@ import java.time.Instant;
  * @param baseBranch   the branch the pull request merges into, whose newest
  *                     completed scan the report compares with
  * @param checkRun     the check run that shows it on the commit
+ * @param baseScan     the scan of the commit the branch started from, to
+ *                     compare with; null to compare with the newest
+ *                     completed scan of the base branch
  */
 record PullRequestScan(
     Scan.ScanId scanId,
@@ -24,6 +27,24 @@ record PullRequestScan(
     String headSha,
     String baseBranch,
     long checkRun,
-    Instant createdAt
+    Instant createdAt,
+    Scan.ScanId baseScan
 ) {
+
+    /**
+     * A scan compared with the newest completed scan of the base branch.
+     */
+    PullRequestScan(
+        final Scan.ScanId scanId,
+        final Project.ProjectId projectId,
+        final long installation,
+        final String repository,
+        final int pullRequest,
+        final String headSha,
+        final String baseBranch,
+        final long checkRun,
+        final Instant createdAt
+    ) {
+        this(scanId, projectId, installation, repository, pullRequest, headSha, baseBranch, checkRun, createdAt, null);
+    }
 }
