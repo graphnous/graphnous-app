@@ -12,19 +12,85 @@ import java.util.UUID;
 
 public interface NotificationJpaRepository extends JpaRepository<NotificationEntity, UUID> {
 
-    Page<NotificationEntity> findAllBySystemId(
-        final UUID systemId,
+    /**
+     * The notifications, each with its recipient's row: the user's, or that
+     * of no user, matched as {@code COALESCE(r.userId, :noUser) = :user}, as
+     * no user has no id to compare.
+     */
+    String ROWS = """
+        SELECT new dev.graphnous.persistence.notification.NotificationRow(n, r.read)
+        FROM NotificationEntity n
+        LEFT JOIN NotificationRecipientEntity r ON r.notificationId = n.id AND COALESCE(r.userId, :noUser) = :user
+        """;
+
+    String COUNT = """
+        SELECT COUNT(n)
+        FROM NotificationEntity n
+        LEFT JOIN NotificationRecipientEntity r ON r.notificationId = n.id AND COALESCE(r.userId, :noUser) = :user
+        """;
+
+    String UNREAD = " AND COALESCE(r.read, FALSE) = FALSE";
+
+    @Query(value = ROWS + "WHERE n.id = :id")
+    java.util.Optional<NotificationRow> findRow(
+        @Param("id") final UUID id,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser
+    );
+
+    @Query(value = ROWS + "WHERE n.systemId = :systemId", countQuery = COUNT + "WHERE n.systemId = :systemId")
+    Page<NotificationRow> findRowsOfSystem(
+        @Param("systemId") final UUID systemId,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser,
         final Pageable pageable
     );
 
-    Page<NotificationEntity> findAllByProjectId(
-        final UUID projectId,
+    @Query(value = ROWS + "WHERE n.projectId = :projectId", countQuery = COUNT + "WHERE n.projectId = :projectId")
+    Page<NotificationRow> findRowsOfProject(
+        @Param("projectId") final UUID projectId,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser,
         final Pageable pageable
     );
 
-    Page<NotificationEntity> findAllByScanId(
-        final UUID scanId,
+    @Query(value = ROWS + "WHERE n.scanId = :scanId", countQuery = COUNT + "WHERE n.scanId = :scanId")
+    Page<NotificationRow> findRowsOfScan(
+        @Param("scanId") final UUID scanId,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser,
         final Pageable pageable
+    );
+
+    @Query(value = ROWS + "WHERE n.systemId = :systemId" + UNREAD, countQuery = COUNT + "WHERE n.systemId = :systemId" + UNREAD)
+    Page<NotificationRow> findUnreadOfSystem(
+        @Param("systemId") final UUID systemId,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser,
+        final Pageable pageable
+    );
+
+    @Query(value = ROWS + "WHERE n.projectId = :projectId" + UNREAD, countQuery = COUNT + "WHERE n.projectId = :projectId" + UNREAD)
+    Page<NotificationRow> findUnreadOfProject(
+        @Param("projectId") final UUID projectId,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser,
+        final Pageable pageable
+    );
+
+    @Query(value = ROWS + "WHERE n.scanId = :scanId" + UNREAD, countQuery = COUNT + "WHERE n.scanId = :scanId" + UNREAD)
+    Page<NotificationRow> findUnreadOfScan(
+        @Param("scanId") final UUID scanId,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser,
+        final Pageable pageable
+    );
+
+    @Query(COUNT + "WHERE n.systemId = :systemId" + UNREAD)
+    long countUnreadOfSystem(
+        @Param("systemId") final UUID systemId,
+        @Param("user") final UUID user,
+        @Param("noUser") final UUID noUser
     );
 
     @Modifying

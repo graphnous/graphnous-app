@@ -2,6 +2,7 @@ package dev.graphnous.api.configuration;
 
 import dev.graphnous.application.authorization.AuthorizationService;
 import dev.graphnous.application.notification.NotificationRepository;
+import dev.graphnous.application.notification.NotificationPublisher;
 import dev.graphnous.application.notification.NotificationService;
 import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.ProjectRepository;
@@ -22,7 +23,8 @@ public class NotificationConfiguration {
         final AuthorizationService authorizationService,
         final SystemService systemService,
         final ProjectService projectService,
-        final ScanService scanService
+        final ScanService scanService,
+        final NotificationPublisher notificationPublisher
     ) {
         return new NotificationService(
             notificationRepository,
@@ -30,6 +32,7 @@ public class NotificationConfiguration {
             systemService,
             projectService,
             scanService,
+            notificationPublisher,
             Clock.systemUTC()
         );
     }
@@ -37,9 +40,10 @@ public class NotificationConfiguration {
     @Bean
     ScanNotifier scanNotifier(
         final NotificationRepository notificationRepository,
-        final ProjectRepository projectRepository
+        final ProjectRepository projectRepository,
+        final NotificationPublisher notificationPublisher
     ) {
-        return new ScanNotifier(notificationRepository, projectRepository, Clock.systemUTC());
+        return new ScanNotifier(notificationRepository, projectRepository, notificationPublisher, Clock.systemUTC());
     }
 
 }
