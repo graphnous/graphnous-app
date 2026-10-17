@@ -9,8 +9,11 @@ import dev.graphnous.scanner.listener.ScanProcessListener;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -41,14 +44,19 @@ public class DockerGitCheckout {
      * is what is checked out; a tag too. Arguments are passed as
      * positional parameters so none of them is interpreted by the shell.
      * A private repository is fetched over SSH with the key and known
-     * hosts copied to {@link #SSH_DIRECTORY}, when there is a key. Only
-     * servers in the known hosts are trusted.
+     * hosts copied to {@link #CREDENTIALS_DIRECTORY}, when there is a key.
+     * Only servers in the known hosts are trusted. Over https, with
+     * credentials, git sends them from the git config copied there, for
+     * the url's server only.
      */
     private static final String SCRIPT = """
         set -eu
         dir="$1"; url="$2"; branch="$3"; revision="$4"
         if [ -f "%1$s/id_key" ]; then
           export GIT_SSH_COMMAND="ssh -i %1$s/id_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%1$s/known_hosts -o GlobalKnownHostsFile=/dev/null"
+        fi
+        if [ -f "%1$s/gitconfig" ]; then
+          export GIT_CONFIG_GLOBAL="%1$s/gitconfig"
         fi
         rm -rf "$dir"
         git init -q "$dir"
@@ -71,10 +79,11 @@ public class DockerGitCheckout {
         """;
 
     /**
-     * Where the SSH key and known hosts are copied in the git container;
-     * outside the workspace, so they are never visible to the scanners.
+     * Where the SSH key and known hosts, or the git config with the https
+     * credentials, are copied in the git container; outside the workspace,
+     * so they are never visible to the scanners.
      */
-    private static final String SSH_DIRECTORY = "/graphnous-ssh";
+    private static final String CREDENTIALS_DIRECTORY = "/graphnous-credentials";
 
     private final DockerClient docker;
     private final DockerWorkspace workspace;
@@ -193,8 +202,8 @@ public class DockerGitCheckout {
         final var exitCode = run(
             listener,
             labels,
-            sshFiles(source),
-            "sh", "-c", SCRIPT.formatted(SSH_DIRECTORY), "checkout",
+            credentialFiles(source),
+            "sh", "-c", SCRIPT.formatted(CREDENTIALS_DIRECTORY), "checkout",
             directory.toString(),
             source.url(),
             orEmpty(source.branch()),
@@ -264,7 +273,7 @@ public class DockerGitCheckout {
     private int run(
         final ScanProcessListener listener,
         final Map<String, String> labels,
-        final Map<String, String> sshFiles,
+        final Map<String, String> credentialFiles,
         final String... command
     ) {
         String containerId = null;
@@ -285,10 +294,10 @@ public class DockerGitCheckout {
                 .exec()
                 .getId();
 
-            if (!sshFiles.isEmpty()) {
+            if (!credentialFiles.isEmpty()) {
                 docker.copyArchiveToContainerCmd(containerId)
                     .withTarInputStream(new ByteArrayInputStream(
-                        ContainerArchive.privateFiles(SSH_DIRECTORY, sshFiles)
+                        ContainerArchive.privateFiles(CREDENTIALS_DIRECTORY, credentialFiles)
                     ))
                     .withRemotePath("/")
                     .exec();
@@ -298,7 +307,7 @@ public class DockerGitCheckout {
 
         } catch (IOException e) {
             throw new UncheckedIOException(
-                "Failed to copy the SSH key to the git container",
+                "Failed to copy the credentials to the git container",
                 e
             );
         } catch (InterruptedException e) {
@@ -328,10 +337,19 @@ public class DockerGitCheckout {
     }
 
     /**
-     * The files of {@link #SSH_DIRECTORY}, or none for a source without a
-     * key.
+     * The files of {@link #CREDENTIALS_DIRECTORY}, or none for a source
+     * without credentials.
      */
-    private static Map<String, String> sshFiles(final GitSource source) {
+    static Map<String, String> credentialFiles(final GitSource source) {
+        if (source.httpUsername() != null) {
+            final var basic = Base64.getEncoder().encodeToString(
+                (source.httpUsername() + ":" + source.httpPassword()).getBytes(StandardCharsets.UTF_8)
+            );
+
+            // Only to the url's server, should a redirect lead elsewhere
+            return Map.of("gitconfig", "[http \"%s\"]\n\textraHeader = Authorization: Basic %s\n".formatted(server(source.url()), basic));
+        }
+
         if (source.sshKey() == null) {
             return Map.of();
         }
@@ -340,6 +358,15 @@ public class DockerGitCheckout {
             "id_key", withTrailingNewline(source.sshKey()),
             "known_hosts", withTrailingNewline(source.knownHosts())
         );
+    }
+
+    /**
+     * The scheme and host of an https url, such as https://github.com/.
+     */
+    private static String server(final String url) {
+        final var uri = URI.create(url);
+
+        return uri.getScheme() + "://" + uri.getRawAuthority() + "/";
     }
 
     /**
@@ -361,21 +388,37 @@ public class DockerGitCheckout {
      * @param knownHosts the servers' host keys, in the format of OpenSSH's
      *                   {@code known_hosts}; required with an SSH key and
      *                   an SSH url, as no other server is trusted
+     * @param httpUsername   the user to fetch an https url as, with the
+     *                       password, or {@code null} for none; ignored for
+     *                       other urls
+     * @param httpPassword   its password, or a token
      */
     public record GitSource(
         String url,
         String branch,
         String revision,
         String sshKey,
-        String knownHosts
+        String knownHosts,
+        String httpUsername,
+        String httpPassword
     ) {
+
+        public GitSource(
+            final String url,
+            final String branch,
+            final String revision,
+            final String sshKey,
+            final String knownHosts
+        ) {
+            this(url, branch, revision, sshKey, knownHosts, null, null);
+        }
 
         public GitSource(
             final String url,
             final String branch,
             final String revision
         ) {
-            this(url, branch, revision, null, null);
+            this(url, branch, revision, null, null, null, null);
         }
 
         public GitSource {
@@ -387,6 +430,13 @@ public class DockerGitCheckout {
             revision = blankToNull(revision);
             sshKey = blankToNull(sshKey);
             knownHosts = blankToNull(knownHosts);
+            httpUsername = blankToNull(httpUsername);
+            httpPassword = httpUsername == null ? null : httpPassword;
+
+            if (!url.startsWith("https://")) {
+                httpUsername = null;
+                httpPassword = null;
+            }
 
             // Only SSH uses them; a key configured for private repositories
             // leaves public ones over https working without known hosts
@@ -434,16 +484,18 @@ public class DockerGitCheckout {
         }
 
         /**
-         * Leaves the key out, so it does not end up in logs.
+         * Leaves the key and password out, so they do not end up in logs.
          */
         @Override
         public String toString() {
-            return "GitSource[url=%s, branch=%s, revision=%s, sshKey=%s, knownHosts=%s]".formatted(
+            return "GitSource[url=%s, branch=%s, revision=%s, sshKey=%s, knownHosts=%s, httpUsername=%s, httpPassword=%s]".formatted(
                 url,
                 branch,
                 revision,
                 sshKey == null ? null : "****",
-                knownHosts
+                knownHosts,
+                httpUsername,
+                httpPassword == null ? null : "****"
             );
         }
     }

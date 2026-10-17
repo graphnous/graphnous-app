@@ -1,5 +1,6 @@
 package dev.graphnous.application.scan;
 
+import dev.graphnous.application.event.EventPublisher;
 import dev.graphnous.application.notification.ScanNotifier;
 import dev.graphnous.application.project.scanner.ScanCanceller;
 import dev.graphnous.application.scan.log.ScanLogService;
@@ -52,6 +53,9 @@ class ScanRecoveryTest {
     @Mock
     private ScanNotifier scanNotifier;
 
+    @Mock
+    private EventPublisher eventPublisher;
+
     @Test
     void failsEveryActiveScanLeftByAPreviousRun() {
         final var pending = scan(Scan.ScanStatus.PENDING, NOW);
@@ -98,6 +102,7 @@ class ScanRecoveryTest {
         verify(scanSteps, never()).failRunning(eq(recent.id()), anyString());
         verify(scanLogService, never()).log(eq(recent.id()), any(), anyString());
         verify(scanNotifier).scanFailed(stuck, "Scan timed out: no progress in PT1H");
+        verify(eventPublisher).publish(new ScanFailedEvent(stuck.id(), stuck.projectId(), "Scan timed out: no progress in PT1H"));
         verify(scanNotifier, never()).scanFailed(eq(recent), anyString());
     }
 
@@ -209,6 +214,7 @@ class ScanRecoveryTest {
             scanCanceller,
             scanSteps,
             scanNotifier,
+            eventPublisher,
             TIMEOUT,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );

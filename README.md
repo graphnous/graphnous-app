@@ -8,9 +8,13 @@ or runs without security, as the open-source container does.
 | --- | --- |
 | [`server`](server) | The Spring Boot server: the REST API, scan orchestration and persistence, and the scanner framework the scanners build on |
 | [`web`](web) | The web app, in Next.js, built from [`@graphnous/theme`](https://www.npmjs.com/package/@graphnous/theme) |
+| [`actions`](actions) | GitHub Actions for workflows that use Graphnous, such as the [impact report](actions/impact-report) on pull requests |
 
 Each has its README with how to run and test it; the
 [repository README](../README.md) describes how the pieces fit together.
+
+To have Graphnous report on every pull request what it affects, set the
+server up as a GitHub App: [GITHUB_APP.md](GITHUB_APP.md).
 
 ## CI and sibling repositories
 
