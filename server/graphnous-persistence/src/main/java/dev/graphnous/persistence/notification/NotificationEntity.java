@@ -38,8 +38,6 @@ public class NotificationEntity {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "is_read", nullable = false)
-    private boolean read;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -92,13 +90,7 @@ public class NotificationEntity {
         this.content = content;
     }
 
-    public boolean isRead() {
-        return read;
-    }
 
-    public void setRead(final boolean read) {
-        this.read = read;
-    }
 
     public Instant getCreatedAt() {
         return createdAt;

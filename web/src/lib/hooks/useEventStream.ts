@@ -6,10 +6,10 @@ export type EventStreamStatus = "connecting" | "open" | "closed";
 
 export type EventStreamOptions<T> = {
   /**
-   * The name of the events, such as "scanLog"; unnamed events are
-   * "message".
+   * The name of the events, such as "scanLog", or the names of several;
+   * unnamed events are "message".
    */
-  event?: string;
+  event?: string | readonly string[];
   /**
    * Called with each event's data, parsed as JSON.
    */
@@ -41,6 +41,9 @@ export function useEventStream<T>(
 
   const handle = useEffectEvent((data: T) => onEvent(data));
 
+  // A list of names as one dependency of the effect, so a new array with the same names keeps the stream
+  const events = typeof event === "string" ? event : event.join(" ");
+
   useEffect(() => {
     if (!url || !enabled) {
       return;
@@ -67,20 +70,22 @@ export function useEventStream<T>(
       }
     };
 
+    const names = events.split(" ");
+
     source.addEventListener("open", update);
     source.addEventListener("error", update);
-    source.addEventListener(event, listener);
+    names.forEach((name) => source.addEventListener(name, listener));
 
     update();
 
     return () => {
       source.removeEventListener("open", update);
       source.removeEventListener("error", update);
-      source.removeEventListener(event, listener);
+      names.forEach((name) => source.removeEventListener(name, listener));
       source.close();
       setStatus({ url, status: "closed" });
     };
-  }, [url, event, enabled, withCredentials]);
+  }, [url, events, enabled, withCredentials]);
 
   if (!url || !enabled) {
     return "closed";

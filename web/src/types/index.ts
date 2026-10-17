@@ -22,3 +22,4 @@ export type { Scanner } from "./Scanner";
 export type { ScanClass, ScanCodeItems, ScanCodeKind, ScanFile, ScanMethod, ScanModule, ScanPackage } from "./ScanCode";
 export type { SystemLink, SystemLinkCall, SystemLinkEndpoint, SystemLinks } from "./SystemLinks";
 export type { ScanUsage, ScanUsageArgument, ScanUsageNode, ScanUsageRelationship, ScanUsageRequest, ScanUsages } from "./ScanUsages";
+export type { Notification, NotificationEvent, NotificationEventType } from "./Notification";

@@ -3,6 +3,7 @@ import {
     ChatApi,
     Configuration,
     FetchError,
+    NotificationsApi,
     ProjectsApi,
     RequiredError,
     ResponseError,
@@ -67,6 +68,7 @@ export function graphnousApi() {
 
     return {
         chat: new ChatApi(configuration),
+        notifications: new NotificationsApi(configuration),
         projects: new ProjectsApi(configuration),
         scanCode: new ScanCodeApi(configuration),
         scans: new ScansApi(configuration),

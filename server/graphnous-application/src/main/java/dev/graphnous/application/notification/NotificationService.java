@@ -20,7 +20,10 @@ import java.time.Clock;
 
 /**
  * Notifications of systems, projects and scans. A notification is only
- * accessible to whoever may read its system.
+ * accessible to whoever may read its system, and is read or unread for the
+ * user of the request context: each user marks it for themselves, and
+ * without a user, as without security or for an API key, it is marked for
+ * no user.
  */
 public class NotificationService {
 
@@ -31,6 +34,7 @@ public class NotificationService {
     private final ProjectService projectService;
     private final ScanService scanService;
 
+    private final NotificationPublisher publisher;
     private final Clock clock;
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
@@ -43,6 +47,22 @@ public class NotificationService {
         final ScanService scanService,
         final Clock clock
     ) {
+        this(notificationRepository, authorizationService, systemService, projectService, scanService, NotificationPublisher.NONE, clock);
+    }
+
+    /**
+     * @param publisher who to tell of each notification created, marked or
+     *                  deleted
+     */
+    public NotificationService(
+        final NotificationRepository notificationRepository,
+        final AuthorizationService authorizationService,
+        final SystemService systemService,
+        final ProjectService projectService,
+        final ScanService scanService,
+        final NotificationPublisher publisher,
+        final Clock clock
+    ) {
         this.notificationRepository = notificationRepository;
         this.authorizationService = authorizationService;
 
@@ -50,6 +70,7 @@ public class NotificationService {
         this.projectService = projectService;
         this.scanService = scanService;
 
+        this.publisher = publisher;
         this.clock = clock;
     }
 
@@ -99,6 +120,7 @@ public class NotificationService {
         }
 
         final var saved = this.notificationRepository.save(notification);
+        this.publisher.publish(NotificationEvent.created(saved));
 
         log.info(
             "Created notification organizationId={} notificationId={}",
@@ -121,7 +143,7 @@ public class NotificationService {
             id.id()
         );
 
-        final var notification = this.notificationRepository.findById(id);
+        final var notification = this.notificationRepository.findById(id, context.user());
 
         // Only a notification of a system of the caller's organization
         this.systemService.getSystem(context, notification.systemId());
@@ -141,7 +163,7 @@ public class NotificationService {
 
         this.systemService.getSystem(context, systemId);
 
-        return this.notificationRepository.findAll(systemId, pageQuery);
+        return this.notificationRepository.findAll(systemId, context.user(), pageQuery);
     }
 
     /**
@@ -156,7 +178,7 @@ public class NotificationService {
 
         this.projectService.getProject(context, projectId);
 
-        return this.notificationRepository.findAll(projectId, pageQuery);
+        return this.notificationRepository.findAll(projectId, context.user(), pageQuery);
     }
 
     public Page<Notification> getNotifications(
@@ -168,11 +190,11 @@ public class NotificationService {
 
         this.scanService.getScan(context, scanId);
 
-        return this.notificationRepository.findAll(scanId, pageQuery);
+        return this.notificationRepository.findAll(scanId, context.user(), pageQuery);
     }
 
     /**
-     * Marks the notification read or unread.
+     * Marks the notification read or unread for the user of the context.
      */
     public Notification markRead(
         final RequestContext context,
@@ -194,7 +216,126 @@ public class NotificationService {
             read
         );
 
-        return this.notificationRepository.save(notification.withRead(read));
+        this.notificationRepository.markRead(id, context.user(), read);
+
+        final var marked = notification.withRead(read);
+        this.publisher.publish(NotificationEvent.updated(marked, context.user()));
+
+        return marked;
+    }
+
+    /**
+     * The notifications of the system, its projects and their scans; only
+     * the unread ones when asked.
+     */
+    public Page<Notification> getNotifications(
+        final RequestContext context,
+        final PageQuery pageQuery,
+        final System.SystemId systemId,
+        final boolean unreadOnly
+    ) {
+        if (!unreadOnly) {
+            return getNotifications(context, pageQuery, systemId);
+        }
+
+        this.authorizationService.authorize(context, Permission.NOTIFICATION_READ);
+        this.systemService.getSystem(context, systemId);
+
+        return this.notificationRepository.findUnread(systemId, context.user(), pageQuery);
+    }
+
+    /**
+     * The notifications of the project and its scans; only the unread ones
+     * when asked.
+     */
+    public Page<Notification> getNotifications(
+        final RequestContext context,
+        final PageQuery pageQuery,
+        final Project.ProjectId projectId,
+        final boolean unreadOnly
+    ) {
+        if (!unreadOnly) {
+            return getNotifications(context, pageQuery, projectId);
+        }
+
+        this.authorizationService.authorize(context, Permission.NOTIFICATION_READ);
+        this.projectService.getProject(context, projectId);
+
+        return this.notificationRepository.findUnread(projectId, context.user(), pageQuery);
+    }
+
+    /**
+     * The notifications of the scan; only the unread ones when asked.
+     */
+    public Page<Notification> getNotifications(
+        final RequestContext context,
+        final PageQuery pageQuery,
+        final Scan.ScanId scanId,
+        final boolean unreadOnly
+    ) {
+        if (!unreadOnly) {
+            return getNotifications(context, pageQuery, scanId);
+        }
+
+        this.authorizationService.authorize(context, Permission.NOTIFICATION_READ);
+        this.scanService.getScan(context, scanId);
+
+        return this.notificationRepository.findUnread(scanId, context.user(), pageQuery);
+    }
+
+    /**
+     * How many notifications of the system, its projects and their scans
+     * are unread.
+     */
+    public long countUnread(
+        final RequestContext context,
+        final System.SystemId systemId
+    ) {
+        this.authorizationService.authorize(context, Permission.NOTIFICATION_READ);
+        this.systemService.getSystem(context, systemId);
+
+        return this.notificationRepository.countUnread(systemId, context.user());
+    }
+
+    /**
+     * Marks every notification of the system, its projects and their scans
+     * read.
+     *
+     * @return how many were unread
+     */
+    public int markAllRead(
+        final RequestContext context,
+        final System.SystemId systemId
+    ) {
+        this.authorizationService.authorize(context, Permission.NOTIFICATION_UPDATE);
+        this.systemService.getSystem(context, systemId);
+
+        final var marked = this.notificationRepository.markAllRead(systemId, context.user());
+
+        log.debug(
+            "Marked notifications read organizationId={} systemId={} count={}",
+            context.organization().id(),
+            systemId.id(),
+            marked
+        );
+
+        if (marked > 0) {
+            this.publisher.publish(NotificationEvent.allRead(systemId, context.user()));
+        }
+
+        return marked;
+    }
+
+    /**
+     * Checks the caller may read the system's notifications, as before
+     * listening to them.
+     */
+    public void requireReadable(
+        final RequestContext context,
+        final System.SystemId systemId
+    ) {
+        this.authorizationService.authorize(context, Permission.NOTIFICATION_READ);
+        this.systemService.getSystem(context, systemId);
     }
 
     public void delete(
@@ -209,9 +350,10 @@ public class NotificationService {
             id.id()
         );
 
-        this.getNotification(context, id);
+        final var notification = this.getNotification(context, id);
 
         this.notificationRepository.delete(id);
+        this.publisher.publish(NotificationEvent.deleted(notification));
     }
 
     /**

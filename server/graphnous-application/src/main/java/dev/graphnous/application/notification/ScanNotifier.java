@@ -24,6 +24,7 @@ public class ScanNotifier {
 
     private final NotificationRepository notificationRepository;
     private final ProjectRepository projectRepository;
+    private final NotificationPublisher publisher;
     private final Clock clock;
 
     private static final Logger log = LoggerFactory.getLogger(ScanNotifier.class);
@@ -33,8 +34,21 @@ public class ScanNotifier {
         final ProjectRepository projectRepository,
         final Clock clock
     ) {
+        this(notificationRepository, projectRepository, NotificationPublisher.NONE, clock);
+    }
+
+    /**
+     * @param publisher who to tell of each notification stored
+     */
+    public ScanNotifier(
+        final NotificationRepository notificationRepository,
+        final ProjectRepository projectRepository,
+        final NotificationPublisher publisher,
+        final Clock clock
+    ) {
         this.notificationRepository = notificationRepository;
         this.projectRepository = projectRepository;
+        this.publisher = publisher;
         this.clock = clock;
     }
 
@@ -121,7 +135,7 @@ public class ScanNotifier {
         final String title,
         final String content
     ) {
-        this.notificationRepository.save(new Notification(
+        final var saved = this.notificationRepository.save(new Notification(
             Notification.NotificationId.generate(),
             project.systemId(),
             project.id(),
@@ -131,6 +145,8 @@ public class ScanNotifier {
             false,
             this.clock.instant()
         ));
+
+        this.publisher.publish(NotificationEvent.created(saved));
     }
 
     private static String describe(final Scan.SourceRevision revision) {

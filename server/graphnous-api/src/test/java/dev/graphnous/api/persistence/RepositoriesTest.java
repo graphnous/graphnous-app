@@ -1,5 +1,6 @@
 package dev.graphnous.api.persistence;
 
+import dev.graphnous.application.context.UserContext;
 import dev.graphnous.application.exception.NotFoundException;
 import dev.graphnous.application.chat.ChatThreadRepository;
 import dev.graphnous.application.notification.NotificationRepository;
@@ -44,6 +45,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * The repositories against their real stores: PostgreSQL, with the Flyway
@@ -838,6 +840,8 @@ class RepositoriesTest {
 
     // Notifications
 
+    private static final UserContext NO_USER = new UserContext(null);
+
     @Test
     void pagesTheNotificationsOfASystemProjectAndScan() {
         final var shop = system("Shop");
@@ -850,27 +854,63 @@ class RepositoriesTest {
 
         final var byDate = query(0, 10, "createdAt", Sort.Direction.ASC);
 
-        assertThat(notificationRepository.findAll(shop.id(), byDate).content())
+        assertThat(notificationRepository.findAll(shop.id(), NO_USER, byDate).content())
             .extracting(Notification::id)
             .containsExactly(ofSystem.id(), ofProject.id(), ofScan.id());
-        assertThat(notificationRepository.findAll(backend.id(), byDate).content())
+        assertThat(notificationRepository.findAll(backend.id(), NO_USER, byDate).content())
             .extracting(Notification::id)
             .containsExactly(ofProject.id(), ofScan.id());
-        assertThat(notificationRepository.findAll(scan.id(), byDate).content())
+        assertThat(notificationRepository.findAll(scan.id(), NO_USER, byDate).content())
             .extracting(Notification::id)
             .containsExactly(ofScan.id());
 
-        assertThat(notificationRepository.findById(ofScan.id())).isEqualTo(ofScan);
+        assertThat(notificationRepository.findById(ofScan.id(), NO_USER)).isEqualTo(ofScan);
     }
 
     @Test
-    void storesWhetherANotificationIsRead() {
+    void keepsWhetherEachRecipientReadANotification() {
         final var shop = system("Shop");
-        final var notification = notification(shop, null, null, Instant.now());
+        final var backend = project(shop, "backend");
+        final var first = notification(shop, null, null, Instant.now().minusSeconds(60));
+        final var second = notification(shop, backend, null, Instant.now());
+        final var alice = new UserContext(UUID.randomUUID());
+        final var bob = new UserContext(UUID.randomUUID());
+        final var newest = query(0, 10, "createdAt", Sort.Direction.DESC);
 
-        notificationRepository.save(notification.withRead(true));
+        notificationRepository.markRead(first.id(), alice, true);
 
-        assertThat(notificationRepository.findById(notification.id()).read()).isTrue();
+        // Read for Alice only
+        assertThat(notificationRepository.findById(first.id(), alice).read()).isTrue();
+        assertThat(notificationRepository.findById(first.id(), bob).read()).isFalse();
+        assertThat(notificationRepository.findById(first.id(), NO_USER).read()).isFalse();
+        assertThat(notificationRepository.countUnread(shop.id(), alice)).isEqualTo(1);
+        assertThat(notificationRepository.countUnread(shop.id(), bob)).isEqualTo(2);
+        assertThat(notificationRepository.findUnread(shop.id(), alice, newest).content())
+            .extracting(Notification::id)
+            .containsExactly(second.id());
+        assertThat(notificationRepository.findUnread(backend.id(), bob, newest).content())
+            .extracting(Notification::id)
+            .containsExactly(second.id());
+        assertThat(notificationRepository.findAll(shop.id(), alice, newest).content())
+            .extracting(Notification::id, Notification::read)
+            .containsExactly(tuple(second.id(), false), tuple(first.id(), true));
+
+        // Marked again, unread
+        notificationRepository.markRead(first.id(), alice, false);
+        assertThat(notificationRepository.countUnread(shop.id(), alice)).isEqualTo(2);
+
+        // All read, for one recipient at a time, counting only those that were unread
+        notificationRepository.markRead(first.id(), NO_USER, true);
+        assertThat(notificationRepository.markAllRead(shop.id(), NO_USER)).isEqualTo(1);
+        assertThat(notificationRepository.markAllRead(shop.id(), NO_USER)).isZero();
+        assertThat(notificationRepository.countUnread(shop.id(), NO_USER)).isZero();
+        assertThat(notificationRepository.markAllRead(shop.id(), bob)).isEqualTo(2);
+        assertThat(notificationRepository.countUnread(shop.id(), alice)).isEqualTo(2);
+
+        // Its recipients go with it
+        notificationRepository.delete(first.id());
+        assertThatThrownBy(() -> notificationRepository.findById(first.id(), bob)).isInstanceOf(NotFoundException.class);
+        assertThat(notificationRepository.countUnread(shop.id(), bob)).isZero();
     }
 
     @Test
@@ -885,17 +925,17 @@ class RepositoriesTest {
 
         notificationRepository.deleteByScanId(scan.id());
 
-        assertThatThrownBy(() -> notificationRepository.findById(ofScan.id())).isInstanceOf(NotFoundException.class);
-        assertThat(notificationRepository.findById(ofProject.id())).isEqualTo(ofProject);
+        assertThatThrownBy(() -> notificationRepository.findById(ofScan.id(), NO_USER)).isInstanceOf(NotFoundException.class);
+        assertThat(notificationRepository.findById(ofProject.id(), NO_USER)).isEqualTo(ofProject);
 
         notificationRepository.deleteByProjectId(backend.id());
 
-        assertThatThrownBy(() -> notificationRepository.findById(ofProject.id())).isInstanceOf(NotFoundException.class);
-        assertThat(notificationRepository.findById(ofSystem.id())).isEqualTo(ofSystem);
+        assertThatThrownBy(() -> notificationRepository.findById(ofProject.id(), NO_USER)).isInstanceOf(NotFoundException.class);
+        assertThat(notificationRepository.findById(ofSystem.id(), NO_USER)).isEqualTo(ofSystem);
 
         notificationRepository.deleteBySystemId(shop.id());
 
-        assertThatThrownBy(() -> notificationRepository.findById(ofSystem.id())).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> notificationRepository.findById(ofSystem.id(), NO_USER)).isInstanceOf(NotFoundException.class);
     }
 
     // Chat threads
