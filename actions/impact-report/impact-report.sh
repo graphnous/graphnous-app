@@ -86,9 +86,20 @@ while :; do
   sleep 10
 done
 
+# Where the branch started, to compare with what it was then rather than
+# what the base branch got since; the newest scan of it otherwise
+merge_base=""
+if [ -n "${BASE_SHA:-}" ]; then
+  merge_base=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BASE_SHA...$HEAD_SHA" --jq .merge_base_commit.sha 2>/dev/null || true)
+fi
+base=()
+if [ -n "$merge_base" ]; then
+  base=(--data-urlencode "baseRevision=$merge_base")
+fi
+
 comment=$(mktemp)
 graphnous -G "$api/scans/$scan_id/impact-comment" -H "Accept: text/markdown" \
-  --data-urlencode "baseBranch=$BASE_BRANCH" --data-urlencode "assess=${ASSESS:-false}" >"$comment"
+  --data-urlencode "baseBranch=$BASE_BRANCH" --data-urlencode "assess=${ASSESS:-false}" ${base[@]+"${base[@]}"} >"$comment"
 
 cat "$comment" >>"$GITHUB_STEP_SUMMARY"
 

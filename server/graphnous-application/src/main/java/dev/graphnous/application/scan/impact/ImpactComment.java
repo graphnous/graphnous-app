@@ -97,9 +97,24 @@ public final class ImpactComment {
         final String assessment,
         final Sources sources
     ) {
-        final var comment = render(report, projects, assessment, sources, true);
+        return render(report, projects, assessment, sources, null);
+    }
 
-        return comment.length() <= MAX_LENGTH ? comment : render(report, projects, assessment, sources, false);
+    /**
+     * @param note what to say about what it compares, under the scans it
+     *             compares, such as why the base is not where the branch
+     *             started; none when null
+     */
+    public static String render(
+        final ImpactReport report,
+        final Map<Project.ProjectId, String> projects,
+        final String assessment,
+        final Sources sources,
+        final String note
+    ) {
+        final var comment = render(report, projects, assessment, sources, note, true);
+
+        return comment.length() <= MAX_LENGTH ? comment : render(report, projects, assessment, sources, note, false);
     }
 
     private static String render(
@@ -107,6 +122,7 @@ public final class ImpactComment {
         final Map<Project.ProjectId, String> projects,
         final String assessment,
         final Sources sources,
+        final String note,
         final boolean usages
     ) {
         final var out = new StringBuilder();
@@ -114,6 +130,10 @@ public final class ImpactComment {
         out.append(MARKER).append("\n");
         out.append("### Graphnous impact report\n\n");
         out.append(revision(report.head())).append(" compared with ").append(revision(report.base())).append(".\n\n");
+
+        if (note != null && !note.isBlank()) {
+            out.append("<sub>").append(note.strip()).append("</sub>\n\n");
+        }
 
         final var used = report.changes().stream().filter(change -> change.usageCount() > 0).toList();
         final var unused = report.changes().stream().filter(change -> change.usageCount() == 0).toList();

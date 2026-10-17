@@ -9,8 +9,10 @@ A GitHub Action that comments on a pull request what its change affects:
 - the endpoints it removes and adds, and the projects affected.
 
 Graphnous scans the pull request's head commit and compares it with the
-newest completed scan of the base branch, so the base branch needs a
-completed scan first. The job comments once, then edits that comment on
+scan of the commit its branch started from, so what the base branch got
+since does not show as removed. When that commit has no completed scan, it
+compares with the newest completed scan of the base branch instead, and the
+comment says so; either way, the base branch needs a completed scan first. The job comments once, then edits that comment on
 every new push.
 
 ```yaml
@@ -78,5 +80,6 @@ the results:
 
 The comment is `GET /api/v1/scans/{head}/impact-comment` on the server, in
 Markdown, with the query parameters `baseBranch` (`main` by default),
-`base` (a scan id, instead of the branch's newest completed scan) and
-`assess`.
+`base` (a scan id, instead of the branch's newest completed scan),
+`baseRevision` (a commit, such as where the branch started, whose completed
+scan to compare with) and `assess`.

@@ -47,6 +47,15 @@ public interface ScanRepository {
         final String branch
     );
 
+    /**
+     * The scans of the project of the commit, newest first: those that
+     * checked it out, and those asked for it that have not yet.
+     */
+    List<Scan> findOfRevision(
+        final Project.ProjectId projectId,
+        final String revision
+    );
+
     Scan findById(
         final Scan.ScanId id
     );

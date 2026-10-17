@@ -57,6 +57,16 @@ public interface ScanJpaRepository extends JpaRepository<ScanEntity, UUID> {
         final Scan.ScanStatus status
     );
 
+    @Query("""
+        SELECT s FROM ScanEntity s
+        WHERE s.projectId = :projectId AND (s.revision = :revision OR s.requestedRevision = :revision)
+        ORDER BY s.createdAt DESC
+        """)
+    List<ScanEntity> findAllOfRevision(
+        @Param("projectId") final UUID projectId,
+        @Param("revision") final String revision
+    );
+
     List<ScanEntity> findAllByStatusIn(
         final Collection<Scan.ScanStatus> statuses
     );

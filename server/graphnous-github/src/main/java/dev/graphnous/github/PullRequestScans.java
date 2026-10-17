@@ -26,8 +26,10 @@ class PullRequestScans {
     void save(final PullRequestScan scan) {
         jdbc.sql("""
                 INSERT INTO github_pull_request_scans
-                    (scan_id, project_id, installation_id, repository, pull_request, head_sha, base_branch, check_run_id, created_at)
-                VALUES (:scanId, :projectId, :installation, :repository, :pullRequest, :headSha, :baseBranch, :checkRun, :createdAt)
+                    (scan_id, project_id, installation_id, repository, pull_request, head_sha, base_branch, check_run_id, created_at,
+                     base_scan_id)
+                VALUES (:scanId, :projectId, :installation, :repository, :pullRequest, :headSha, :baseBranch, :checkRun, :createdAt,
+                        :baseScanId)
                 """)
             .param("scanId", scan.scanId().id())
             .param("projectId", scan.projectId().id())
@@ -38,7 +40,18 @@ class PullRequestScans {
             .param("baseBranch", scan.baseBranch())
             .param("checkRun", scan.checkRun())
             .param("createdAt", Timestamp.from(scan.createdAt()))
+            .param("baseScanId", scan.baseScan() == null ? null : scan.baseScan().id())
             .update();
+    }
+
+    /**
+     * Those whose head or base the scan is, not reported on yet.
+     */
+    List<PullRequestScan> findByScan(final Scan.ScanId scanId) {
+        return jdbc.sql("SELECT * FROM github_pull_request_scans WHERE scan_id = :scanId OR base_scan_id = :scanId ORDER BY created_at")
+            .param("scanId", scanId.id())
+            .query(PullRequestScans::read)
+            .list();
     }
 
     Optional<PullRequestScan> find(final Scan.ScanId scanId) {
@@ -95,7 +108,8 @@ class PullRequestScans {
             row.getString("head_sha"),
             row.getString("base_branch"),
             row.getLong("check_run_id"),
-            row.getTimestamp("created_at").toInstant()
+            row.getTimestamp("created_at").toInstant(),
+            row.getObject("base_scan_id", UUID.class) == null ? null : new Scan.ScanId(row.getObject("base_scan_id", UUID.class))
         );
     }
 }

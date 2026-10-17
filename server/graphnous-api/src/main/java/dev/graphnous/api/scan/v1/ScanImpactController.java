@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -60,10 +61,14 @@ public class ScanImpactController {
      * The impact report of the head scan, from the base scan, as a comment
      * in GitHub's Markdown.
      *
-     * @param base       the scan to compare from; the newest completed scan
-     *                   of the head's project on the base branch when left
-     *                   out
-     * @param baseBranch the branch whose newest completed scan is the base
+     * @param base         the scan to compare from; the newest completed
+     *                     scan of the head's project on the base branch
+     *                     when left out
+     * @param baseRevision the commit to compare from, such as where a pull
+     *                     request's branch started: its completed scan; the
+     *                     newest completed scan of the base branch, with a
+     *                     note, when it has none
+     * @param baseBranch   the branch whose newest completed scan is the base
      * @param assess     whether the impact agent heads the comment with its
      *                   assessment of the report, which takes a while; the
      *                   comment says when it could not be written
@@ -73,15 +78,34 @@ public class ScanImpactController {
     public ResponseEntity<String> impactComment(
         @PathVariable("head") final UUID head,
         @RequestParam(value = "base", required = false) final UUID base,
+        @RequestParam(value = "baseRevision", required = false) final String baseRevision,
         @RequestParam(value = "baseBranch", defaultValue = "main") final String baseBranch,
         @RequestParam(value = "assess", defaultValue = "false") final boolean assess
     ) {
         final var context = contextProvider.get();
         final var headScan = scanService.getScan(context, new Scan.ScanId(head));
+        final var ofRevision = base != null || baseRevision == null || baseRevision.isBlank()
+            ? Optional.<Scan>empty()
+            : scanService.getScansOfRevision(context, headScan.projectId(), baseRevision.trim())
+                .stream()
+                .filter(scan -> scan.status() == Scan.ScanStatus.COMPLETED)
+                .findFirst();
+
+        final String note;
+
+        if (ofRevision.isPresent()) {
+            note = "Compared with the commit the branch started from, so what `" + baseBranch + "` got since is left out.";
+        } else if (base == null && baseRevision != null && !baseRevision.isBlank()) {
+            note = "There is no completed scan of `" + abbreviate(baseRevision) + "`, where the branch started, so this compares "
+                + "with the newest completed scan of `" + baseBranch + "`: what that has and the branch does not shows as removed.";
+        } else {
+            note = null;
+        }
+
         final var baseId = base != null
             ? new Scan.ScanId(base)
-            : scanService.getLatestCompletedScan(context, headScan.projectId(), baseBranch)
-                .map(Scan::id)
+            : ofRevision.map(Scan::id).or(() -> scanService.getLatestCompletedScan(context, headScan.projectId(), baseBranch)
+                    .map(Scan::id))
                 .orElseThrow(() -> new NotFoundException(
                     "No completed scan of branch " + baseBranch + " to compare with: scan it first"
                 ));
@@ -107,6 +131,12 @@ public class ScanImpactController {
             }
         }
 
-        return ResponseEntity.ok(ImpactComment.render(report, projects, assessment, impactAnalysisService.sources(context, report)));
+        return ResponseEntity.ok(ImpactComment.render(report, projects, assessment, impactAnalysisService.sources(context, report), note));
+    }
+
+    private static String abbreviate(final String revision) {
+        final var trimmed = revision.trim();
+
+        return trimmed.substring(0, Math.min(7, trimmed.length()));
     }
 }
