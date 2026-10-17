@@ -8,6 +8,7 @@ import dev.graphnous.domain.scan.Scan;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * What a change of a project affects, from one of its scans (the base, such
@@ -107,6 +108,12 @@ public record ImpactReport(
      *                       them, those outside tests first
      * @param usageCount     how many places use it, of every project
      * @param testUsageCount how many of those are in test code
+     * @param updatedUsageCount how many of those the head updated: for a
+     *                       renamed node, or a method whose signature
+     *                       changed, the places that use it themselves and
+     *                       use its replacement in the head
+     * @param updatedUsers   the keys of the users of those places: their ids
+     *                       without the scan's
      * @param truncated      whether there are more usages than it counts,
      *                       as finding them stops at a limit
      * @param projects       the project of each scan the usages are in
@@ -122,6 +129,8 @@ public record ImpactReport(
         List<ScanUsages.Usage> usages,
         int usageCount,
         int testUsageCount,
+        int updatedUsageCount,
+        Set<String> updatedUsers,
         boolean truncated,
         Map<Scan.ScanId, Project.ProjectId> projects
     ) {
@@ -129,7 +138,28 @@ public record ImpactReport(
         public Change {
             properties = List.copyOf(properties);
             usages = List.copyOf(usages);
+            updatedUsers = Set.copyOf(updatedUsers);
             projects = Map.copyOf(projects);
+        }
+
+        /**
+         * A change of which the head updated no place.
+         */
+        public Change(
+            final Kind kind,
+            final String id,
+            final Scan.ScanId scanId,
+            final String type,
+            final String name,
+            final List<ScanGraph.PropertyChange> properties,
+            final String replacement,
+            final List<ScanUsages.Usage> usages,
+            final int usageCount,
+            final int testUsageCount,
+            final boolean truncated,
+            final Map<Scan.ScanId, Project.ProjectId> projects
+        ) {
+            this(kind, id, scanId, type, name, properties, replacement, usages, usageCount, testUsageCount, 0, Set.of(), truncated, projects);
         }
 
         /**
@@ -155,6 +185,20 @@ public record ImpactReport(
          */
         public int codeUsageCount() {
             return usageCount - testUsageCount;
+        }
+
+        /**
+         * How many places use it that the head did not update.
+         */
+        public int openUsageCount() {
+            return usageCount - updatedUsageCount;
+        }
+
+        /**
+         * Whether the head updated the place.
+         */
+        public boolean isUpdated(final ScanUsages.Usage usage) {
+            return usage.depth() == 1 && usage.user() != null && updatedUsers.contains(ImpactReport.key(usage.user().id()));
         }
     }
 
@@ -216,6 +260,16 @@ public record ImpactReport(
      * @param handler what serves it; null when the scan does not say
      */
     public record UnusedEndpoint(HttpLinks.Endpoint endpoint, HttpLinks.Source handler) {
+    }
+
+    /**
+     * A node's id without its scan's, which is the same in every scan of
+     * the repository.
+     */
+    static String key(final String id) {
+        final var bar = id.indexOf('|');
+
+        return bar < 0 ? id : id.substring(bar + 1);
     }
 
     /**

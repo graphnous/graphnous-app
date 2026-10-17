@@ -287,6 +287,9 @@ public class GraphnousTools {
      * @param usageCount     how many places use it, of which usages lists
      *                       the first, those outside tests first
      * @param testUsageCount how many of those places are in tests
+     * @param updatedUsageCount how many of those places the head updated:
+     *                       that use the old one themselves, and its
+     *                       replacement in the head
      */
     public record ImpactChange(
         String kind,
@@ -297,6 +300,7 @@ public class GraphnousTools {
         String replacement,
         int usageCount,
         int testUsageCount,
+        int updatedUsageCount,
         boolean truncated,
         List<UsageSummary> usages
     ) {
@@ -501,6 +505,7 @@ public class GraphnousTools {
                     change.replacement(),
                     change.usageCount(),
                     change.testUsageCount(),
+                    change.updatedUsageCount(),
                     change.truncated(),
                     change.usages().stream().map(usage -> summary(usage, change.projects())).toList()
                 ))

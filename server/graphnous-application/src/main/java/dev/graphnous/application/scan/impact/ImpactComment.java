@@ -5,6 +5,7 @@ import dev.graphnous.application.scan.usages.ScanUsages;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -128,7 +129,11 @@ public final class ImpactComment {
             .append(" · ")
             .append(count(used.size(), "change", "changes")).append(" in use, in ")
             .append(count(used.stream().mapToInt(ImpactReport.Change::usageCount).sum(), "place", "places"))
-            .append(inTests(used.stream().mapToInt(ImpactReport.Change::testUsageCount).sum()))
+            .append(detail(
+                used.stream().mapToInt(ImpactReport.Change::usageCount).sum(),
+                used.stream().mapToInt(ImpactReport.Change::testUsageCount).sum(),
+                used.stream().mapToInt(ImpactReport.Change::updatedUsageCount).sum()
+            ))
             .append(" · ")
             .append(count(report.projects().size(), "project", "projects")).append(" affected")
             .append(report.unused().noLongerCalled().isEmpty()
@@ -167,7 +172,7 @@ public final class ImpactComment {
             used.forEach(change -> out
                 .append("| ").append(change.type()).append(" ").append(code(label(change.id(), change.name())))
                 .append(" | ").append(how(change))
-                .append(" | ").append(change.usageCount()).append(change.truncated() ? "+" : "").append(inTests(change.testUsageCount()))
+                .append(" | ").append(change.usageCount()).append(change.truncated() ? "+" : "").append(detail(change.usageCount(), change.testUsageCount(), change.updatedUsageCount()))
                 .append(" | ").append(cell(usageProjects(change, projects)))
                 .append(" |\n"));
 
@@ -180,7 +185,9 @@ public final class ImpactComment {
 
                     change.usages().stream().limit(LISTED_USAGES).forEach(usage -> out
                         .append("- ").append(where(usage, change, sources))
-                        .append(" (").append(name(projects, project(change, usage))).append(")\n"));
+                        .append(" (").append(name(projects, project(change, usage))).append(")")
+                        .append(change.isUpdated(usage) ? ", updated by this change" : "")
+                        .append("\n"));
 
                     if (change.usageCount() > LISTED_USAGES) {
                         out.append("- and ").append(change.usageCount() - LISTED_USAGES).append(" more\n");
@@ -315,8 +322,22 @@ public final class ImpactComment {
         };
     }
 
-    private static String inTests(final int count) {
-        return count == 0 ? "" : " (" + count + " in tests)";
+    /**
+     * How many of the places are in tests, and how many the change
+     * updated, such as " (10 in tests, all updated)"; nothing when none.
+     */
+    private static String detail(final int count, final int inTests, final int updated) {
+        final var parts = new ArrayList<String>();
+
+        if (inTests > 0) {
+            parts.add(inTests + " in tests");
+        }
+
+        if (updated > 0) {
+            parts.add(updated == count ? "all updated" : updated + " updated");
+        }
+
+        return parts.isEmpty() ? "" : " (" + String.join(", ", parts) + ")";
     }
 
     private static String where(final HttpLinks.Source caller, final Scan.ScanId scanId, final Sources sources) {

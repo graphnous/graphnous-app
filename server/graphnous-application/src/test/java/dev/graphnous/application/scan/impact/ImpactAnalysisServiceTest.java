@@ -241,6 +241,54 @@ class ImpactAnalysisServiceTest {
     }
 
     @Test
+    void tellsThePlacesTheHeadUpdatedToUseTheReplacement() {
+        scans();
+        final var make = "api|orders|class:com.acme.Orders|method:com.acme.Orders.make(Order)";
+
+        when(scanGraphService.compare(eq(context), eq(base.id()), eq(head.id()), any(), anyInt()))
+            .thenReturn(new ScanGraph.Comparison(
+                List.of(), List.of(method(make, "make", "com.acme.Order")), List.of(method(CREATE, "create", "com.acme.Order")), List.of(), false
+            ));
+        noCalls();
+
+        // checkout and its test call make now; the web app still calls create
+        when(scanUsageService.getUsages(context, base.id(), id(base, CREATE), 1)).thenReturn(found(
+            List.of(
+                usage(base.id().id() + "|api|orders|class:Checkout|method:checkout", base.id(), "src/main/java/Checkout.java"),
+                usage(base.id().id() + "|api|orders|class:CheckoutTest|method:checksOut", base.id(), "src/test/java/CheckoutTest.java"),
+                usage(webScan.id().id() + "|web|.|class:Client|method:order", webScan.id(), "src/client.ts")
+            ),
+            Map.of(base.id(), api.id(), webScan.id(), web.id())
+        ));
+        when(scanUsageService.getUsages(context, head.id(), id(head, make), 1)).thenReturn(found(
+            List.of(
+                usage(head.id().id() + "|api|orders|class:Checkout|method:checkout", head.id(), "src/main/java/Checkout.java"),
+                usage(head.id().id() + "|api|orders|class:CheckoutTest|method:checksOut", head.id(), "src/test/java/CheckoutTest.java")
+            ),
+            Map.of(head.id(), api.id())
+        ));
+
+        final var report = service().analyze(context, base.id(), head.id(), null);
+
+        assertThat(report.changes()).singleElement().satisfies(change -> {
+            assertThat(change.kind()).isEqualTo(ImpactReport.Kind.RENAMED);
+            assertThat(change.usageCount()).isEqualTo(3);
+            assertThat(change.updatedUsageCount()).isEqualTo(2);
+            assertThat(change.openUsageCount()).isEqualTo(1);
+            // What is left to update first
+            assertThat(change.usages()).extracting(usage -> usage.user().name()).containsExactly(
+                webScan.id().id() + "|web|.|class:Client|method:order",
+                base.id().id() + "|api|orders|class:Checkout|method:checkout",
+                base.id().id() + "|api|orders|class:CheckoutTest|method:checksOut"
+            );
+            assertThat(change.isUpdated(change.usages().getFirst())).isFalse();
+            assertThat(change.isUpdated(change.usages().get(1))).isTrue();
+        });
+        // Only the places left to update count for the projects
+        assertThat(report.projects()).containsExactly(new ImpactReport.AffectedProject(web.id(), 1, 0));
+    }
+
+    @Test
     void leavesAMethodRemovedWhenWhatReplacedItIsNotClear() {
         final var removed = method("c|method:a(int)", "a", "int");
 
