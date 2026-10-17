@@ -139,11 +139,13 @@ public class ImpactAnalysisService {
 
         final var changes = candidates.stream()
             .limit(MAX_CHANGES)
-            .map(candidate -> follow(context, candidate, steps, usagesByProject, projectIds))
-            // What code uses first, then what only tests use
-            .sorted(Comparator.comparingInt(ImpactReport.Change::codeUsageCount)
-                .thenComparingInt(ImpactReport.Change::usageCount)
+            .map(candidate -> follow(context, candidate, head, steps, usagesByProject, projectIds))
+            // What code still has to update first, then what tests do, then what the head updated
+            .sorted(Comparator.comparingInt(Followed::openInCode)
+                .thenComparingInt(followed -> followed.change().openUsageCount())
+                .thenComparingInt(followed -> followed.change().usageCount())
                 .reversed())
+            .map(Followed::change)
             .toList();
 
         final var endpoints = endpoints(
@@ -321,23 +323,35 @@ public class ImpactAnalysisService {
     /**
      * The change with what uses it, counting its usages by project.
      */
-    private ImpactReport.Change follow(
+    /**
+     * @param openInCode how many places outside tests use the change that
+     *                   the head did not update
+     */
+    private record Followed(ImpactReport.Change change, int openInCode) {
+    }
+
+    private Followed follow(
         final RequestContext context,
         final Candidate candidate,
+        final Scan head,
         final int depth,
         final Map<String, Integer> usagesByProject,
         final Map<String, Project.ProjectId> projectIds
     ) {
         final var id = candidate.scan().id().id() + "|" + candidate.key();
         final var found = scanUsageService.getUsages(context, candidate.scan().id(), id, depth);
+        final var updated = updatedUsers(context, candidate, head, found.usages());
 
-        // Those in tests last, so the places listed are those of code first
+        // Those the head did not update first, and of those, those in code
         final var usages = found.usages().stream()
-            .sorted(Comparator.comparing(ImpactAnalysisService::inTest))
+            .sorted(Comparator.comparing((ScanUsages.Usage usage) -> isUpdated(usage, updated))
+                .thenComparing(ImpactAnalysisService::inTest))
             .toList();
         final var inTests = (int) usages.stream().filter(ImpactAnalysisService::inTest).count();
+        final var updatedCount = (int) usages.stream().filter(usage -> isUpdated(usage, updated)).count();
 
-        found.usages().forEach(usage -> {
+        // The places the change leaves to update
+        found.usages().stream().filter(usage -> !isUpdated(usage, updated)).forEach(usage -> {
             final var project = found.projects().get(usage.scanId() == null ? candidate.scan().id() : usage.scanId());
 
             if (project != null) {
@@ -346,7 +360,9 @@ public class ImpactAnalysisService {
             }
         });
 
-        return new ImpactReport.Change(
+        final var openInCode = (int) usages.stream().filter(usage -> !isUpdated(usage, updated) && !inTest(usage)).count();
+
+        return new Followed(new ImpactReport.Change(
             candidate.kind(),
             id,
             candidate.scan().id(),
@@ -357,9 +373,49 @@ public class ImpactAnalysisService {
             usages.stream().limit(MAX_USAGES).toList(),
             usages.size(),
             inTests,
+            updatedCount,
+            updated,
             found.truncated(),
             found.projects()
-        );
+        ), openInCode);
+    }
+
+    /**
+     * The users, by key, of the places that use the renamed or re-signed
+     * node themselves and that use its replacement in the head: those the
+     * head updated. None for other changes, whose head the base's usages
+     * cannot be told from.
+     */
+    private Set<String> updatedUsers(
+        final RequestContext context,
+        final Candidate candidate,
+        final Scan head,
+        final List<ScanUsages.Usage> usages
+    ) {
+        if (candidate.replacement() == null || usages.stream().noneMatch(usage -> usage.depth() == 1)) {
+            return Set.of();
+        }
+
+        final var replacement = scanUsageService.getUsages(context, head.id(), head.id().id() + "|" + candidate.replacement(), 1);
+        final var usingReplacement = new HashSet<String>();
+        replacement.usages().forEach(usage -> {
+            if (usage.user() != null) {
+                usingReplacement.add(key(usage.user().id()));
+            }
+        });
+
+        final var updated = new HashSet<String>();
+        usages.stream()
+            .filter(usage -> usage.depth() == 1 && usage.user() != null)
+            .map(usage -> key(usage.user().id()))
+            .filter(usingReplacement::contains)
+            .forEach(updated::add);
+
+        return updated;
+    }
+
+    private static boolean isUpdated(final ScanUsages.Usage usage, final Set<String> updated) {
+        return usage.depth() == 1 && usage.user() != null && updated.contains(key(usage.user().id()));
     }
 
     static boolean inTest(final ScanUsages.Usage usage) {
@@ -496,9 +552,7 @@ public class ImpactAnalysisService {
      * the repository.
      */
     private static String key(final String id) {
-        final var bar = id.indexOf('|');
-
-        return bar < 0 ? id : id.substring(bar + 1);
+        return ImpactReport.key(id);
     }
 
     /**

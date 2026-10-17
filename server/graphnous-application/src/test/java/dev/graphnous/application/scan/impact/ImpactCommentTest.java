@@ -154,6 +154,43 @@ class ImpactCommentTest {
     }
 
     @Test
+    void saysWhichPlacesTheChangeUpdated() {
+        final var usages = IntStream.range(0, 3)
+            .mapToObj(i -> new ScanUsages.Usage(
+                "CALLS", new ScanUsages.Node(base.id().id() + "|server|api|class:C|method:m" + i, "Method", "m" + i, null),
+                "com.example.Checkout", "src/Checkout.java", i + 1, new ScanUsages.Node("t", "Method", "create", null),
+                null, 1, List.of(), base.id(), null
+            ))
+            .toList();
+        final var change = new ImpactReport.Change(
+            ImpactReport.Kind.RENAMED, base.id().id() + "|server|api|class:x|method:com.example.Orders.create()",
+            base.id(), "Method", "create", List.of(), "server|api|class:x|method:com.example.Orders.make()",
+            usages, 3, 1, 2, java.util.Set.of("server|api|class:C|method:m1", "server|api|class:C|method:m2"), false,
+            Map.of(base.id(), api)
+        );
+
+        final var comment = ImpactComment.render(report(
+            List.of(change), List.of(), new ImpactReport.Endpoints(List.of(), List.of()),
+            List.of(new ImpactReport.AffectedProject(api, 1, 0))
+        ), projects, null);
+
+        assertThat(comment)
+            .contains("1 change in use, in 3 places (1 in tests, 2 updated)")
+            .contains("| renamed to `Orders.make()` | 3 (1 in tests, 2 updated) |")
+            .contains("- `Checkout.m0` calls it, in `src/Checkout.java:1` (api)\n")
+            .contains("- `Checkout.m1` calls it, in `src/Checkout.java:2` (api), updated by this change\n");
+
+        final var all = new ImpactReport.Change(
+            change.kind(), change.id(), change.scanId(), change.type(), change.name(), change.properties(), change.replacement(),
+            usages, 3, 0, 3, java.util.Set.of("server|api|class:C|method:m0", "server|api|class:C|method:m1", "server|api|class:C|method:m2"),
+            false, change.projects()
+        );
+
+        assertThat(ImpactComment.render(report(List.of(all), List.of(), new ImpactReport.Endpoints(List.of(), List.of()), List.of()), projects, null))
+            .contains("| 3 (all updated) |");
+    }
+
+    @Test
     void linksThePlacesWhereTheSourcesCan() {
         final var sources = new ImpactComment.Sources() {
             @Override

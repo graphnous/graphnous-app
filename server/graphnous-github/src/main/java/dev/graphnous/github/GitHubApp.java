@@ -426,8 +426,12 @@ public class GitHubApp {
             return "Nothing else uses what changed";
         }
 
+        final var updated = report.changes().stream().mapToInt(ImpactReport.Change::updatedUsageCount).sum();
+        final var open = report.changes().stream().mapToInt(ImpactReport.Change::openUsageCount).sum();
+
         return (broken == 1 ? "1 broken call" : broken + " broken calls")
-            + ", " + (used == 1 ? "1 change in use" : used + " changes in use");
+            + ", " + (used == 1 ? "1 change in use" : used + " changes in use")
+            + (updated == 0 ? "" : open == 0 ? ", all places updated" : ", " + (open == 1 ? "1 place" : open + " places") + " not updated");
     }
 
     private HashMap<Project.ProjectId, String> projectNames(

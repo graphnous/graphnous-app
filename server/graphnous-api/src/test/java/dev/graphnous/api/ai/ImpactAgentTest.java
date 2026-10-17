@@ -196,7 +196,7 @@ class ImpactAgentTest {
             "CALLS", null, null, "Caller.java", 1, null, null, 1, List.of(), null, null, null
         );
         final var change = new GraphnousTools.ImpactChange(
-            "CHANGED", "m1", "Method", "find", List.of(), null, 9, 0, false,
+            "CHANGED", "m1", "Method", "find", List.of(), null, 9, 0, 0, false,
             IntStream.range(0, 9).mapToObj(i -> usage).toList()
         );
 

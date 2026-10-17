@@ -40,7 +40,9 @@ public class ImpactAgent implements ImpactAssessor {
           low risk; say so briefly rather than listing them.
         A renamed method or field, and a method whose signature changed,
         say what replaced them; their usages are of the old one, which
-        still need to change with it. Places in tests are counted apart:
+        still need to change with it, unless the change updated them:
+        updatedUsageCount says how many it did, and those listed first are
+        the ones it did not. Places in tests are counted apart:
         what only tests use is lower risk. Endpoints the change leaves
         without callers break nothing, but may be dead code to remove;
         mention them briefly.
@@ -154,6 +156,7 @@ public class ImpactAgent implements ImpactAssessor {
                     change.replacement(),
                     change.usageCount(),
                     change.testUsageCount(),
+                    change.updatedUsageCount(),
                     change.truncated() || change.usages().size() > REPORT_USAGES,
                     change.usages().stream().limit(REPORT_USAGES).toList()
                 ))

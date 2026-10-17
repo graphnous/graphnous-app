@@ -443,6 +443,26 @@ class GitHubAppTest {
         return new Scan(scanId, shop.id(), status, new Scan.SourceRevision("abc123", "orders-v2"), NOW, NOW, NOW);
     }
 
+    @Test
+    void titlesTheCheckRunWithThePlacesLeftToUpdate() {
+        final var all = change(3, 3);
+        final var some = change(3, 1);
+
+        assertThat(GitHubApp.title(withChanges(List.of(all)))).isEqualTo("0 broken calls, 1 change in use, all places updated");
+        assertThat(GitHubApp.title(withChanges(List.of(all, some)))).isEqualTo("0 broken calls, 2 changes in use, 2 places not updated");
+        assertThat(GitHubApp.title(withChanges(List.of(change(1, 0))))).isEqualTo("0 broken calls, 1 change in use");
+    }
+
+    private ImpactReport.Change change(final int usages, final int updated) {
+        return new ImpactReport.Change(
+            ImpactReport.Kind.RENAMED, "k", main.id(), "Method", "m", List.of(), "r", List.of(), usages, 0, updated, java.util.Set.of(), false, java.util.Map.of()
+        );
+    }
+
+    private ImpactReport withChanges(final List<ImpactReport.Change> changes) {
+        return new ImpactReport(main, head, List.of(), changes, new ImpactReport.Endpoints(List.of(), List.of()), List.of(), List.of(), false);
+    }
+
     private ImpactReport report(final List<ImpactReport.BrokenCall> brokenCalls) {
         return new ImpactReport(
             main, head, List.of(), List.of(),
