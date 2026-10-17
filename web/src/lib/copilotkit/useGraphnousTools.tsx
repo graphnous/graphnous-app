@@ -1,12 +1,14 @@
 "use client";
 
-import { useDefaultRenderTool, useFrontendTool } from "@copilotkit/react-core/v2";
+import { useDefaultRenderTool, useFrontendTool, useHumanInTheLoop } from "@copilotkit/react-core/v2";
 import { Link, Spinner } from "@graphnous/theme";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 
 import { ChatToolCall } from "@/components/ChatToolCall/ChatToolCall";
+
+import { StartScanCall, startScanParameters, type StartScanParameters } from "./StartScanCall";
 
 const openPageParameters = z.object({
     page: z
@@ -54,7 +56,8 @@ function pagePath({ page, projectId, scanId }: Partial<OpenPageParameters>): str
 /**
  * What the assistant can do in the browser, and how its tool calls show in
  * the chat: the server's tools with views of what they found, see
- * ChatToolCall.
+ * ChatToolCall. The server's tools only read; what changes something, such
+ * as starting a scan, waits for the user here.
  */
 export function useGraphnousTools() {
     const router = useRouter();
@@ -111,4 +114,19 @@ export function useGraphnousTools() {
         },
         [router],
     );
+
+    // Human in the loop: the assistant asks, the user starts the scan or not
+    useHumanInTheLoop<StartScanParameters>({
+        name: "startScan",
+        description:
+            "Asks the user to start a scan of a project, at a branch and optionally a revision, such as to compare " +
+            "a branch with main when it has no completed scan yet. The user sees the request, may change the " +
+            "branch and revision, and starts the scan or declines; you get which, with the new scan's id. A scan " +
+            "takes minutes: follow it with listScans until it is COMPLETED. Only when the user asks for a scan, " +
+            "or agrees to one you suggested; say why in reason.",
+        parameters: startScanParameters,
+        render: ({ toolCallId, args, status, respond, result }) => (
+            <StartScanCall toolCallId={toolCallId} args={args} status={status} respond={respond} result={result} />
+        ),
+    });
 }

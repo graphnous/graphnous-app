@@ -52,6 +52,10 @@ public class GraphnousAgent implements Agent {
         outline, then find the classes, annotations or dependencies the
         question is about. Answer briefly. When a tool fails, say what you
         could not look up.
+
+        Your tools only look things up. To scan a project, as when a branch
+        has no completed scan to look at yet, ask the user with startScan:
+        it starts nothing until they agree.
         """;
 
     private final AiApiTokenRetriever tokenRetriever;
