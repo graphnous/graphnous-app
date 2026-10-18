@@ -84,6 +84,7 @@ command-line arguments or environment variables.
 
 | Property | Default | Meaning |
 | --- | --- | --- |
+| `graphnous.sse.heartbeat-interval` | `PT25S` | How often the open event streams, of notifications and of scan logs, get a comment, so a proxy in between does not close one that is quiet for a while. |
 | `graphnous.scans.timeout` | `1h` | An active scan without a status change for this long is marked failed. |
 | `graphnous.scans.recovery-interval` | `1m` | How often to look for such scans. |
 | `graphnous.scans.retention.days` (`GRAPHNOUS_SCANS_RETENTION_DAYS`) | `-1` | Finished scans older than this many days are deleted, checked every 6 hours. `-1` keeps them. |
