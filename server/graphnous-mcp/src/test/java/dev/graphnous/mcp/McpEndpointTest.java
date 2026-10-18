@@ -117,6 +117,21 @@ class McpEndpointTest {
     }
 
     /**
+     * After the parameters of the tool's method, which the build keeps,
+     * rather than arg0 and on.
+     */
+    @Test
+    void namesTheArgumentsOfATool() throws Exception {
+        mockMvc.perform(mcp("""
+                {"jsonrpc": "2.0", "id": 4, "method": "tools/list"}
+                """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.result.tools[?(@.name == 'listProjects')].inputSchema.properties.systemId").exists())
+            .andExpect(jsonPath("$.result.tools[?(@.name == 'listProjects')].inputSchema.properties.arg0").doesNotExist())
+            .andExpect(jsonPath("$.result.tools[?(@.name == 'compareScans')].inputSchema.properties.baseScanId").exists());
+    }
+
+    /**
      * On the request's thread, where the security context, which is the
      * thread's, knows the caller.
      */
