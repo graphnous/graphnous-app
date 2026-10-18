@@ -4,6 +4,8 @@ import dev.graphnous.application.context.OrganizationContext;
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.context.UserContext;
 import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.notification.CreateNotificationCommand;
+import dev.graphnous.application.notification.NotificationService;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.CreateScanCommand;
@@ -75,6 +77,9 @@ class GitHubAppTest {
 
     @Mock
     private ImpactAnalysisService impactAnalysisService;
+
+    @Mock
+    private NotificationService notificationService;
 
     private final OrganizationId organization = new OrganizationId(UUID.randomUUID());
     private final RequestContext context = new RequestContext(new UserContext(null), new OrganizationContext(organization));
@@ -205,6 +210,12 @@ class GitHubAppTest {
         ));
         // The head did not fail
         verify(github).completeCheckRun(eq(INSTALLATION), eq("acme/shop"), eq(7L), eq("success"), any());
+        verify(notificationService).create(context, new CreateNotificationCommand(
+            shop.systemId(), shop.id(), head.id(),
+            "Pull request #3 compared with the newest scan of main",
+            "The scan of the commit the branch of acme/shop#3 started from failed, so its report compares with the newest "
+                + "completed scan of main: what main got since shows as removed. https://github.com/acme/shop/pull/3"
+        ));
     }
 
     @Test
@@ -286,6 +297,66 @@ class GitHubAppTest {
         verify(github, never()).comment(anyLong(), anyString(), anyInt(), anyString());
         verify(github).completeCheckRun(eq(INSTALLATION), eq("acme/shop"), eq(7L), eq("neutral"), argThat(output ->
             output.title().equals("1 broken call, 0 changes in use") && output.summary().contains("**1 broken call**")));
+        verify(notificationService).create(context, new CreateNotificationCommand(
+            shop.systemId(), shop.id(), head.id(),
+            "Broken calls in pull request #3",
+            "acme/shop#3 (orders-v2) leaves 1 call without an endpoint: GET /api/orders in shop. https://github.com/acme/shop/pull/3"
+        ));
+    }
+
+    @Test
+    void namesTheFirstBrokenCallsAndCountsTheRest() {
+        final var calls = java.util.stream.IntStream.range(0, GitHubApp.NAMED_CALLS + 2)
+            .mapToObj(i -> new ImpactReport.BrokenCall(
+                new HttpLinks.Call("c" + i, head.id(), shop.id(), "GET", "/api/orders/" + i, "fetch"),
+                null,
+                List.of(new HttpLinks.Endpoint("e", main.id(), shop.id(), "GET", "/api/orders/{id}"))
+            ))
+            .toList();
+
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
+        when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
+        when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report(calls));
+        when(github.findComment(anyLong(), anyString(), anyInt(), anyString())).thenReturn(Optional.empty());
+
+        app().completed(head.id());
+
+        verify(notificationService).create(eq(context), argThat(command -> command.content().startsWith(
+            "acme/shop#3 (orders-v2) leaves 7 calls without an endpoint: GET /api/orders/0 in shop, "
+        ) && command.content().contains("GET /api/orders/4 in shop, and 2 more. https://github.com/acme/shop/pull/3")
+            && !command.content().contains("/api/orders/5")));
+    }
+
+    @Test
+    void reportsEvenWhenTheNotificationFails() {
+        final var report = report(List.of(new ImpactReport.BrokenCall(
+            new HttpLinks.Call("c", head.id(), shop.id(), "GET", "/api/orders", "fetch"),
+            null,
+            List.of(new HttpLinks.Endpoint("e", main.id(), shop.id(), "GET", "/api/orders"))
+        )));
+
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
+        when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
+        when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report);
+        when(github.findComment(anyLong(), anyString(), anyInt(), anyString())).thenReturn(Optional.empty());
+        when(notificationService.create(any(), any())).thenThrow(new IllegalStateException("Database unavailable"));
+
+        app().completed(head.id());
+
+        verify(github).completeCheckRun(eq(INSTALLATION), eq("acme/shop"), eq(7L), eq("neutral"), any());
+        verify(github, never()).completeCheckRun(anyLong(), anyString(), anyLong(), eq("failure"), any());
+    }
+
+    @Test
+    void notifiesNothingOfAReportWithoutBrokenCalls() {
+        when(pullRequestScans.findByScan(head.id())).thenReturn(List.of(pullRequestScan));
+        when(scanService.getLatestCompletedScan(context, shop.id(), "main")).thenReturn(Optional.of(main));
+        when(impactAnalysisService.analyze(context, main.id(), head.id(), null)).thenReturn(report(List.of()));
+        when(github.findComment(anyLong(), anyString(), anyInt(), anyString())).thenReturn(Optional.empty());
+
+        app().completed(head.id());
+
+        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -512,7 +583,7 @@ class GitHubAppTest {
     private GitHubApp app(final ImpactAssessor assessor, final boolean scanDefaultBranch) {
         return new GitHubApp(
             github, pullRequestScans, installation -> organization, scanSourceService, scanService, projectService,
-            impactAnalysisService, assessor, scanDefaultBranch, Clock.fixed(NOW, ZoneOffset.UTC)
+            impactAnalysisService, assessor, notificationService, "https://github.com", scanDefaultBranch, Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
 

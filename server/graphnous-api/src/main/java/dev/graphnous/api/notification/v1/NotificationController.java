@@ -1,6 +1,7 @@
 package dev.graphnous.api.notification.v1;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import dev.graphnous.api.sse.SseHeartbeat;
 import dev.graphnous.api.v1.generated.notification.Notification;
 import dev.graphnous.api.v1.generated.notification.NotificationCount;
 import dev.graphnous.api.v1.generated.notification.NotificationPage;
@@ -52,15 +53,18 @@ public class NotificationController {
 
     private final NotificationService notificationService;
     private final NotificationSubscriber notificationSubscriber;
+    private final SseHeartbeat heartbeat;
     private final RequestContextProvider contextProvider;
 
     public NotificationController(
         final NotificationService notificationService,
         final NotificationSubscriber notificationSubscriber,
+        final SseHeartbeat heartbeat,
         final RequestContextProvider contextProvider
     ) {
         this.notificationService = notificationService;
         this.notificationSubscriber = notificationSubscriber;
+        this.heartbeat = heartbeat;
         this.contextProvider = contextProvider;
     }
 
@@ -137,6 +141,7 @@ public class NotificationController {
         emitter.onCompletion(() -> notificationSubscriber.unsubscribe(system, listener));
         emitter.onTimeout(() -> notificationSubscriber.unsubscribe(system, listener));
         emitter.onError(error -> notificationSubscriber.unsubscribe(system, listener));
+        heartbeat.register(emitter);
 
         try {
             emitter.send(SseEmitter.event().comment("notifications of system " + systemId));

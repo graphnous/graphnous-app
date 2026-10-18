@@ -1,5 +1,6 @@
 package dev.graphnous.api.scan.v1;
 
+import dev.graphnous.api.sse.SseHeartbeat;
 import dev.graphnous.application.context.RequestContextProvider;
 import dev.graphnous.application.enhancer.ScanEnhancementService;
 import dev.graphnous.api.v1.generated.scan.ScanExecution;
@@ -44,13 +45,15 @@ public class ScanController {
     private final ScanLogSubscriber scanLogSubscriber;
     private final ScanLogService scanLogService;
     private final ScanEnhancementService scanEnhancementService;
+    private final SseHeartbeat heartbeat;
 
     public ScanController(
         final RequestContextProvider contextProvider,
         final ScanService scanService,
         final ScanLogSubscriber scanLogSubscriber,
         final ScanLogService scanLogService,
-        final ScanEnhancementService scanEnhancementService
+        final ScanEnhancementService scanEnhancementService,
+        final SseHeartbeat heartbeat
     ) {
         this.contextProvider = contextProvider;
 
@@ -59,6 +62,7 @@ public class ScanController {
 
         this.scanLogService = scanLogService;
         this.scanEnhancementService = scanEnhancementService;
+        this.heartbeat = heartbeat;
     }
 
     @GetMapping("/{id}")
@@ -270,6 +274,8 @@ public class ScanController {
         emitter.onError(
             error -> scanLogSubscriber.unsubscribe(new Scan.ScanId(id), listener)
         );
+
+        heartbeat.register(emitter);
 
         return emitter;
     }

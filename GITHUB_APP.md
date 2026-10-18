@@ -14,6 +14,10 @@ that reports on every pull request what its change affects:
   scans are done. When GitHub cannot say where the branch started, or that
   scan fails, the report compares with the newest completed scan of the base
   branch, and the comment says so.
+- A report with calls that no longer reach an endpoint is a notification of
+  the project in Graphnous too, under the bell, with the calls and a link to
+  the pull request. So is a report that had to compare with the newest scan
+  of the base branch because the scan of where the branch started failed.
 - A push to a repository's default branch scans it, so pull requests have a
   current scan to compare with, and most branches start from a commit that
   already has a scan.
