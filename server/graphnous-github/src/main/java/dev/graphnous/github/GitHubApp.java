@@ -4,6 +4,8 @@ import dev.graphnous.application.context.OrganizationContext;
 import dev.graphnous.application.context.RequestContext;
 import dev.graphnous.application.context.UserContext;
 import dev.graphnous.application.exception.NotFoundException;
+import dev.graphnous.application.notification.CreateNotificationCommand;
+import dev.graphnous.application.notification.NotificationService;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.scan.CreateScanCommand;
 import dev.graphnous.application.scan.ScanService;
@@ -11,6 +13,7 @@ import dev.graphnous.application.scan.impact.ImpactAnalysisService;
 import dev.graphnous.application.scan.impact.ImpactAssessor;
 import dev.graphnous.application.scan.impact.ImpactComment;
 import dev.graphnous.application.scan.impact.ImpactReport;
+import dev.graphnous.application.scan.links.HttpLinks;
 import dev.graphnous.application.scan.source.ScanSourceService;
 import dev.graphnous.domain.project.Project;
 import dev.graphnous.domain.scan.Scan;
@@ -21,8 +24,10 @@ import tools.jackson.databind.JsonNode;
 import java.time.Clock;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * What the GitHub App does with what GitHub sends it, for the projects of
@@ -36,11 +41,19 @@ import java.util.Set;
  *     of the commit its branch started from, which it scans too when there
  *     is none, completes the check run and goes to the pull request as a
  *     comment, edited on every new push; headed, with an assessor, by its
- *     assessment.</li>
+ *     assessment;</li>
+ *     <li>a report with calls that no longer reach an endpoint, or that
+ *     could not compare with where the branch started, is a notification
+ *     of the project in Graphnous too.</li>
  * </ul>
  * It acts without a user, for the organization, as an API key does.
  */
 public class GitHubApp {
+
+    /**
+     * The most broken calls a notification names; it counts them all.
+     */
+    static final int NAMED_CALLS = 5;
 
     static final Set<String> PULL_REQUEST_ACTIONS = Set.of("opened", "synchronize", "reopened", "ready_for_review");
 
@@ -54,6 +67,8 @@ public class GitHubApp {
     private final ProjectService projectService;
     private final ImpactAnalysisService impactAnalysisService;
     private final ImpactAssessor assessor;
+    private final NotificationService notifications;
+    private final String webUrl;
     private final boolean scanDefaultBranch;
     private final Clock clock;
 
@@ -66,6 +81,8 @@ public class GitHubApp {
         final ProjectService projectService,
         final ImpactAnalysisService impactAnalysisService,
         final ImpactAssessor assessor,
+        final NotificationService notifications,
+        final String webUrl,
         final boolean scanDefaultBranch,
         final Clock clock
     ) {
@@ -77,6 +94,8 @@ public class GitHubApp {
         this.projectService = projectService;
         this.impactAnalysisService = impactAnalysisService;
         this.assessor = assessor;
+        this.notifications = notifications;
+        this.webUrl = webUrl;
         this.scanDefaultBranch = scanDefaultBranch;
         this.clock = clock;
     }
@@ -250,8 +269,12 @@ public class GitHubApp {
     /**
      * What to compare a pull request's head with: a scan, with what to say
      * about it; none while it is not done.
+     *
+     * @param startFailed whether the scan of the commit the branch started
+     *                    from failed, so it is the newest of the base
+     *                    branch instead
      */
-    private record Base(Scan scan, String note) {
+    private record Base(Scan scan, String note, boolean startFailed) {
     }
 
     /**
@@ -313,7 +336,7 @@ public class GitHubApp {
 
             if (started.isPresent() && started.get().status() == Scan.ScanStatus.COMPLETED) {
                 return new Base(started.get(), "Compared with the commit the branch started from, so what `"
-                    + scan.baseBranch() + "` got since is left out.");
+                    + scan.baseBranch() + "` got since is left out.", false);
             }
         }
 
@@ -324,7 +347,8 @@ public class GitHubApp {
         return new Base(
             scanService.getLatestCompletedScan(context, scan.projectId(), scan.baseBranch()).orElse(null),
             why + ", so this compares with the newest completed scan of `" + scan.baseBranch()
-                + "`: what that has and the branch does not shows as removed."
+                + "`: what that has and the branch does not shows as removed.",
+            scan.baseScan() != null
         );
     }
 
@@ -369,9 +393,10 @@ public class GitHubApp {
 
             final var context = context(scan.installation());
             final var report = impactAnalysisService.analyze(context, base.scan().id(), scan.scanId(), null);
+            final var names = projectNames(context, scan, report);
             final var comment = ImpactComment.render(
                 report,
-                projectNames(context, scan, report),
+                names,
                 assessment(context, scan, report),
                 impactAnalysisService.sources(context, report),
                 base.note()
@@ -391,9 +416,77 @@ public class GitHubApp {
                 report.brokenCalls().isEmpty() ? "success" : "neutral",
                 new GitHubClient.Output(title(report), comment)
             );
+
+            notify(context, scan, report, base, names);
         } catch (final RuntimeException e) {
             failReport(scan, e);
         }
+    }
+
+    /**
+     * Tells the project, in Graphnous, of what in the report needs a look:
+     * calls the change leaves without an endpoint, and a report that could
+     * not compare with where the branch started. A notification that cannot
+     * be made is left out: the report holds without it.
+     */
+    private void notify(
+        final RequestContext context,
+        final PullRequestScan scan,
+        final ImpactReport report,
+        final Base base,
+        final Map<Project.ProjectId, String> names
+    ) {
+        if (notifications == null || (report.brokenCalls().isEmpty() && !base.startFailed())) {
+            return;
+        }
+
+        try {
+            final var systemId = projectService.getProject(context, scan.projectId()).systemId();
+            final var pullRequest = scan.repository() + "#" + scan.pullRequest();
+            final var link = webUrl + "/" + scan.repository() + "/pull/" + scan.pullRequest();
+
+            if (!report.brokenCalls().isEmpty()) {
+                final var calls = report.brokenCalls();
+                final var named = calls.stream()
+                    .limit(NAMED_CALLS)
+                    .map(broken -> request(broken.call()) + " in " + names.getOrDefault(broken.call().projectId(), "another project"))
+                    .collect(Collectors.joining(", "));
+
+                notifications.create(context, new CreateNotificationCommand(
+                    systemId,
+                    scan.projectId(),
+                    scan.scanId(),
+                    "Broken calls in pull request #" + scan.pullRequest(),
+                    "%s (%s) leaves %s without an endpoint: %s%s. %s".formatted(
+                        pullRequest,
+                        report.head().revision().branch(),
+                        calls.size() == 1 ? "1 call" : calls.size() + " calls",
+                        named,
+                        calls.size() > NAMED_CALLS ? ", and " + (calls.size() - NAMED_CALLS) + " more" : "",
+                        link
+                    )
+                ));
+            }
+
+            if (base.startFailed()) {
+                notifications.create(context, new CreateNotificationCommand(
+                    systemId,
+                    scan.projectId(),
+                    scan.scanId(),
+                    "Pull request #" + scan.pullRequest() + " compared with the newest scan of " + scan.baseBranch(),
+                    ("The scan of the commit the branch of %s started from failed, so its report compares with the "
+                        + "newest completed scan of %s: what %s got since shows as removed. %s").formatted(
+                        pullRequest, scan.baseBranch(), scan.baseBranch(), link
+                    )
+                ));
+            }
+        } catch (final RuntimeException e) {
+            log.warn("Notifying of the report of {}#{} failed", scan.repository(), scan.pullRequest(), e);
+        }
+    }
+
+    private static String request(final HttpLinks.Call call) {
+        return (call.httpMethod() == null ? "" : call.httpMethod() + " ") + (call.url() == null ? "?" : call.url());
     }
 
     /**

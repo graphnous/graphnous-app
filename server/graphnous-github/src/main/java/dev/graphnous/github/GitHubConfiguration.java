@@ -1,6 +1,7 @@
 package dev.graphnous.github;
 
 import dev.graphnous.application.authorization.AuthorizationService;
+import dev.graphnous.application.notification.NotificationService;
 import dev.graphnous.application.organization.OrganizationId;
 import dev.graphnous.application.project.ProjectService;
 import dev.graphnous.application.project.scanner.GitCredentials;
@@ -116,6 +117,7 @@ public class GitHubConfiguration {
         final ProjectService projectService,
         final ImpactAnalysisService impactAnalysisService,
         final ObjectProvider<ImpactAssessor> assessor,
+        final NotificationService notificationService,
         final GitHubProperties properties
     ) {
         return new GitHubApp(
@@ -127,6 +129,8 @@ public class GitHubConfiguration {
             projectService,
             impactAnalysisService,
             properties.assess() ? assessor.getIfAvailable() : null,
+            notificationService,
+            "https://" + GitHubCredentials.webHost(properties.apiUrl()),
             properties.scanDefaultBranch(),
             Clock.systemUTC()
         );
