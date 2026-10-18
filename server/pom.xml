@@ -47,6 +47,18 @@
     </distributionManagement>
 
     <build>
+        <plugins>
+            <plugin>
+                <!-- Keeps the names of method parameters, as the Spring Boot parent
+                     does: the AI and MCP tools name their arguments after them -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.0</version>
+                <configuration>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+        </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>
