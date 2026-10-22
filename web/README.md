@@ -20,15 +20,19 @@ npm run generate:api
 OpenAPI Generator runs on Java, which has to be installed, and downloads the
 spec, so generating needs network access.
 
-Components get the client with `useApi()`, from the `ApiClientProvider` in
-the root layout. It calls the API at `NEXT_PUBLIC_GRAPHNOUS_API_URL`, which is
-read when the app is built, or else the server in the spec. Locally, set it
-in `.env.local`, which Next.js loads and git ignores, to the server on this
-machine:
+The browser only calls the web app: its routes in `src/app/api` call the
+server, at `GRAPHNOUS_API_URL`, or else the server in the spec. It is read
+when the web app's server starts, not when it is built, so one build runs
+against any server. Locally, set it in `.env.local`, which Next.js loads and
+git ignores, to the server on this machine:
 
 ```ini
-NEXT_PUBLIC_GRAPHNOUS_API_URL=http://localhost:1337
+GRAPHNOUS_API_URL=http://localhost:1337
 ```
+
+Components get the client with `useApi()`, from the `ApiClientProvider` in
+the root layout. It calls the web app's own `/api/v1`, which passes the API's
+reads on to the server (`src/app/api/v1`).
 
 ## Components and theme
 
@@ -56,37 +60,24 @@ npm run storybook         # at http://localhost:6006
 npm run test:storybook    # runs every story as a test, with accessibility checks, in light and dark
 ```
 
-## Getting Started
-
-First, run the development server:
+## Running
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev     # at http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The server has to run too; see [`../server`](../server).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Docker
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The image runs the production build. Build it from this folder:
 
-## Learn More
+```bash
+docker build -t graphnous-web .
+docker run -p 3000:3000 -e GRAPHNOUS_API_URL=http://host.docker.internal:1337 graphnous-web
+```
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The build generates the API client, so it downloads the OpenAPI spec and
+OpenAPI Generator. `GRAPHNOUS_API_URL` is where the web app's server reaches
+the API, such as `http://server:1337` on a compose network; the browser never
+calls it.

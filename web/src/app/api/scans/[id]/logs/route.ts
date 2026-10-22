@@ -1,5 +1,4 @@
 import {
-    BASE_PATH,
     Configuration,
     CreateProjectRequest,
     CreateScanRequest,
@@ -9,12 +8,12 @@ import {
     ScansApi,
 } from "@/generated/api";
 import { NextResponse, type NextRequest } from "next/server";
+import { graphnousApiUrl } from "@/lib/server/graphnousApi";
 
 /**
- * The API of graphnous-server: NEXT_PUBLIC_GRAPHNOUS_API_URL (such as in
- * .env.local), or else the server in the spec.
+ * The API of graphnous-server, as graphnousApiUrl says.
  */
-const basePath = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replace(/\/+$/, "");
+const basePath = graphnousApiUrl;
 
 /**
  * A client that calls the API as the caller: their access token, when they

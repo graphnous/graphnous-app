@@ -1,0 +1,8 @@
+# Keep the build context to the sources; the build installs and generates the rest
+node_modules
+.next
+src/generated
+storybook-static
+.env*
+Dockerfile
+.dockerignore

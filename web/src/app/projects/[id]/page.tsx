@@ -3,10 +3,12 @@
 import {
     Badge,
     Button,
+    ButtonLink,
     Card,
     CardBody,
     CardHeader,
     Container,
+    EmptyState,
     PageHeader,
     Section,
     Stack,
@@ -17,7 +19,7 @@ import {
     Text,
 } from "@graphnous/theme";
 
-import { PlayIcon } from "@phosphor-icons/react";
+import { HourglassIcon, PlayIcon } from "@phosphor-icons/react";
 import { useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -150,9 +152,25 @@ export default function ProjectPage() {
                         <section className="flex gap-4 flex-row mb-8">
                             <Card className="flex-1">
                                 <CardHeader title="Latest Scan" />
+                                <CardBody>
+                                    <EmptyState
+                                        icon={HourglassIcon}
+                                        level={4}
+                                        title="Coming soon"
+                                        description="The project's latest scan at a glance."
+                                    />
+                                </CardBody>
                             </Card>
                             <Card className="flex-1">
                                 <CardHeader title="Architecture" />
+                                <CardBody>
+                                    <EmptyState
+                                        icon={HourglassIcon}
+                                        level={4}
+                                        title="Coming soon"
+                                        description="The project's layers, and how they connect."
+                                    />
+                                </CardBody>
                             </Card>
                         </section>
                         <section className="flex gap-4 flex-row mb-8">
@@ -202,10 +220,22 @@ export default function ProjectPage() {
                         <ProjectDependencies scans={scansPage.content} />
                     </TabPanel>
                     <TabPanel value={"impact"}>
-                        Impact
+                        <EmptyState
+                            icon={HourglassIcon}
+                            level={2}
+                            title="Coming soon"
+                            description="Impact analysis of this project alone is on its way; Impact Analysis covers the whole system."
+                            action={<ButtonLink href="/impact-analysis" variant="secondary">Open Impact Analysis</ButtonLink>}
+                        />
                     </TabPanel>
                     <TabPanel value={"chat"}>
-                        Chat
+                        <EmptyState
+                            icon={HourglassIcon}
+                            level={2}
+                            title="Coming soon"
+                            description="A chat about this project alone is on its way; Chat asks about the whole system."
+                            action={<ButtonLink href="/chat" variant="secondary">Open Chat</ButtonLink>}
+                        />
                     </TabPanel>
                     <TabPanel value={"scans"}>
                         <ScansTable page={scansPage} onScanDeleted={() => refreshScans()} />

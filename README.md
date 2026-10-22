@@ -20,8 +20,9 @@ server up as a GitHub App: [GITHUB_APP.md](GITHUB_APP.md).
 
 | File | What it does |
 | --- | --- |
-| `.github/workflows/ci.yml` | On every pull request and push to main: the server's tests (`mvn verify`), the web app's lint, build and story tests, and the server's Docker image |
+| `.github/workflows/ci.yml` | On every pull request and push to main: the server's tests (`mvn verify`), the web app's lint, build and story tests, and the Docker images of both |
 | `.github/workflows/publish.yml` | On every push to main and every `v*` tag: the server's Maven modules to [GitHub Packages](https://github.com/orgs/graphnous/packages?repo_name=graphnous-app), as `1.0-SNAPSHOT` from main and as the tag's version (`v1.2.3` publishes `1.2.3`) |
+| `.github/workflows/images.yml` | On every push to main and every `v*` tag: the Docker images `ghcr.io/graphnous/graphnous-server` and `ghcr.io/graphnous/graphnous-web`, as `edge` from main and as the tag's version, its minor version and `latest` (`v1.2.3` publishes `1.2.3`, `1.2` and `latest`) |
 
 The server generates code from
 [`graphnous-schemas`](https://github.com/graphnous/graphnous-schemas) (the
@@ -38,11 +39,6 @@ and
 [`graphnous-typescript-scanner`](https://github.com/graphnous/graphnous-typescript-scanner);
 the server runs the versions its `graphnous.scanners` configuration names
 (see the [server README](server/README.md#scanners)).
-
-Still to do:
-
-1. Pin the web app's dependencies that are `latest`
-   (`@chromatic-com/storybook`, `playwright` and `vite`).
 
 To build the server's image or compose file outside CI, clone the schemas
 next to the app, as the workflow does.
