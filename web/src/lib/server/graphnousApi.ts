@@ -15,10 +15,13 @@ import {
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * The API of graphnous-server: NEXT_PUBLIC_GRAPHNOUS_API_URL (such as in
- * .env.local), or else the server in the spec.
+ * The API of graphnous-server: GRAPHNOUS_API_URL (such as in .env.local), or
+ * else the server in the spec. Read when the server starts, not when the app
+ * is built, so one build, such as the Docker image, runs against any server;
+ * only the web app's server calls it, so the browser needs neither the
+ * address nor CORS.
  */
-export const graphnousApiUrl = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL || BASE_PATH).replace(/\/+$/, "");
+export const graphnousApiUrl = (process.env.GRAPHNOUS_API_URL || BASE_PATH).replace(/\/+$/, "");
 
 /**
  * Calls the API, for what the generated client does not do, such as

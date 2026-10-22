@@ -139,7 +139,7 @@ errors are in `src/lib/api`, the hooks in `src/lib/hooks`, and
 ApiErrorMessage in `src/components`.
 
 - [x] **ApiClientProvider**: one configured client from `src/generated/api`,
-  with the API's base URL (from `NEXT_PUBLIC_GRAPHNOUS_API_URL`).
+  calling the web app's own `/api/v1`, which passes reads on to the API.
 - [x] **useApiError** / **ApiErrorMessage**: turns the API's error body
   (`code` and `message`) into a message. `VALIDATION_ERROR` and
   `MALFORMED_REQUEST` show the message, `FORBIDDEN` says the caller may not do

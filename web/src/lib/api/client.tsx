@@ -3,7 +3,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 import {
-  BASE_PATH,
   Configuration,
   ProjectsApi,
   ScanLogsApi,
@@ -27,7 +26,7 @@ const ApiClientContext = createContext<ApiClient | null>(null);
 
 export type ApiClientProviderProps = {
   /**
-   * Overrides NEXT_PUBLIC_GRAPHNOUS_API_URL, such as in tests.
+   * Overrides the web app's own origin, such as in tests.
    */
   baseUrl?: string;
   /**
@@ -46,10 +45,11 @@ export type ApiClientProviderProps = {
 };
 
 /**
- * The API's base URL: NEXT_PUBLIC_GRAPHNOUS_API_URL, read when the app is
- * built, or the one in the OpenAPI spec.
+ * The API's base URL: the web app itself, whose /api/v1 passes the API's
+ * reads on to the server (app/api/v1), so the browser needs neither the
+ * server's address nor CORS.
  */
-export const defaultBaseUrl = (process.env.NEXT_PUBLIC_GRAPHNOUS_API_URL ?? BASE_PATH).replace(/\/+$/, "");
+export const defaultBaseUrl = "";
 
 /**
  * One configured client for the API, generated from its OpenAPI spec, for
