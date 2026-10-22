@@ -7,13 +7,14 @@ import {
   CardBody,
   CardHeader,
   Container,
+  EmptyState,
   PageHeader,
   Section,
   Stack,
   Text,
 } from "@graphnous/theme";
 
-import { PlayIcon } from "@phosphor-icons/react";
+import { HourglassIcon, PlayIcon } from "@phosphor-icons/react";
 
 import { useSystemStore } from "@/lib/store/systemStore";
 import { useListProjects } from "@/lib/hooks/project/useListProjects";
@@ -74,9 +75,25 @@ export default function Home() {
         <section className="flex gap-4 flex-row">
           <Card className="flex-1">
             <CardHeader title="Project Activity"></CardHeader>
+            <CardBody>
+              <EmptyState
+                icon={HourglassIcon}
+                level={4}
+                title="Coming soon"
+                description="What happens in the system's projects, scan by scan."
+              />
+            </CardBody>
           </Card>
           <Card className="flex-1">
             <CardHeader title="Graph Entry Points"></CardHeader>
+            <CardBody>
+              <EmptyState
+                icon={HourglassIcon}
+                level={4}
+                title="Coming soon"
+                description="Where requests enter the system's graph."
+              />
+            </CardBody>
           </Card>
         </section>
       </Stack>
