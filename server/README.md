@@ -84,6 +84,7 @@ command-line arguments or environment variables.
 
 | Property | Default | Meaning |
 | --- | --- | --- |
+| `management.endpoints.web.exposure.include` | `health` | The server's health is at `/actuator/health`: `UP` once the server, PostgreSQL and Neo4j are, for the checks of a container platform. Open with security on too. |
 | `graphnous.sse.heartbeat-interval` | `PT25S` | How often the open event streams, of notifications and of scan logs, get a comment, so a proxy in between does not close one that is quiet for a while. |
 | `graphnous.scans.timeout` | `1h` | An active scan without a status change for this long is marked failed. |
 | `graphnous.scans.recovery-interval` | `1m` | How often to look for such scans. |

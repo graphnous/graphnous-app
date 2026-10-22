@@ -21,7 +21,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
-RUN npm run build
+# public holds what the app serves as it is, and may be empty or missing
+RUN mkdir -p public && npm run build
 
 
 FROM node:24-bookworm-slim

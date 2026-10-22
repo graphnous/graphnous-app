@@ -40,10 +40,5 @@ and
 the server runs the versions its `graphnous.scanners` configuration names
 (see the [server README](server/README.md#scanners)).
 
-Still to do:
-
-1. Pin the web app's dependencies that are `latest`
-   (`@chromatic-com/storybook`, `playwright` and `vite`).
-
 To build the server's image or compose file outside CI, clone the schemas
 next to the app, as the workflow does.

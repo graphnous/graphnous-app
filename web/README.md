@@ -66,6 +66,8 @@ npm run test:storybook    # runs every story as a test, with accessibility check
 npm run dev     # at http://localhost:3000
 ```
 
+The server has to run too; see [`../server`](../server).
+
 ## Docker
 
 The image runs the production build. Build it from this folder:

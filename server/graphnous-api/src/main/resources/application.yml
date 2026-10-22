@@ -1,6 +1,14 @@
 server:
   port: 1337
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only the health, at /actuator/health: UP once the server, its
+        # databases and Neo4j are, for the checks of a container platform
+        include: health
+
 spring:
   neo4j:
     uri: ${NEO4J_URI:bolt://localhost:8687}
